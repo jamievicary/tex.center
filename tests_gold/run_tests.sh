@@ -9,13 +9,26 @@
 # (completion requires both tests_normal/ and tests_gold/ green). A
 # failing gold case is a legitimate iteration goal.
 #
-# The agent maintains this script as the project takes shape. It
-# should run cases under tests_gold/ in parallel where feasible.
-#
-# Initially a no-op so the harness can run from iteration 1 even
-# before any gold cases exist.
+# Cases live under `tests_gold/cases/test_*.py` and are discovered
+# by `unittest`. Each case may shell out to `pnpm exec tsx` for
+# Node-backed integration scripts. The Node toolchain is provisioned
+# by `tests_normal/setup_node.sh`; the harness runs `tests_normal/`
+# first so `.tools/node` is already populated, but we guard against
+# standalone invocations.
 
 set -euo pipefail
 
-echo "tests_gold/run_tests.sh: no gold tests configured yet (placeholder); treating as pass."
-exit 0
+cd "$(dirname "$0")/.."
+
+if [[ ! -x .tools/node/bin/node ]]; then
+    bash tests_normal/setup_node.sh
+fi
+export PATH="$PWD/.tools/node/bin:$PATH"
+
+if compgen -G "tests_gold/cases/test_*.py" >/dev/null; then
+    python3 -m unittest discover -s tests_gold/cases -p "test_*.py" -v
+else
+    echo "tests_gold/run_tests.sh: no gold cases configured; treating as pass."
+fi
+
+echo "tests_gold/run_tests.sh: PASS"

@@ -7,7 +7,13 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { applyMigrations, closeDb, createDb, loadMigrations } from '../src/index.js';
+import {
+  applyMigrations,
+  closeDb,
+  createDb,
+  loadMigrations,
+  postgresJsDriver,
+} from '../src/index.js';
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -25,7 +31,7 @@ async function main(): Promise<void> {
 
   const handle = createDb(url, { max: 1, onnotice: () => {} });
   try {
-    const result = await applyMigrations(handle.client, migrations);
+    const result = await applyMigrations(postgresJsDriver(handle.client), migrations);
     for (const name of result.applied) console.log(`applied ${name}`);
     for (const name of result.skipped) console.log(`skipped ${name} (already applied)`);
     console.log(`migrate: ${result.applied.length} applied, ${result.skipped.length} skipped`);

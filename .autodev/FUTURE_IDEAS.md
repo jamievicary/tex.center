@@ -1,7 +1,8 @@
 # Future ideas
 
-- **In-process Postgres for M4.2.1.** Evaluate PGlite
-  (`@electric-sql/pglite`) as an alternative to docker-compose
-  for the migration-apply integration test. Trade-off: hermetic
-  + no host Docker required, but a different SQL surface than
-  prod Postgres so DDL-level coverage only.
+- **docker-compose bring-up for Postgres + MinIO.** M4.2.1 is
+  covered by PGlite for DDL-level checks, but the file-blob side
+  of M4.3 (Tigris object store, sidecar hydration round-trip)
+  still wants a real local stack. Spin Postgres + MinIO behind a
+  compose file with a CI host that has Docker; gold cases gate
+  on `which docker`.

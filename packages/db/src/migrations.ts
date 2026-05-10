@@ -42,14 +42,26 @@ export interface ApplyResult {
   skipped: string[];
 }
 
+/**
+ * Driver abstraction over the SQL client so `applyMigrations` can
+ * run against postgres-js (prod) and PGlite (in-process gold test)
+ * without duplicating the bookkeeping logic.
+ */
+export interface MigrationsDriver {
+  /** Run `MIGRATIONS_TABLE_SQL` (idempotent). */
+  ensureMigrationsTable(): Promise<void>;
+  /** Return one row per already-applied migration. */
+  loadAppliedRows(): Promise<{ name: string; sha256: string }[]>;
+  /** Apply one migration's DDL and insert its bookkeeping row, atomically. */
+  applyOne(migration: Migration): Promise<void>;
+}
+
 export async function applyMigrations(
-  sql: Sql,
+  driver: MigrationsDriver,
   migrations: Migration[],
 ): Promise<ApplyResult> {
-  await sql.unsafe(MIGRATIONS_TABLE_SQL);
-  const rows = await sql<{ name: string; sha256: string }[]>`
-    SELECT name, sha256 FROM schema_migrations
-  `;
+  await driver.ensureMigrationsTable();
+  const rows = await driver.loadAppliedRows();
   const known = new Map(rows.map((r) => [r.name, r.sha256]));
 
   const applied: string[] = [];
@@ -57,13 +69,7 @@ export async function applyMigrations(
   for (const m of migrations) {
     const existing = known.get(m.name);
     if (existing === undefined) {
-      await sql.begin(async (tx) => {
-        await tx.unsafe(m.sql);
-        await tx`
-          INSERT INTO schema_migrations (name, sha256)
-          VALUES (${m.name}, ${m.sha256})
-        `;
-      });
+      await driver.applyOne(m);
       applied.push(m.name);
     } else if (existing !== m.sha256) {
       throw new Error(
@@ -75,4 +81,29 @@ export async function applyMigrations(
     }
   }
   return { applied, skipped };
+}
+
+/**
+ * Driver adapter for postgres-js's `Sql` client (the prod path).
+ */
+export function postgresJsDriver(sql: Sql): MigrationsDriver {
+  return {
+    async ensureMigrationsTable() {
+      await sql.unsafe(MIGRATIONS_TABLE_SQL);
+    },
+    async loadAppliedRows() {
+      return await sql<{ name: string; sha256: string }[]>`
+        SELECT name, sha256 FROM schema_migrations
+      `;
+    },
+    async applyOne(m) {
+      await sql.begin(async (tx) => {
+        await tx.unsafe(m.sql);
+        await tx`
+          INSERT INTO schema_migrations (name, sha256)
+          VALUES (${m.name}, ${m.sha256})
+        `;
+      });
+    },
+  };
 }

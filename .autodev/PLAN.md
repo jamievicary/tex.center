@@ -80,15 +80,25 @@ per-project Machine spawning, (D) auth + production polish.
                   `packages/db/test/migrations.test.mjs`; the
                   applier integration lands in M4.2.1 with real
                   Postgres.
-            - [ ] **M4.2.1 — Docker compose + apply integration.**
-                  `docker-compose.yml` for Postgres + MinIO.
-                  Gold test runs `db:migrate` against a real
-                  container, asserts every spec table exists and
-                  re-running is a no-op (`skipped` only).
-                  **Deferred (iter 19):** harness host has no
-                  Docker, so the gold case would skip locally.
-                  Pick up once CI host has Docker, or adopt an
-                  in-process alternative (PGlite) — see
+            - [x] **M4.2.1 — Migration-apply integration test.**
+                  _(iter 23.)_ Adopted in-process PGlite (devDep
+                  of `packages/db`) instead of docker-compose:
+                  no host services required, every iteration runs
+                  the full DDL against a real Postgres
+                  parser/planner. `applyMigrations` was refactored
+                  to take a `MigrationsDriver` interface;
+                  `postgresJsDriver(sql)` is the prod adapter and
+                  is shipped from `@tex-center/db`. The gold case
+                  `tests_gold/cases/test_pglite_migrations.py`
+                  drives `packages/db/test/migrations-pglite.test.mjs`,
+                  which asserts (a) first apply produces
+                  `applied=[…all migrations]`, (b) re-apply is
+                  `skipped`-only, (c) every table in `allTables`
+                  exists with every declared column at the
+                  expected SQL data type and nullability. A
+                  docker-compose bring-up for Postgres+MinIO is
+                  still wanted longer-term for the file-blob /
+                  Tigris side of M4.3 — captured in
                   FUTURE_IDEAS.
             - [x] **M4.2.2 — Sidecar wiring.** _(iter 19.)_
                   `apps/sidecar` depends on `@tex-center/db`;
@@ -120,8 +130,9 @@ per-project Machine spawning, (D) auth + production polish.
 ## Current focus
 
 **Next ordinary iteration should pick up M3.5 (upstream supertex
-PRs) or M4.3 (project hydration).** M4.2.1 stays deferred until
-a Docker-capable host or PGlite (see FUTURE_IDEAS).
+PRs) or M4.3 (project hydration).** M4.2 is now fully closed —
+both schema-string-regex (tests_normal) and DDL-against-real-PG
+(tests_gold via PGlite) coverage are in place.
 
 **Live caveats:**
 
