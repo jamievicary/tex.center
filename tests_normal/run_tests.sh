@@ -21,13 +21,15 @@ cd "$(dirname "$0")/.."
 
 python3 tests_normal/structural_checks.py
 
-if compgen -G "tests_normal/cases/test_*.py" >/dev/null; then
-    python3 -m unittest discover -s tests_normal/cases -p "test_*.py" -v
-fi
-
 bash tests_normal/setup_node.sh
 export PATH="$PWD/.tools/node/bin:$PATH"
 pnpm install --frozen-lockfile --prefer-offline
 pnpm -r typecheck
+
+# Python test cases run after the Node toolchain is provisioned
+# (some shell out to `pnpm exec tsx`).
+if compgen -G "tests_normal/cases/test_*.py" >/dev/null; then
+    python3 -m unittest discover -s tests_normal/cases -p "test_*.py" -v
+fi
 
 echo "tests_normal/run_tests.sh: PASS"

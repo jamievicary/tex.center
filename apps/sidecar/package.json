@@ -6,9 +6,19 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@tex-center/protocol": "workspace:*"
+    "@fastify/websocket": "^11.0.1",
+    "@tex-center/protocol": "workspace:*",
+    "fastify": "^5.0.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.13",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.1"
   }
 }

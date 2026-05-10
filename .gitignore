@@ -42,6 +42,8 @@ Thumbs.db
 *.toc
 # Frontend static fixtures are intentionally tracked.
 !apps/web/static/*.pdf
+# Sidecar stub-compile fixture (will be deleted at M3 when supertex lands).
+!apps/sidecar/fixtures/*.pdf
 
 # Autodev internal state — keep out of the product repo
 autodev/

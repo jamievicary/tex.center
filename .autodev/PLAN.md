@@ -36,11 +36,17 @@ per-project Machine spawning, (D) auth + production polish.
       the generated `.svelte-kit/tsconfig.json` to extend
       `tsconfig.base.json` so structural intent is preserved.
       _(iter 4.)_
-- [ ] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
+- [~] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
       Yjs document persistence in memory, "viewing page N" channel,
       and a stub compile loop that hands back a static PDF to the
       browser. Defines `packages/protocol` (Yjs awareness fields,
       compile messages, PDF byte-range patch messages).
+      _(iter 5: server half landed — `packages/protocol` codec
+      with tagged binary frames, sidecar boots Fastify +
+      `@fastify/websocket`, holds one `Y.Doc` per project, emits
+      hello + PDF segments, observes Y.Text changes with a 100 ms
+      debounce. Unit tests under `tests_normal/cases/test_node_suites.py`
+      via `pnpm exec tsx`. Browser-side wiring still TODO.)_
 - [ ] **M3 — supertex daemon mode.** Decide whether to add daemon
       mode upstream or wrap with a thin per-project supervisor that
       drives `vendor/supertex` per-edit. Likely upstream PR to
@@ -67,11 +73,15 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0 + M1 closed. Next: M2 — sidecar service skeleton (Fastify +
-`ws`, in-memory Yjs doc, viewing-page-N channel, stub compile
-loop returning the fixture PDF, with `packages/protocol`
-defining message shapes). The sidecar's WebSocket can replace
-the current static `/fixture.pdf` reference in M2's iteration.
+M0 + M1 closed. M2 server half landed (iter 5). Next: M2
+**browser** half — `apps/web` opens a WebSocket to the sidecar,
+mirrors the `Y.Doc` against the CodeMirror buffer (Yjs ↔ CM6
+binding, e.g. `y-codemirror.next`), feeds incoming PDF segments
+into PdfViewer (which becomes a `Uint8Array` consumer rather
+than a URL consumer), and emits `view` control messages when the
+visible page changes. The dev experience needs a Vite proxy from
+`/ws/*` to `127.0.0.1:3001`. Once that lands, the M1 static
+`/fixture.pdf` reference can be deleted.
 
 ## Local toolchain
 
