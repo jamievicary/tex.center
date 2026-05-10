@@ -1,0 +1,3 @@
+[submodule "vendor/supertex"]
+	path = vendor/supertex
+	url = https://github.com/jamievicary/supertex.git
