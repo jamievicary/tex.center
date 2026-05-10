@@ -133,7 +133,7 @@ per-project Machine spawning, (D) auth + production polish.
                   same interface; gold-test against MinIO once
                   the docker-compose item from
                   `FUTURE_IDEAS.md` lands.
-            - [~] **M4.3.2 — Sidecar wiring.** _(iter 25.)_
+            - [~] **M4.3.2 — Sidecar wiring.** _(iter 25, 28, 29.)_
                   Source-file hydration + persistence done.
                   `buildServer` accepts an optional
                   `blobStore?: BlobStore`; when unset, env selects
@@ -149,7 +149,13 @@ per-project Machine spawning, (D) auth + production polish.
                   persisted copy. Tested at
                   `apps/sidecar/test/serverBlobs.test.mjs`
                   (hydrate, edit-then-persist, cold-restart sees
-                  the edit). **Outstanding:** checkpoint
+                  the edit). Iter 28 decoupled the put from
+                  compile success (writeMain → put → compile, so
+                  TeX errors don't lose edits). Iter 29 added a
+                  `canPersist` flag so a transient hydration
+                  failure never causes the next compile to
+                  overwrite the remote blob with the empty
+                  in-memory Y.Text. **Outstanding:** checkpoint
                   persistence on `Compiler.close()` waits for
                   M3.5/M7 — compilers don't expose checkpoint
                   blobs yet, and `vendor/supertex` doesn't

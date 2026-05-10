@@ -59,6 +59,14 @@ interface ProjectState {
   workspace: ProjectWorkspace;
   /** Last source persisted to the blob store; used to skip no-op writes. */
   persistedSource: string | null;
+  /**
+   * `true` only after blob hydration completed without throwing
+   * (whether or not the blob existed). Persistence is gated on
+   * this so a transient `blobStore.get()` failure doesn't cause
+   * the next compile to overwrite the remote blob with the empty
+   * in-memory Y.Text.
+   */
+  canPersist: boolean;
   hydrated: Promise<void>;
 }
 
@@ -157,6 +165,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       compiler: compilerFactory({ projectId: id, workspace }),
       workspace,
       persistedSource: null,
+      canPersist: blobStore === undefined,
       hydrated: Promise.resolve(),
     };
     if (blobStore) {
@@ -170,10 +179,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           } else if (bytes) {
             state.persistedSource = "";
           }
+          state.canPersist = true;
         } catch (e) {
           app.log.warn(
             { err: e instanceof Error ? e.message : String(e), projectId: id },
-            "blob hydration failed",
+            "blob hydration failed; persistence disabled this session",
           );
         }
       })();
@@ -228,7 +238,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // Persist source before invoking the compiler. A failed compile
     // must not lose the user's edits — once the source is on the
     // workspace disk it is also durable in the blob store.
-    if (blobStore && source !== p.persistedSource) {
+    if (blobStore && p.canPersist && source !== p.persistedSource) {
       try {
         await blobStore.put(mainTexKey(p.id), new TextEncoder().encode(source));
         p.persistedSource = source;

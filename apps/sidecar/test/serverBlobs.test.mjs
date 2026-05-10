@@ -128,6 +128,81 @@ async function bootClient(app) {
   await app.close();
 }
 
+// --- Run 1c: failed hydration must NOT clobber the remote blob ----
+// If `blobStore.get` throws (transient outage, partial failure),
+// the project state's `persistedSource` would historically remain
+// null. The next compile would then evaluate `source !==
+// persistedSource` as trivially true and overwrite the legitimate
+// blob with the empty in-memory Y.Text — silent data loss.
+{
+  const sentinel = "PRESERVE_ME_DO_NOT_CLOBBER";
+  const isolatedRoot = mkdtempSync(join(tmpdir(), "sidecar-blob-fail-test-"));
+  const realStore = new LocalFsBlobStore({ rootDir: isolatedRoot });
+  const sentinelKey = `projects/beta/files/main.tex`;
+  await realStore.put(sentinelKey, new TextEncoder().encode(sentinel));
+
+  // One-shot get-failing wrapper; subsequent calls pass through.
+  let getCallsBeforeFail = 1;
+  const flakyStore = {
+    async get(key) {
+      if (getCallsBeforeFail-- > 0) throw new Error("simulated transient blob outage");
+      return realStore.get(key);
+    },
+    put: realStore.put.bind(realStore),
+    list: realStore.list.bind(realStore),
+    delete: realStore.delete.bind(realStore),
+    health: realStore.health.bind(realStore),
+  };
+
+  const app = await buildServer({ logger: false, blobStore: flakyStore });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+
+  // Override projectId for this run via direct WS — bootClient uses
+  // the module-level `projectId`, so spin a minimal client inline.
+  const address = app.server.address();
+  const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws/project/beta`);
+  ws.binaryType = "arraybuffer";
+  const frames = [];
+  const clientDoc = new Y.Doc();
+  const text = clientDoc.getText(MAIN_DOC_NAME);
+  ws.on("message", (data) => {
+    const buf = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
+    const f = decodeFrame(buf);
+    frames.push(f);
+    if (f.kind === "doc-update") Y.applyUpdate(clientDoc, f.update);
+  });
+  await new Promise((res, rej) => { ws.once("open", res); ws.once("error", rej); });
+
+  // Drive a destructive edit. If the bug is unfixed, the server
+  // will clobber the sentinel blob with this content.
+  const target = "this would destroy the original";
+  const before = Y.encodeStateVector(text.doc);
+  text.doc.transact(() => {
+    text.delete(0, text.length);
+    text.insert(0, target);
+  });
+  ws.send(encodeDocUpdate(Y.encodeStateAsUpdate(text.doc, before)));
+
+  // Wait for the compile to fire and the (would-be) put to settle.
+  // We can't observe a "no-op put" directly, so wait for an idle
+  // compile-status frame, which the server sends after the compile
+  // path completes.
+  await waitFor(
+    () => frames.some((f) => f.kind === "control" && f.message.type === "compile-status" && f.message.state === "idle"),
+    "compile completed",
+    frames,
+  );
+
+  // Assert the blob is untouched.
+  const persisted = await realStore.get(sentinelKey);
+  const persistedText = new TextDecoder().decode(persisted);
+  assert.equal(persistedText, sentinel, "failed hydration must not overwrite the remote blob");
+
+  ws.close();
+  await new Promise((r) => ws.once("close", r));
+  await app.close();
+}
+
 // --- Run 2: cold-start hydration sees the persisted edit -----------
 {
   const app = await buildServer({ logger: false, blobStore });
