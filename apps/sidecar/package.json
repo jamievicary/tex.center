@@ -1,0 +1,14 @@
+{
+  "name": "@tex-center/sidecar",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Per-project sidecar: Fastify + ws server that drives supertex over its daemon protocol and bridges Yjs/PDF traffic to the browser.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tex-center/protocol": "workspace:*"
+  }
+}

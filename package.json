@@ -1,0 +1,16 @@
+{
+  "name": "tex-center",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cloud LaTeX editor on top of supertex (https://tex.center).",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --parallel typecheck",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}

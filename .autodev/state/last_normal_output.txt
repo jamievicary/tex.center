@@ -1,1 +1,2 @@
-tests_normal/run_tests.sh: no normal tests configured yet (placeholder); treating as pass.
+structural_checks: OK (3 packages)
+tests_normal/run_tests.sh: PASS
