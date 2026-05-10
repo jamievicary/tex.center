@@ -63,6 +63,9 @@ importers:
       codemirror:
         specifier: ^6.0.1
         version: 6.0.2
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
@@ -1081,6 +1084,9 @@ packages:
 
   isomorphic.js@0.2.5:
     resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
+
+  jose@5.10.0:
+    resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
   json-schema-ref-resolver@3.0.0:
     resolution: {integrity: sha512-hOrZIVL5jyYFjzk7+y7n5JDzGlU8rfWDuYyHwGa2WA8/pcmMHezp2xsVwxrebD/Q9t8Nc5DboieySDpCp4WG4A==}
@@ -2104,6 +2110,8 @@ snapshots:
       '@types/estree': 1.0.9
 
   isomorphic.js@0.2.5: {}
+
+  jose@5.10.0: {}
 
   json-schema-ref-resolver@3.0.0:
     dependencies:

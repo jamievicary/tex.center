@@ -153,11 +153,39 @@ spawning, (D) auth + production polish.
                   `Cache-Control: no-store`. `secureCookie` keys
                   off `url.protocol === "https:"` so dev over
                   localhost still works.
-            - [ ] **M5.1.2** — `/auth/google/callback`
-                  `+server.ts`: verify state cookie, exchange
-                  code+verifier for tokens, JWKS-verify the ID
-                  token, allowlist-check email, persist a
-                  session row, mint signed session cookie.
+            - [~] **M5.1.2** — `/auth/google/callback`
+                  `+server.ts`.
+                  - [x] **M5.1.2a** — OAuth round-trip lands
+                        (iter 36). Pure `resolveGoogleCallback`
+                        (`apps/web/src/lib/server/oauthCallback.ts`)
+                        orchestrates state-cookie verify → state
+                        compare → token exchange → JWKS verify →
+                        allowlist check → mint signed session
+                        cookie. All I/O injected; unit test stubs
+                        every branch. Concrete I/O in
+                        `googleTokens.ts` (`fetch` for the token
+                        endpoint, `jose.createRemoteJWKSet` +
+                        `jwtVerify` for the ID token). `jose` added
+                        to `apps/web` deps. Route file at
+                        `apps/web/src/routes/auth/google/callback/+server.ts`.
+                        Cookie names: `tc_oauth_state` cleared on
+                        every termination; `tc_session` minted on
+                        success (Path=/, HttpOnly, SameSite=Lax,
+                        Secure on https, Max-Age=30 days).
+                  - [ ] **M5.1.2b** — Session-row persistence.
+                        Wire `@tex-center/db` into `apps/web`
+                        (mirror sidecar's `DbHandle | null` pattern
+                        with `DATABASE_URL`). Add
+                        `packages/db/src/users.ts` +
+                        `sessions.ts` (or co-locate) with a
+                        `findOrCreateUserByGoogleSub` upsert + a
+                        `insertSession({userId, exp})` helper that
+                        returns the new uuid. The route swaps
+                        `mintSid: () => randomUUID()` for a real
+                        DB-backed factory that returns the inserted
+                        row's id. Until this lands, the signed
+                        `tc_session` cookie will not pass the
+                        M5.1.3 hooks lookup.
             - [ ] **M5.1.3** — `hooks.server.ts`: read session
                   cookie on every request, expose `event.locals.session`,
                   redirect unauthenticated users on protected
@@ -175,17 +203,15 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5.1.2 (`/auth/google/callback`):
-verify state cookie, exchange `code + verifier` for tokens against
-Google's token endpoint, JWKS-verify the ID token (`jose` or hand-
-rolled with `node:crypto`), allowlist-check `email` +
-`email_verified`, persist a session row in Postgres
-(`@tex-center/db`), mint a signed session cookie via
-`signSessionToken`, 302 to `/editor`. Same `loadOAuthConfig()` for
-client secret + redirect URI; same signing key. Smaller alternatives
-if M5.1.2 needs prerequisites: M3.5 PRs (out of repo) or a small
-multi-file-project slice. M4.3.1 (S3 adapter) waits for docker-
-compose; M4.3.2 checkpoint half waits for M3.5/M7.
+**Next ordinary iteration:** M5.1.2b (session-row persistence).
+Wire `@tex-center/db` into `apps/web`, add user-upsert + session-
+insert helpers in `packages/db`, swap the route's
+`mintSid: () => randomUUID()` for the DB-backed factory. After that,
+M5.1.3 (`hooks.server.ts`: read `tc_session`, lookup row, populate
+`event.locals.session`). Smaller alternatives if blocked: M3.5 PRs
+(out of repo), a multi-file-project slice on the sidecar. M4.3.1
+(S3 adapter) still waits for docker-compose; M4.3.2 checkpoint half
+waits for M3.5/M7.
 
 ## Live caveats
 

@@ -17,6 +17,7 @@
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.35.0",
     "codemirror": "^6.0.1",
+    "jose": "^5.9.6",
     "pdfjs-dist": "^4.10.38",
     "y-codemirror.next": "^0.3.5",
     "yjs": "^13.6.30"
