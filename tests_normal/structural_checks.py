@@ -118,12 +118,32 @@ def main() -> int:
             else:
                 package_names[name] = pkg_dir
 
-        # tsconfig.json present and extends the shared base.
+        # tsconfig.json present and extends the shared base — either
+        # directly, or transitively via SvelteKit's auto-generated
+        # `.svelte-kit/tsconfig.json` (in which case svelte.config.js
+        # must wire `kit.typescript.config` to set `extends` to the
+        # repo's `tsconfig.base.json`).
         tsconfig_path = pkg_dir / "tsconfig.json"
         ts = load_json(tsconfig_path)
         if ts is not None:
-            extends = ts.get("extends", "")
-            if "tsconfig.base.json" not in str(extends):
+            extends = str(ts.get("extends", ""))
+            if "tsconfig.base.json" in extends:
+                pass
+            elif ".svelte-kit/tsconfig.json" in extends:
+                svelte_cfg = pkg_dir / "svelte.config.js"
+                if not svelte_cfg.exists():
+                    err(
+                        f"{tsconfig_path.relative_to(ROOT)}: extends "
+                        f".svelte-kit/tsconfig.json but svelte.config.js missing"
+                    )
+                elif "tsconfig.base.json" not in svelte_cfg.read_text():
+                    err(
+                        f"{tsconfig_path.relative_to(ROOT)}: extends "
+                        f".svelte-kit/tsconfig.json but svelte.config.js "
+                        f"does not configure kit.typescript.config to extend "
+                        f"tsconfig.base.json"
+                    )
+            else:
                 err(f"{tsconfig_path.relative_to(ROOT)}: must extend tsconfig.base.json")
 
         src = pkg_dir / "src"

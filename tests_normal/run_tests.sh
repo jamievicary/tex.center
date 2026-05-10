@@ -27,6 +27,7 @@ fi
 
 bash tests_normal/setup_node.sh
 export PATH="$PWD/.tools/node/bin:$PATH"
+pnpm install --frozen-lockfile --prefer-offline
 pnpm -r typecheck
 
 echo "tests_normal/run_tests.sh: PASS"

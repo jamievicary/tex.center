@@ -40,6 +40,8 @@ Thumbs.db
 *.fdb_latexmk
 *.out
 *.toc
+# Frontend static fixtures are intentionally tracked.
+!apps/web/static/*.pdf
 
 # Autodev internal state — keep out of the product repo
 autodev/

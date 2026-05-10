@@ -25,10 +25,17 @@ per-project Machine spawning, (D) auth + production polish.
       `tests_normal/setup_node.sh`. Submodule at
       `vendor/supertex`. _(iter 2: scaffolding + structural
       checks. iter 3: Node toolchain + typecheck wired in.)_
-- [ ] **M1 — Static frontend shell.** SvelteKit app: white page with
-      "Sign in with Google" button (mock auth for now), three-panel
-      editor route stubbed with CodeMirror 6 and a hardcoded PDF in
-      PDF.js. No backend yet; serve a fixture PDF.
+- [x] **M1 — Static frontend shell.** SvelteKit (Svelte 5 runes,
+      `adapter-static`, prerendered, `ssr=false`) at `apps/web`. `/`
+      is a white page with a single "Sign in with Google" button
+      (mock: navigates to `/editor`). `/editor` is a three-panel
+      grid: file-tree stub, CodeMirror 6 editor bound to a doc
+      string, PDF.js viewer pointed at `static/fixture.pdf` (a
+      hand-rolled 599-byte hello-world PDF). svelte-check
+      replaces tsc for this package; `kit.typescript.config` wires
+      the generated `.svelte-kit/tsconfig.json` to extend
+      `tsconfig.base.json` so structural intent is preserved.
+      _(iter 4.)_
 - [ ] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
       Yjs document persistence in memory, "viewing page N" channel,
       and a stub compile loop that hands back a static PDF to the
@@ -60,21 +67,33 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0 closed. Next: M1 — SvelteKit white sign-in page +
-three-panel editor stub (CodeMirror 6, PDF.js with a fixture
-PDF). Mock auth for now; real Google OAuth lands in M5.
+M0 + M1 closed. Next: M2 — sidecar service skeleton (Fastify +
+`ws`, in-memory Yjs doc, viewing-page-N channel, stub compile
+loop returning the fixture PDF, with `packages/protocol`
+defining message shapes). The sidecar's WebSocket can replace
+the current static `/fixture.pdf` reference in M2's iteration.
 
 ## Local toolchain
 
-Node 20.18.1 is auto-provisioned per-checkout into
-`.tools/node/` (gitignored) by
-`tests_normal/setup_node.sh`, which the normal-test runner
-calls before `pnpm -r typecheck`. The script is idempotent and
-needs no human input. pnpm is activated via corepack at the
+Node 20.18.1 is auto-provisioned per-checkout into `.tools/node/`
+(gitignored) by `tests_normal/setup_node.sh`, which the normal
+runner invokes. After provisioning Node, the runner calls
+`pnpm install --frozen-lockfile --prefer-offline` and then
+`pnpm -r typecheck`. pnpm is activated via corepack at the
 version pinned in root `package.json` (`packageManager`).
-`/mnt/c` is slower than a real Linux filesystem, but the cost
-is borne once at Node download (~25 MB) and per `pnpm install`;
-typecheck itself is fast.
+
+**DrvFs (/mnt/c) workaround.** WSL2 mounts of the Windows
+filesystem can't host pnpm's atomic-rename install step
+reliably — Windows file watchers (VSCode, antivirus) hold
+transient handles that cause `EACCES` mid-install, leaving
+half-extracted `_tmp_*` dirs behind. `setup_node.sh` detects
+`/mnt/*` checkouts and stashes `node_modules/` under
+`~/.cache/tex-center-nm/<sha1-of-checkout-path>/node_modules`
+(ext4), then symlinks it back into the checkout. We run
+`node-linker=hoisted` (set in repo `.npmrc`) so the layout is
+flat enough that Node's resolution algorithm walks the
+realpath correctly. On a non-`/mnt/*` checkout the symlink
+trick is a no-op and pnpm installs in place.
 
 ## Open questions / risks
 

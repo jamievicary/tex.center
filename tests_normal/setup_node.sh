@@ -36,4 +36,35 @@ if ! command -v pnpm >/dev/null 2>&1; then
     corepack enable >/dev/null
 fi
 
+# DrvFs (/mnt/c on WSL2) cannot host pnpm's package layout reliably:
+# Windows file watchers hold transient handles that race pnpm's
+# atomic-rename install step, producing EACCES. Workaround: stash
+# `node_modules/` on an ext4-backed cache dir under $HOME and link
+# it back into the checkout. Hoisted-linker keeps the layout flat
+# enough that Node's resolution algorithm walks correctly through
+# the symlink (the cache dir's parent is a real path containing a
+# `node_modules` child, which is what Node's walk-up looks for).
+cd ..
+checkout_root="$PWD"
+if [[ "$checkout_root" == /mnt/* ]]; then
+    hash=$(printf '%s' "$checkout_root" | sha1sum | cut -c1-12)
+    cache_parent="$HOME/.cache/tex-center-nm/$hash"
+    cache_nm="$cache_parent/node_modules"
+    mkdir -p "$cache_nm"
+    if [ -e node_modules ] && [ ! -L node_modules ]; then
+        # A previous direct `pnpm install` left a real dir; try to
+        # migrate. Move what we can; leftover entries (locked by
+        # Windows handles) get nuked best-effort.
+        echo "setup_node.sh: migrating node_modules onto ext4 ($cache_nm)..."
+        mv node_modules "$cache_parent/migrated_$$" 2>/dev/null || true
+        rm -rf "$cache_parent/migrated_$$" 2>/dev/null || true
+    fi
+    if [ ! -L node_modules ] || [ "$(readlink node_modules)" != "$cache_nm" ]; then
+        rm -f node_modules
+        ln -s "$cache_nm" node_modules
+        echo "setup_node.sh: node_modules -> $cache_nm"
+    fi
+fi
+cd .tools
+
 echo "setup_node.sh: node $(node --version), pnpm $(pnpm --version)"
