@@ -17,38 +17,22 @@ The work splits roughly into (A) a vertical slice we can run locally
 end-to-end, (B) supertex daemon-isation, (C) Fly deployment +
 per-project Machine spawning, (D) auth + production polish.
 
-- [x] **M0 — Repo scaffolding.** Monorepo layout (`apps/web`,
-      `apps/sidecar`, `packages/protocol`), TypeScript + pnpm
-      workspace, `tests_normal/` runs structural checks plus
-      `pnpm -r typecheck` (tsc --noEmit) across all packages.
-      Node 20 LTS auto-provisioned into gitignored `.tools/` by
-      `tests_normal/setup_node.sh`. Submodule at
-      `vendor/supertex`. _(iter 2: scaffolding + structural
-      checks. iter 3: Node toolchain + typecheck wired in.)_
-- [x] **M1 — Static frontend shell.** SvelteKit (Svelte 5 runes,
-      `adapter-static`, prerendered, `ssr=false`) at `apps/web`. `/`
-      is a white page with a single "Sign in with Google" button
-      (mock: navigates to `/editor`). `/editor` is a three-panel
-      grid: file-tree stub, CodeMirror 6 editor bound to a doc
-      string, PDF.js viewer pointed at `static/fixture.pdf` (a
-      hand-rolled 599-byte hello-world PDF). svelte-check
-      replaces tsc for this package; `kit.typescript.config` wires
-      the generated `.svelte-kit/tsconfig.json` to extend
-      `tsconfig.base.json` so structural intent is preserved.
-      _(iter 4.)_
-- [x] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
-      Yjs document persistence in memory, "viewing page N" channel,
-      and a stub compile loop that hands back a static PDF to the
-      browser. Defines `packages/protocol` (Yjs awareness fields,
-      compile messages, PDF byte-range patch messages).
-      _(iter 5: server half. iter 6: browser half — `apps/web`
-      gains `WsClient` (one Y.Doc, decodes binary frames, applies
-      PDF segments via a `PdfBuffer`), `Editor.svelte` binds to a
-      `Y.Text` via `y-codemirror.next`, `PdfViewer.svelte` accepts
-      `Uint8Array | string`, `+page.svelte` wires it together, and
-      Vite proxies `/ws/* → ws://127.0.0.1:3001`. Static
-      `apps/web/static/fixture.pdf` deleted; the sidecar fixture
-      stays until M3.)_
+- [x] **M0 — Repo scaffolding.** _(iter 2–3.)_ pnpm workspace
+      (`apps/web`, `apps/sidecar`, `packages/protocol`), TS, Node 20
+      auto-provisioned into `.tools/`, `tests_normal/` runs
+      structural checks + `pnpm -r typecheck`. `vendor/supertex`
+      submodule.
+- [x] **M1 — Static frontend shell.** _(iter 4.)_ SvelteKit (Svelte
+      5 runes, `adapter-static`, `ssr=false`). `/` = white page +
+      "Sign in with Google" mock button. `/editor` = three-panel
+      grid (file tree stub / CM6 editor / PDF.js viewer).
+- [x] **M2 — Sidecar service skeleton.** _(iter 5–6.)_ Fastify +
+      `ws` with in-memory Yjs persistence, "viewing page N" channel,
+      stub compile loop returning a fixture PDF. `packages/protocol`
+      defines the wire format (Yjs frames, compile-status,
+      pdf-segment). Browser `WsClient` decodes binary frames and
+      applies segments via `PdfBuffer`; `y-codemirror.next` binds
+      CM6 to the shared `Y.Text`. Vite proxies `/ws/*`.
 - [ ] **M3 — supertex daemon mode.** Decide whether to add daemon
       mode upstream or wrap with a thin per-project supervisor that
       drives `vendor/supertex` per-edit. Likely upstream PR to
@@ -75,15 +59,13 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0–M2 closed; M3.0 (compiler seam) and M3.1 (on-disk workspace
-mirror) closed. The dev loop is now: `pnpm -F @tex-center/sidecar
-dev` plus `pnpm -F @tex-center/web dev`, browser at
-`localhost:3000/editor`, Yjs↔CM6 round-trip, sidecar mirrors
-`main.tex` to a scratch dir every compile and ships the fixture PDF.
-Next: **M3.2 `SupertexOnceCompiler`** — selectable via
-`SIDECAR_COMPILER=supertex-once`, spawns
-`vendor/supertex/bin/supertex paper.tex --once
---output-directory <ws>/out` and returns the resulting PDF.
+**M3.2 `SupertexOnceCompiler`** — spawns
+`vendor/supertex/bin/supertex paper.tex --once --output-directory
+<ws>/out` per compile, reads PDF off disk, returns a single segment.
+Selected via `SIDECAR_COMPILER=supertex-once`; default stays
+`fixture` until parity is good. Dev loop today: sidecar+web pnpm
+dev tasks, Yjs↔CM6 round-trip, sidecar mirrors `main.tex` to scratch
+dir per compile and ships fixture PDF.
 
 ### Survey of `vendor/supertex` (iter 8)
 
@@ -126,24 +108,16 @@ Implications for M3:
 
 ### M3 sub-milestones
 
-- [x] **M3.0 — Compiler adapter seam (scaffolding).** Iter 8.
-      Defined `Compiler` interface in
-      `apps/sidecar/src/compiler/types.ts` and refactored
-      `server.ts` to use it (passing `targetPage = max viewing
-      page across viewers`). Existing behaviour preserved by the
-      `FixtureCompiler` implementation
-      (`apps/sidecar/src/compiler/fixture.ts`). Future M3 slices
-      drop in a `SupertexCompiler` behind the same seam.
-- [x] **M3.1 — Project filesystem layout.** Iter 9.
-      `apps/sidecar/src/workspace.ts` — `ProjectWorkspace` with
-      `init()` / `writeMain()` (atomic tmp+rename) / `dispose()`
-      and a strict `[A-Za-z0-9_-]+` projectId regex so URL path
-      params can't escape the scratch root. Server creates one
-      per project under `opts.scratchRoot ?? mkdtemp(os.tmpdir())`,
-      mirrors `Y.Text` to `<root>/<id>/main.tex` at the head of
-      every compile cycle, and on `onClose` disposes each
-      workspace + removes the owned root. `FixtureCompiler`
-      still ignores the mirror — it's dark code until M3.2.
+- [x] **M3.0 — Compiler adapter seam.** _(iter 8.)_ `Compiler`
+      interface at `apps/sidecar/src/compiler/types.ts`; `server.ts`
+      threads `targetPage` (max viewing page across viewers) through
+      it. `FixtureCompiler` preserves prior behaviour.
+- [x] **M3.1 — Project filesystem layout.** _(iter 9.)_
+      `ProjectWorkspace` (`apps/sidecar/src/workspace.ts`) with
+      atomic `writeMain` and strict projectId regex. Server mirrors
+      `Y.Text` to `<scratchRoot>/<id>/main.tex` at the head of every
+      compile; disposes per-project dirs on close. Mirror is dark
+      code until M3.2 reads it.
 - [ ] **M3.2 — `SupertexOnceCompiler`.** Spawns
       `vendor/supertex/bin/supertex paper.tex --once
       --output-directory <work>/out --live-shipouts <work>/shipouts`
@@ -171,15 +145,9 @@ Implications for M3:
       flag is supported (feature-detect on startup so older
       supertex builds remain usable).
 
-Multi-iteration milestone with scaffolding: each M3.x leaves the
-default compile path runnable, with progressively more of the
-real engine wired up. Cutover is gradual via `SIDECAR_COMPILER`
-selector; the env-var goes away in M3.5 once `supertex-watch` is
-the only sensible default.
-
-The M2 browser bits are exercised by typechecks + the `PdfBuffer`
-unit test only — Svelte component tests via Playwright are M8
-gold-suite work.
+Cutover is gradual via the `SIDECAR_COMPILER` selector; that
+env-var is deleted in M3.5 once `supertex-watch` is the default.
+Browser-side M2 has no component tests — Playwright lives in M8.
 
 ## Local toolchain
 
