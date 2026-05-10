@@ -105,8 +105,20 @@ spawning, (D) auth + production polish.
                   interface yet, and supertex doesn't serialise
                   them either.
 
-- [ ] **M5 — Auth.** Google OAuth (Authorization Code), server-side
+- [~] **M5 — Auth.** Google OAuth (Authorization Code), server-side
       sessions, allowlist `jamievicary@gmail.com`. Replaces M1 mock.
+      - [x] **M5.0** — `packages/auth`: pure-logic leaf with email
+            allowlist (`isAllowedEmail`, case-insensitive, trimmed)
+            and HMAC-SHA256-signed session tokens
+            (`signSessionToken` / `verifySessionToken`, base64url,
+            constant-time compare, caller-supplied `nowSeconds`).
+            No I/O, no module state. _(iter 32)_
+      - [ ] **M5.1** — Google OAuth callback wiring (PKCE, JWKS
+            verify of the ID token, mint a session row + cookie
+            via `packages/auth`). Requires apps/web to gain a
+            server tier (move off `adapter-static` for the
+            callback route, or split a Fastify control-plane
+            app) — pick at the iteration that lands it.
 - [ ] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
       `fly.toml`, GitHub Actions on push to `main`, custom domain
       `tex.center` via Cloudflare. Scales to zero.
@@ -120,10 +132,13 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration: M3.5 upstream PRs**, or a small
-multi-file project slice (still single-`main.tex` everywhere), or
-M5 auth scaffolding. M4.3.1 (S3 adapter) waits for the docker-
-compose stack; M4.3.2 checkpoint half waits for M3.5/M7.
+**Next ordinary iteration:** M3.5 upstream PRs (not actionable
+in-repo); a small multi-file project slice (still single-
+`main.tex` everywhere); or M5.1 — wire the new `packages/auth`
+into a real OAuth callback (needs an apps/web server tier — pick
+adapter swap vs. split Fastify control-plane at that iteration).
+M4.3.1 (S3 adapter) waits for the docker-compose stack; M4.3.2
+checkpoint half waits for M3.5/M7.
 
 ## Live caveats
 
