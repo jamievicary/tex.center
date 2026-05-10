@@ -25,3 +25,9 @@ export {
   type SessionPayload,
   type VerifyResult,
 } from "./session.js";
+export {
+  generatePkce,
+  computeChallenge,
+  isValidVerifier,
+  type PkcePair,
+} from "./pkce.js";

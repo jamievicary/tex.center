@@ -92,6 +92,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_auth(self) -> None:
         _run_tsx(ROOT / "packages" / "auth" / "test" / "auth.test.mjs")
 
+    def test_auth_pkce(self) -> None:
+        _run_tsx(ROOT / "packages" / "auth" / "test" / "pkce.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()
