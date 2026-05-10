@@ -5,15 +5,15 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 74, downloaded 0, added 0, done
+Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
 Done in 1.1s
 Scope: 5 of 6 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck: Done
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
+packages/protocol typecheck: Done
 packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
@@ -31,6 +31,7 @@ test_sidecar_feature_detect (test_node_suites.TestNodeSuites.test_sidecar_featur
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_pdf_segmenter (test_node_suites.TestNodeSuites.test_sidecar_pdf_segmenter) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
+test_sidecar_server_blobs (test_node_suites.TestNodeSuites.test_sidecar_server_blobs) ... ok
 test_sidecar_server_db (test_node_suites.TestNodeSuites.test_sidecar_server_db) ... ok
 test_sidecar_server_health (test_node_suites.TestNodeSuites.test_sidecar_server_health) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
@@ -40,7 +41,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 16 tests in 27.468s
+Ran 17 tests in 29.966s
 
 OK
 tests_normal/run_tests.sh: PASS

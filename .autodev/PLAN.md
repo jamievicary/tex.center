@@ -133,13 +133,27 @@ per-project Machine spawning, (D) auth + production polish.
                   same interface; gold-test against MinIO once
                   the docker-compose item from
                   `FUTURE_IDEAS.md` lands.
-            - [ ] **M4.3.2 — Sidecar wiring.** On project open,
-                  hydrate `ProjectWorkspace` from a configured
-                  `BlobStore` (key prefix
-                  `projects/<id>/files/`). On `Compiler.close()`,
-                  persist the checkpoint blob back. Selector via
-                  env (`BLOB_STORE=local` for tests/dev, `s3` for
-                  prod).
+            - [~] **M4.3.2 — Sidecar wiring.** _(iter 25.)_
+                  Source-file hydration + persistence done.
+                  `buildServer` accepts an optional
+                  `blobStore?: BlobStore`; when unset, env selects
+                  (`BLOB_STORE=local` requires
+                  `BLOB_STORE_LOCAL_DIR`; `s3` reserved for
+                  M4.3.1; unset/`none` disables persistence). On
+                  first `getProject(id)`, `main.tex` at key
+                  `projects/<id>/files/main.tex` is loaded into
+                  the project's `Y.Text` before initial state
+                  ships to the first client. After every
+                  successful compile, the current source is
+                  written back if it differs from the last
+                  persisted copy. Tested at
+                  `apps/sidecar/test/serverBlobs.test.mjs`
+                  (hydrate, edit-then-persist, cold-restart sees
+                  the edit). **Outstanding:** checkpoint
+                  persistence on `Compiler.close()` waits for
+                  M3.5/M7 — compilers don't expose checkpoint
+                  blobs yet, and `vendor/supertex` doesn't
+                  serialise them either (see Candidate work §5).
 - [ ] **M5 — Auth.** Google OAuth (Authorization Code), server-side
       sessions, allowlist `jamievicary@gmail.com`. Replace mock auth
       from M1.
@@ -156,11 +170,13 @@ per-project Machine spawning, (D) auth + production polish.
 ## Current focus
 
 **Next ordinary iteration should pick up M3.5 (upstream supertex
-PRs) or M4.3.2 (sidecar wiring of `BlobStore`).** M4.3.0 (the
-`BlobStore` primitive + local-FS adapter) landed in iter 24;
+PRs).** M4.3.0 + M4.3.2-source-file-half landed in iters 24–25;
 M4.3.1 (S3 adapter) waits for the docker-compose stack so it can
-be gold-tested against MinIO. The sidecar wiring (M4.3.2) can
-proceed against `LocalFsBlobStore` immediately.
+be gold-tested against MinIO; the M4.3.2 checkpoint half waits
+for M3.5/M7 to introduce a checkpoint-blob protocol on the
+compiler interface. Useful smaller items in the meantime:
+multi-file project support beyond a single `main.tex`, or M5
+auth scaffolding.
 
 **Live caveats:**
 

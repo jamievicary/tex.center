@@ -44,6 +44,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "server.test.mjs")
 
+    def test_sidecar_server_blobs(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverBlobs.test.mjs")
+
     def test_sidecar_server_db(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverDb.test.mjs")
 

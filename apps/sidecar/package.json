@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.1",
+    "@tex-center/blobs": "workspace:*",
     "@tex-center/db": "workspace:*",
     "@tex-center/protocol": "workspace:*",
     "fastify": "^5.0.0",
