@@ -13,6 +13,7 @@ import { eq } from 'drizzle-orm';
 import {
   applyMigrations,
   findOrCreateUserByGoogleSub,
+  getSessionWithUser,
   insertSession,
   loadMigrations,
   MIGRATIONS_TABLE_SQL,
@@ -121,6 +122,22 @@ try {
     fkErr = e;
   }
   assert.ok(fkErr, 'insertSession with bad userId must throw (FK)');
+
+  // --- getSessionWithUser: happy path ----------------------------
+  const lookup = await getSessionWithUser(db, session.id);
+  assert.ok(lookup, 'session must be found by id');
+  assert.equal(lookup.session.id, session.id);
+  assert.equal(lookup.session.userId, created.id);
+  assert.equal(lookup.user.id, created.id);
+  assert.equal(lookup.user.email, refreshed.email);
+  assert.equal(lookup.user.googleSub, 'google-sub-A');
+
+  // --- getSessionWithUser: unknown sid → null --------------------
+  const miss = await getSessionWithUser(
+    db,
+    '11111111-1111-1111-1111-111111111111',
+  );
+  assert.equal(miss, null);
 
   console.log('users + sessions PGlite test: OK');
 } finally {

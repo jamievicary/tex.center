@@ -24,6 +24,7 @@ export {
   verifySessionToken,
   type SessionPayload,
   type VerifyResult,
+  type VerifyFailure,
 } from "./session.js";
 export {
   generatePkce,

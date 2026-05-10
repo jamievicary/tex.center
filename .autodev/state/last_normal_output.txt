@@ -5,20 +5,20 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 74, downloaded 0, added 0, done
 
-Done in 6s
+Done in 2.7s
 Scope: 6 of 7 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck: Done
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
-packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -46,9 +46,10 @@ test_web_oauth_callback (test_node_suites.TestNodeSuites.test_web_oauth_callback
 test_web_oauth_start (test_node_suites.TestNodeSuites.test_web_oauth_start) ... ok
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
+test_web_session_hook (test_node_suites.TestNodeSuites.test_web_session_hook) ... ok
 
 ----------------------------------------------------------------------
-Ran 22 tests in 66.133s
+Ran 23 tests in 51.760s
 
 OK
 tests_normal/run_tests.sh: PASS

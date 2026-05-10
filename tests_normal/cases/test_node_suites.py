@@ -83,6 +83,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_oauth_callback(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "oauthCallback.test.mjs")
 
+    def test_web_session_hook(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "sessionHook.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 

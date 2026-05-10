@@ -5,8 +5,10 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { sessions } from './drizzle.js';
-import type { SessionRow } from './schema.js';
+import { eq } from 'drizzle-orm';
+
+import { sessions, users } from './drizzle.js';
+import type { SessionRow, UserRow } from './schema.js';
 import type { DrizzleDb } from './users.js';
 
 export interface InsertSessionInput {
@@ -29,4 +31,33 @@ export async function insertSession(
   const r = rows[0];
   if (!r) throw new Error('insertSession: no row returned');
   return r;
+}
+
+export interface SessionWithUser {
+  readonly session: SessionRow;
+  readonly user: UserRow;
+}
+
+/**
+ * Look up a session by id, joined with its owning user. Returns
+ * `null` if no row matches.
+ *
+ * The caller is responsible for the wall-clock expiry check
+ * against `session.expiresAt`; this helper is a pure storage
+ * lookup so it can be reused by sweepers / admin tools that
+ * legitimately want expired rows.
+ */
+export async function getSessionWithUser(
+  db: DrizzleDb,
+  sid: string,
+): Promise<SessionWithUser | null> {
+  const rows = await db
+    .select({ session: sessions, user: users })
+    .from(sessions)
+    .innerJoin(users, eq(sessions.userId, users.id))
+    .where(eq(sessions.id, sid))
+    .limit(1);
+  const r = rows[0];
+  if (!r) return null;
+  return { session: r.session, user: r.user };
 }

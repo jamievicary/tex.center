@@ -196,10 +196,29 @@ spawning, (D) auth + production polish.
                         the session, and returns the new sid. A new
                         500 branch in `resolveGoogleCallback` surfs
                         DB outages.
-            - [ ] **M5.1.3** — `hooks.server.ts`: read session
-                  cookie on every request, expose `event.locals.session`,
-                  redirect unauthenticated users on protected
-                  routes.
+            - [x] **M5.1.3** — `hooks.server.ts` (iter 38).
+                  `packages/db/src/sessions.ts` adds
+                  `getSessionWithUser(db, sid)` (`sessions ⋈
+                  users` lookup, `null` on miss). Pure orchestrator
+                  `apps/web/src/lib/server/sessionHook.ts`
+                  (`resolveSessionHook`): cookie parse → token
+                  verify → uuid format check → injected lookup →
+                  server-side expiry. Returns
+                  `{session, clearCookie, reason}` covering every
+                  branch (no-cookie / bad-token / expired-token /
+                  bad-sid / no-row / lookup-error / expired-row /
+                  ok). DB outage keeps the cookie (transient);
+                  every other invalid state clears it.
+                  `sessionConfig.ts` adds `loadSessionSigningKey()`
+                  (subset of OAuth config, returns `null` when
+                  unset). `hooks.server.ts` wires it; protected
+                  prefix `/editor` redirects to `/` on no-session.
+                  `app.d.ts` declares `App.Locals.session`.
+                  `routes/editor/+page.ts` sets `prerender = false;
+                  ssr = false` so the hook actually runs. Unit test
+                  `apps/web/test/sessionHook.test.mjs` covers every
+                  `reason`; PGlite gold test extended for
+                  `getSessionWithUser`.
 - [ ] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
       `fly.toml`, GitHub Actions on push to `main`, custom domain
       `tex.center` via Cloudflare. Scales to zero.
@@ -213,15 +232,18 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5.1.3 (`hooks.server.ts`).
-Read `tc_session` on every request, `verifySessionToken`, lookup
-the row via `@tex-center/db`'s `sessions` table (and `users` join),
-populate `event.locals.session`. Wire `event.locals.session` into
-the editor route(s) so unauthenticated visitors get redirected
-back to `/`. Smaller alternatives if blocked: M3.5 PRs (out of
-repo), a multi-file-project slice on the sidecar. M4.3.1 (S3
-adapter) still waits for docker-compose; M4.3.2 checkpoint half
-waits for M3.5/M7.
+**Next ordinary iteration:** M5 is functionally complete — auth
+loop closes, `/editor` is gated. Two natural next steps:
+(a) M6 Dockerfile + `fly.toml` for `apps/web` + GitHub Actions
+deploy, or (b) consume `event.locals.session` in the editor UI
+(server-side load passing user `displayName`/`email` to the
+client, sign-out button posting to a new `/auth/logout`). (b) is
+cheaper and unblocks visible smoke-testing; (a) is the
+remaining structural milestone before acceptance. Default to
+(b) first if no infra ask comes in. Smaller alternatives if
+blocked: M3.5 PRs (out of repo), a multi-file-project slice on
+the sidecar. M4.3.1 (S3 adapter) still waits for docker-compose;
+M4.3.2 checkpoint half waits for M3.5/M7.
 
 ## Live caveats
 
