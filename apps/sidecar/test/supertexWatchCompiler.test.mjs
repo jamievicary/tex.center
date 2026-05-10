@@ -55,13 +55,21 @@ function compileOnce() {
   try { source = readFileSync(sourcePath, "utf8"); }
   catch (e) { process.stderr.write("read fail: " + e.message + "\\n"); return; }
   mkdirSync(outDir, { recursive: true });
-  const pdf =
-    "%PDF-1.4\\n% round=" + round +
-    "\\n% src-bytes=" + Buffer.byteLength(source, "utf8") +
-    "\\n% src=" + source.replace(/[\\r\\n]/g, " ") +
+  // Two-page fake: chunk A is constant across rounds, chunk B
+  // includes round + source bytes. Shipouts list one entry per
+  // chunk so the sidecar's ShipoutSegmenter (M3.4) sees a
+  // page-partitioned PDF.
+  const chunkA = "%PDF-1.4\\n% chunkA-constant-page-1\\n";
+  const chunkB =
+    "% round=" + round +
+    " src-bytes=" + Buffer.byteLength(source, "utf8") +
+    " src=" + source.replace(/[\\r\\n]/g, " ") +
     "\\n%%EOF\\n";
+  const pdf = chunkA + chunkB;
   writeFileSync(join(outDir, base + ".pdf"), pdf);
-  if (shipouts) appendFileSync(shipouts, round + "\\t0\\n");
+  if (shipouts) {
+    appendFileSync(shipouts, "1\\t0\\n2\\t" + Buffer.byteLength(chunkA, "utf8") + "\\n");
+  }
   if (!suppress) {
     // Important: write+\\n so the line lands as one stdout chunk.
     process.stdout.write(READY + "\\n");
@@ -125,22 +133,36 @@ async function waitFor(pred, timeoutMs, intervalMs = 25) {
   const c = new SupertexWatchCompiler({ workDir: ws.dir, supertexBin: fakeBin, timeoutMs: 5_000 });
   const r1 = await c.compile({ source: "ignored", targetPage: 1 });
   assert.equal(r1.ok, true, "first compile expected ok: " + (r1.ok ? "" : r1.error));
-  assert.equal(r1.segments.length, 1);
-  const t1 = Buffer.from(r1.segments[0].bytes).toString("utf8");
-  assert.match(t1, /round=1/, "first round marker");
-  assert.match(t1, /round one/, "first source bytes");
+  // Fake emits 2 shipouts per round (chunkA + chunkB); the
+  // segmenter (M3.4) chunks the PDF accordingly.
+  assert.equal(r1.segments.length, 2, "round 1 expects 2 per-shipout segments");
+  assert.equal(r1.segments[0].offset, 0);
+  const t1a = Buffer.from(r1.segments[0].bytes).toString("utf8");
+  const t1b = Buffer.from(r1.segments[1].bytes).toString("utf8");
+  assert.match(t1a, /chunkA-constant/, "first segment is chunk A");
+  assert.match(t1b, /round=1/, "second segment carries round marker");
+  assert.match(t1b, /round one/, "second segment carries source bytes");
+  assert.equal(r1.segments[1].offset, t1a.length);
+  // Both segments cover the full PDF length.
+  const total1 = r1.segments[0].totalLength;
+  assert.equal(r1.segments[1].totalLength, total1);
+  assert.equal(r1.segments[1].offset + r1.segments[1].bytes.length, total1);
 
   // Edit the source — simulate the server's writeMain between compiles.
   await ws.writeMain("\\\\documentclass{article}\\\\begin{document}round two\\\\end{document}");
   const r2 = await c.compile({ source: "ignored", targetPage: 1 });
   assert.equal(r2.ok, true, "second compile expected ok: " + (r2.ok ? "" : r2.error));
-  const t2 = Buffer.from(r2.segments[0].bytes).toString("utf8");
-  assert.match(t2, /round=2/, "second round marker");
-  assert.match(t2, /round two/, "updated source bytes");
+  // Fake re-emits both shipouts. (Real supertex would only re-emit
+  // the changed chunk; that's exercised by the dedicated
+  // pdfSegmenter test.)
+  assert.equal(r2.segments.length, 2);
+  const t2b = Buffer.from(r2.segments[1].bytes).toString("utf8");
+  assert.match(t2b, /round=2/, "second round marker");
+  assert.match(t2b, /round two/, "updated source bytes");
 
-  // Shipouts file accumulated two lines.
+  // Shipouts file accumulated four lines (2 per round x 2 rounds).
   const ship = readFileSync(join(ws.dir, "out", "shipouts"), "utf8").trim().split("\n");
-  assert.equal(ship.length, 2);
+  assert.equal(ship.length, 4);
 
   // 3: pid is alive before close, gone after.
   const pid = c.pid();

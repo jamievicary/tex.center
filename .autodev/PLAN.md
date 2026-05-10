@@ -59,7 +59,16 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M3.4 per-shipout deltas.** M3.3 is in: `SupertexWatchCompiler`
+**M3.5 upstream supertex flags.** M3.4 is in: a `ShipoutSegmenter`
+(`apps/sidecar/src/compiler/pdfSegmenter.ts`) consumes the
+append-only `--live-shipouts` log; new lines added in a round are
+exactly the shipouts that were re-emitted, so the segmenter emits
+one `pdf-segment` per such line, with each segment bounded by the
+next shipout offset (or PDF EOF). Stale page entries past EOF are
+culled. First compile / no shipouts file: fall back to one
+whole-PDF segment. Wired into `SupertexWatchCompiler.compile()`.
+
+**M3.3 (historical).** `SupertexWatchCompiler`
 holds one long-lived `supertex` watch process per project,
 synchronises on a `SUPERTEX_READY` stdout marker line emitted
 once per compile round, and is reaped on `Compiler.close()`
@@ -152,11 +161,18 @@ Implications for M3:
       child-reaped-on-close (`process.kill(pid, 0)` → ESRCH),
       timeout when no marker. Selected via
       `SIDECAR_COMPILER=supertex-watch`; default stays `fixture`.
-- [ ] **M3.4 — Per-shipout PDF byte-range deltas.** Use the
-      `--live-shipouts` page→offset map to chunk the PDF into one
-      `pdf-segment` per *changed* shipout, rather than one big
-      segment. Requires tracking the last-shipped offset per
-      project across compiles.
+- [x] **M3.4 — Per-shipout PDF byte-range deltas.** _(iter 14.)_
+      `apps/sidecar/src/compiler/pdfSegmenter.ts` —
+      `ShipoutSegmenter`. Tracks read position in the append-only
+      `--live-shipouts` log plus a per-page offset map; per
+      compile, the new lines added since last read define the set
+      of segments to emit, with each segment bounded by the next
+      shipout offset across the full current state (or PDF EOF).
+      Wired into `SupertexWatchCompiler`; falls back to one
+      whole-PDF segment when no shipouts info is available.
+      Tested directly (`apps/sidecar/test/pdfSegmenter.test.mjs`)
+      and via the watch test, whose fake binary now emits two
+      shipouts per round.
 - [ ] **M3.5 — Upstream supertex flags + sidecar wiring.** Two
       PRs against `github.com/jamievicary/supertex`:
       (a) `--ready-marker <STRING>` — emit one stdout line per

@@ -33,6 +33,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
+import { ShipoutSegmenter } from "./pdfSegmenter.js";
 
 type SpawnFn = (
   command: string,
@@ -70,6 +71,7 @@ export class SupertexWatchCompiler implements Compiler {
   private readonly extraArgs: readonly string[];
   private readonly spawnFn: SpawnFn;
 
+  private segmenter: ShipoutSegmenter | null = null;
   private child: ChildProcess | null = null;
   private exited: { code: number | null; signal: NodeJS.Signals | null } | null = null;
   private exitWaiters: Array<() => void> = [];
@@ -137,10 +139,11 @@ export class SupertexWatchCompiler implements Compiler {
         error: `pdf not produced at ${pdfPath}: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
-    return {
-      ok: true,
-      segments: [{ totalLength: bytes.length, offset: 0, bytes }],
-    };
+    if (!this.segmenter) {
+      this.segmenter = new ShipoutSegmenter(join(outDir, "shipouts"));
+    }
+    const segments = await this.segmenter.update(bytes);
+    return { ok: true, segments };
   }
 
   async close(): Promise<void> {
