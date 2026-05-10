@@ -1,0 +1,32 @@
+name: Deploy to Fly
+
+# Continuous deployment for the control-plane app at tex.center.
+# On every push to `main` we ship the apps/web image to the
+# pre-existing Fly app `tex-center` via Fly's remote builder.
+#
+# Prerequisites (one-shot, manual):
+#   - `flyctl apps create tex-center` (uses fly.toml at repo root).
+#   - `gh secret set FLY_API_TOKEN < creds/fly.token` on
+#     github.com/jamievicary/tex.center.
+
+on:
+  push:
+    branches: [main]
+
+# Serialise deploys: queue rather than cancel, so a fast follow-up
+# push doesn't strand a half-rolled-out Machine.
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: flyctl deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --config fly.toml --dockerfile apps/web/Dockerfile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

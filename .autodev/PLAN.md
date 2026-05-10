@@ -273,10 +273,24 @@ spawning, (D) auth + production polish.
             and asserts: app name, primary region present,
             dockerfile path, scale-to-zero triple, port matches
             Dockerfile `EXPOSE`/`PORT=3000`, force_https on.
-      - [ ] **M6.2** — GitHub Actions workflow on push to `main`:
-            `flyctl deploy --remote-only --dockerfile
-            apps/web/Dockerfile`. Needs `FLY_API_TOKEN` repo
-            secret seeded from `creds/fly.token`.
+      - [x] **M6.2** — GitHub Actions workflow on push to `main`
+            (iter 44). `.github/workflows/deploy.yml`: single
+            `deploy` job, `actions/checkout@v4` →
+            `superfly/flyctl-actions/setup-flyctl@master` →
+            `flyctl deploy --remote-only --config fly.toml
+            --dockerfile apps/web/Dockerfile`, with
+            `FLY_API_TOKEN` from secrets. `concurrency: fly-deploy
+            cancel-in-progress: false` so rapid pushes queue
+            rather than abandoning a half-rolled-out Machine.
+            20-minute job timeout. Structural test
+            `tests_normal/cases/test_deploy_workflow.py` parses
+            the YAML and asserts: trigger is `push` on `main`,
+            checkout + setup-flyctl steps present, exactly one
+            `flyctl deploy` step with `--remote-only` and
+            `FLY_API_TOKEN` env, any `--dockerfile` path resolves.
+            **One-shot manual steps before first push:** `flyctl
+            apps create tex-center`; `gh secret set FLY_API_TOKEN
+            < creds/fly.token`.
       - [ ] **M6.3** — Custom domain `tex.center` via Cloudflare
             (`flyctl certs create` + DNS records).
 - [ ] **M7 — Per-project Machines.** Control plane spawns/wakes a
@@ -289,10 +303,11 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.2 — GitHub Actions workflow on
-push to `main` (`superfly/flyctl-actions/setup-flyctl` →
-`flyctl deploy --remote-only`). Then M6.3 (custom domain). M6.0
-(Dockerfile) landed iter 42; M6.1 (`fly.toml`) landed iter 43. Smaller alternatives if blocked:
+**Next ordinary iteration:** M6.3 — custom domain `tex.center`
+via Cloudflare (`flyctl certs create tex.center` + apex A/AAAA
+records pointing at the Fly app). M6.0 (Dockerfile) landed iter
+42; M6.1 (`fly.toml`) landed iter 43; M6.2 (Actions workflow)
+landed iter 44. Smaller alternatives if blocked:
 a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
 once a streaming compile path exists. M4.3.1 (S3 adapter) still
 waits for docker-compose; M4.3.2 checkpoint half waits for the
