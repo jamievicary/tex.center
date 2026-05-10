@@ -1,8 +1,8 @@
 // Unit-tests SupertexOnceCompiler against a fake `supertex` binary
 // — a small Node script that mimics the real CLI's flag parsing
-// and writes a stub PDF + shipouts log. Verifies we spawn with the
-// right args, parse exit codes, and surface PDF-not-found / engine
-// failures as structured CompileFailure values.
+// and writes a stub PDF. Verifies we spawn with the right args,
+// parse exit codes, and surface PDF-not-found / engine failures
+// as structured CompileFailure values.
 
 import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -14,9 +14,9 @@ import { SupertexOnceCompiler } from "../src/compiler/supertexOnce.ts";
 
 // Fake `supertex` driver: parses the flags we use, copies the
 // source contents into a stub PDF so the test can verify the
-// spawned binary actually saw the expected file, and writes a
-// trivial shipouts entry. Honours $FAKE_FAIL=1 / $FAKE_NO_PDF=1
-// so failure-path tests can opt into specific misbehaviour.
+// spawned binary actually saw the expected file. Honours
+// $FAKE_FAIL=1 / $FAKE_NO_PDF=1 so failure-path tests can opt
+// into specific misbehaviour.
 const FAKE_SUPERTEX = `#!/usr/bin/env node
 import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -29,14 +29,10 @@ if (process.env.FAKE_FAIL === "1") {
 const args = process.argv.slice(2);
 const sourcePath = args[0];
 let outDir = null;
-let shipouts = null;
-let targetPage = null;
 for (let i = 1; i < args.length; i++) {
   const a = args[i];
   if (a === "--once") continue;
   if (a === "--output-directory") { outDir = args[++i]; continue; }
-  if (a === "--live-shipouts") { shipouts = args[++i]; continue; }
-  if (a.startsWith("--target-page=")) { targetPage = a.slice("--target-page=".length); continue; }
   process.stderr.write("fake supertex: unknown arg " + a + "\\n");
   process.exit(2);
 }
@@ -51,11 +47,9 @@ if (process.env.FAKE_NO_PDF !== "1") {
   const pdf =
     "%PDF-1.4\\n% src-bytes=" + Buffer.byteLength(source, "utf8") +
     "\\n% src=" + source.replace(/[\\r\\n]/g, " ") +
-    "\\n% target-page=" + (targetPage ?? "none") +
     "\\n%%EOF\\n";
   writeFileSync(join(outDir, base + ".pdf"), pdf);
 }
-if (shipouts) writeFileSync(shipouts, "1\\t0\\n");
 `;
 
 const here = mkdtempSync(join(tmpdir(), "supertex-once-test-"));
@@ -80,8 +74,8 @@ chmodSync(fakeBin, 0o755);
   const text = Buffer.from(seg.bytes).toString("utf8");
   assert.match(text, /src-bytes=\d+/);
   assert.match(text, /\\\\documentclass/);
-  // Outputs landed in <workDir>/out/.
-  assert.match(readFileSync(join(workDir, "out", "shipouts"), "utf8"), /^1\t0/);
+  // PDF landed in <workDir>/out/.
+  assert.match(readFileSync(join(workDir, "out", "main.pdf"), "utf8"), /^%PDF/);
   await c.close();
 }
 
@@ -150,39 +144,6 @@ child.on("close", (code) => process.exit(code ?? 1));
   const r = await c.compile({ source: "x", targetPage: 1 });
   assert.equal(r.ok, false);
   assert.match(r.error, /ENOENT|not found|no such file/i);
-  await c.close();
-}
-
-// 5. Capability-gated --target-page=N: passed when features advertise it,
-//    absent otherwise.
-{
-  const workDir = join(here, "tp-on");
-  await mkdir(workDir, { recursive: true });
-  await writeFile(join(workDir, "main.tex"), "x");
-  const c = new SupertexOnceCompiler({
-    workDir,
-    supertexBin: fakeBin,
-    features: { readyMarker: false, targetPage: true },
-  });
-  const r = await c.compile({ source: "x", targetPage: 3 });
-  assert.equal(r.ok, true);
-  const pdf = Buffer.from(r.segments[0].bytes).toString("utf8");
-  assert.match(pdf, /target-page=3/);
-  await c.close();
-}
-{
-  const workDir = join(here, "tp-off");
-  await mkdir(workDir, { recursive: true });
-  await writeFile(join(workDir, "main.tex"), "x");
-  const c = new SupertexOnceCompiler({
-    workDir,
-    supertexBin: fakeBin,
-    // features omitted → defaults to all-false; flag must NOT be passed.
-  });
-  const r = await c.compile({ source: "x", targetPage: 3 });
-  assert.equal(r.ok, true);
-  const pdf = Buffer.from(r.segments[0].bytes).toString("utf8");
-  assert.match(pdf, /target-page=none/);
   await c.close();
 }
 

@@ -43,8 +43,6 @@ declare module "fastify" {
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
-import { SupertexWatchCompiler } from "./compiler/supertexWatch.js";
-import { detectSupertexFeatures, type SupertexFeatures } from "./compiler/featureDetect.js";
 import { ProjectWorkspace } from "./workspace.js";
 import {
   createProjectPersistence,
@@ -112,7 +110,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const fixturePath =
     opts.fixturePdfPath ?? resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/hello.pdf");
-  const compilerFactory = opts.compilerFactory ?? (await defaultCompilerFactory(fixturePath));
+  const compilerFactory = opts.compilerFactory ?? defaultCompilerFactory(fixturePath);
 
   // If the caller didn't supply a scratchRoot, mint one under
   // os.tmpdir() so concurrent sidecar instances (e.g. the test
@@ -365,37 +363,28 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 }
 
 // Selects the compiler implementation based on `$SIDECAR_COMPILER`:
-//   - unset / "fixture"       → FixtureCompiler (default)
-//   - "supertex-once"         → SupertexOnceCompiler, spawning the
-//                               binary at `$SUPERTEX_BIN` (required).
-//   - "supertex-watch"        → SupertexWatchCompiler, one persistent
-//                               watch process per project (M3.3).
-//                               Requires upstream READY-marker support
-//                               (M3.5) before it can be used against
-//                               real `vendor/supertex`.
+//   - unset / "fixture" → FixtureCompiler (default; used by unit
+//                         tests and dev without a real supertex).
+//   - "supertex"        → SupertexOnceCompiler, spawning the binary
+//                         at `$SUPERTEX_BIN` (required) once per
+//                         compile request.
 // Anything else is rejected loudly so deploy-time typos don't
 // silently fall back to the fixture path.
-async function defaultCompilerFactory(
+function defaultCompilerFactory(
   fixturePath: string,
-): Promise<(ctx: CompilerContext) => Compiler> {
+): (ctx: CompilerContext) => Compiler {
   const which = process.env.SIDECAR_COMPILER ?? "fixture";
   if (which === "fixture") {
     return () => new FixtureCompiler(fixturePath);
   }
-  if (which === "supertex-once" || which === "supertex-watch") {
+  if (which === "supertex") {
     const supertexBin = process.env.SUPERTEX_BIN;
     if (!supertexBin) {
       throw new Error(
         `SIDECAR_COMPILER=${which} requires SUPERTEX_BIN to point at a supertex executable`,
       );
     }
-    const features: SupertexFeatures = await detectSupertexFeatures(supertexBin);
-    if (which === "supertex-once") {
-      return (ctx) =>
-        new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin, features });
-    }
-    return (ctx) =>
-      new SupertexWatchCompiler({ workDir: ctx.workspace.dir, supertexBin, features });
+    return (ctx) => new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
   }
   throw new Error(`unknown SIDECAR_COMPILER: ${which}`);
 }

@@ -5,14 +5,15 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
+Progress: resolved 0, reused 64, downloaded 0, added 0
 Progress: resolved 0, reused 79, downloaded 0, added 0, done
 
-Done in 1.8s
+Done in 4.5s
 Scope: 6 of 7 workspace projects
-packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
 packages/protocol typecheck: Done
 packages/auth typecheck: Done
@@ -32,15 +33,13 @@ test_db_drizzle (test_node_suites.TestNodeSuites.test_db_drizzle) ... ok
 test_db_migrations (test_node_suites.TestNodeSuites.test_db_migrations) ... ok
 test_db_schema (test_node_suites.TestNodeSuites.test_db_schema) ... ok
 test_protocol_codec (test_node_suites.TestNodeSuites.test_protocol_codec) ... ok
-test_sidecar_feature_detect (test_node_suites.TestNodeSuites.test_sidecar_feature_detect) ... ok
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
-test_sidecar_pdf_segmenter (test_node_suites.TestNodeSuites.test_sidecar_pdf_segmenter) ... ok
+test_sidecar_pdf_stability_watcher (test_node_suites.TestNodeSuites.test_sidecar_pdf_stability_watcher) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
 test_sidecar_server_blobs (test_node_suites.TestNodeSuites.test_sidecar_server_blobs) ... ok
 test_sidecar_server_db (test_node_suites.TestNodeSuites.test_sidecar_server_db) ... ok
 test_sidecar_server_health (test_node_suites.TestNodeSuites.test_sidecar_server_health) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
-test_sidecar_supertex_watch_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_watch_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
 test_web_logout (test_node_suites.TestNodeSuites.test_web_logout) ... ok
 test_web_oauth_callback (test_node_suites.TestNodeSuites.test_web_oauth_callback) ... ok
@@ -50,7 +49,7 @@ test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 test_web_session_hook (test_node_suites.TestNodeSuites.test_web_session_hook) ... ok
 
 ----------------------------------------------------------------------
-Ran 24 tests in 56.132s
+Ran 22 tests in 63.455s
 
 OK
 tests_normal/run_tests.sh: PASS

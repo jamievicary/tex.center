@@ -2,25 +2,17 @@
 //
 // Each `compile()` spawns:
 //   <supertexBin> <workDir>/<sourceName> --once \
-//     --output-directory <workDir>/out \
-//     --live-shipouts <workDir>/out/shipouts
+//     --output-directory <workDir>/out
 //
 // then reads the resulting PDF off disk and returns it as a single
-// segment. Slow (full rebuild every edit) but end-to-end real.
-// M3.2 of the plan: parity with the fixture path on the wire while
-// the input is plumbed through to a real engine. M3.3 replaces this
-// with a long-lived watch process; M3.4 chunks the PDF using the
-// shipouts log; M3.5 wires `--target-page=N`.
-//
-// The caller (the sidecar's compile loop) is responsible for having
-// written the source to `<workDir>/<sourceName>` *before* calling
-// `compile()` — `ProjectWorkspace.writeMain` does that today.
+// segment. Slow (full rebuild every edit) but end-to-end real, and
+// the current production path until an upstream `--daemon DIR`
+// mode lands.
 
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
-import type { SupertexFeatures } from "./featureDetect.js";
 import { defaultSpawnFn, supertexPaths, type SpawnFn } from "./supertexShared.js";
 
 export interface SupertexOnceOptions {
@@ -32,8 +24,6 @@ export interface SupertexOnceOptions {
   sourceName?: string;
   /** Wallclock cap for one compile. Default 60 s. */
   timeoutMs?: number;
-  /** Capabilities advertised by the supertex binary. */
-  features?: SupertexFeatures;
   /** Override `child_process.spawn` (used by tests). */
   spawnFn?: SpawnFn;
 }
@@ -43,7 +33,6 @@ export class SupertexOnceCompiler implements Compiler {
   private readonly supertexBin: string;
   private readonly sourceName: string;
   private readonly timeoutMs: number;
-  private readonly features: SupertexFeatures;
   private readonly spawnFn: SpawnFn;
 
   constructor(opts: SupertexOnceOptions) {
@@ -51,25 +40,14 @@ export class SupertexOnceCompiler implements Compiler {
     this.supertexBin = opts.supertexBin;
     this.sourceName = opts.sourceName ?? "main.tex";
     this.timeoutMs = opts.timeoutMs ?? 60_000;
-    this.features = opts.features ?? { readyMarker: false, targetPage: false };
     this.spawnFn = opts.spawnFn ?? defaultSpawnFn;
   }
 
-  async compile(req: CompileRequest): Promise<CompileResult> {
-    const { outDir, shipoutsPath, pdfPath } = supertexPaths(this.workDir, this.sourceName);
+  async compile(_req: CompileRequest): Promise<CompileResult> {
+    const { outDir, pdfPath } = supertexPaths(this.workDir, this.sourceName);
     await mkdir(outDir, { recursive: true });
     const sourcePath = join(this.workDir, this.sourceName);
-    const args = [
-      sourcePath,
-      "--once",
-      "--output-directory",
-      outDir,
-      "--live-shipouts",
-      shipoutsPath,
-    ];
-    if (this.features.targetPage && req.targetPage > 0) {
-      args.push(`--target-page=${req.targetPage}`);
-    }
+    const args = [sourcePath, "--once", "--output-directory", outDir];
 
     let result: { code: number; stderr: string };
     try {

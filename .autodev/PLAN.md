@@ -28,34 +28,40 @@ spawning, (D) auth + production polish.
       compile loop. `packages/protocol` defines wire format
       (Yjs frames, compile-status, pdf-segment). Browser
       `WsClient` + `PdfBuffer`; `y-codemirror.next` binds CM6.
-- [~] **M3 — supertex daemon mode.** Sidecar drives `vendor/supertex`
-      in watch mode (no new IPC needed — supertex's inotify watcher
-      catches workspace writes). Two upstream PRs still
-      outstanding; see M3.5.
+- [~] **M3 — supertex compile path.** Sidecar drives
+      `vendor/supertex` per compile request. The persistent /
+      streaming variant waits on an upstream `--daemon DIR` mode
+      (see "Candidate supertex work" below); until then,
+      `SupertexOnceCompiler` is the real path, with a sidecar-side
+      PDF-stability debouncer covering the post-engine settle
+      window.
       - [x] **M3.0** — Compiler interface + `targetPage` plumbing
             (`apps/sidecar/src/compiler/types.ts`). _(iter 8)_
       - [x] **M3.1** — `ProjectWorkspace`: atomic `writeMain`,
             strict id regex, scratch-dir lifecycle. _(iter 9)_
       - [x] **M3.2** — `SupertexOnceCompiler`: `--once
-            --output-directory --live-shipouts`, 60s wallclock,
-            ENOENT/non-zero/missing-PDF paths. _(iter 12)_
-      - [x] **M3.3** — `SupertexWatchCompiler`: persistent process,
-            `SUPERTEX_READY` marker sync, lazy spawn, SIGTERM/grace/
-            SIGKILL on close. _(iter 13)_
-      - [x] **M3.4** — `ShipoutSegmenter`: per-shipout PDF byte-
-            range deltas from `--live-shipouts`; falls back to one
-            whole-PDF segment. _(iter 14)_
-      - [~] **M3.5** — Upstream supertex flags. Sidecar half done
-            (iter 15): `<bin> --help` startup detector gates
-            emission. Outstanding: PRs against
-            `github.com/jamievicary/supertex` adding
-            (a) `--ready-marker <STRING>` end-of-round stdout
-            signal, (b) `--target-page=N` stop-after-page (CLI
-            declares it but errors at runtime). On boot after both
-            land, no sidecar changes needed.
+            --output-directory`, 60s wallclock, ENOENT/non-zero/
+            missing-PDF paths. _(iter 12; simplified iter 41 —
+            `--live-shipouts` and `--target-page=N` emission
+            removed alongside their consumers.)_
+      - [~] **M3.6** — `awaitPdfStable` watcher
+            (`apps/sidecar/src/pdfStabilityWatcher.ts`) lands iter
+            41 with fake-clock tests. Not yet wired into
+            `runCompile` — the once-path returns after the engine
+            exits, so calling it would only add latency. Wires in
+            when a streaming compiler (`--daemon DIR` consumer)
+            returns before the PDF settles.
 
-      Cutover: `SIDECAR_COMPILER` env-var deleted once
-      `supertex-watch` becomes default (post-M3.5).
+      **Retired (iter 41).** `SupertexWatchCompiler` (M3.3),
+      `ShipoutSegmenter` (M3.4), and the `--help` feature detector
+      (M3.5) were ripped out: they were built against a two-flag
+      upstream contract (`--ready-marker`, `--target-page=N`) that
+      has been superseded by the unified `--daemon DIR` ask. Old
+      logs 13–15 retain the historical detail.
+
+      Cutover: `SIDECAR_COMPILER` env-var stays for now —
+      `fixture` (default for dev/unit) vs `supertex` (production,
+      once the deploy image carries the binary).
 
 - [~] **M4 — Persistence.** Postgres (Drizzle) for entities; Tigris
       for blobs (project files, checkpoints, PDF segments).
@@ -248,14 +254,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5 fully consumed — `/editor`
-renders a topbar showing the user's display name/email with a
-working `POST /auth/logout` (iter 39). Remaining structural
+**Next ordinary iteration:** M5 fully consumed (iter 39); M3
+re-scoped (iter 41, see retired note above). Remaining structural
 milestone before acceptance is M6: Dockerfile + `fly.toml` for
-`apps/web` + GitHub Actions deploy to Fly. Smaller alternatives
-if blocked: M3.5 PRs (out of repo), a multi-file-project slice on
-the sidecar. M4.3.1 (S3 adapter) still waits for docker-compose;
-M4.3.2 checkpoint half waits for M3.5/M7.
+`apps/web` + GitHub Actions deploy to Fly. Smaller alternatives if
+blocked: a multi-file-project slice on the sidecar; wiring
+`awaitPdfStable` once a streaming compile path exists. M4.3.1 (S3
+adapter) still waits for docker-compose; M4.3.2 checkpoint half
+waits for the upstream `--daemon DIR` mode / M7.
 
 M5 tail items deferred to FUTURE_IDEAS: session sweeper for
 expired rows, JWKS clock-skew tolerance, GET-via-shim for
@@ -263,11 +269,9 @@ logout-from-link.
 
 ## Live caveats
 
-- Real `vendor/supertex` does not yet emit `SUPERTEX_READY`, so
-  `SIDECAR_COMPILER=supertex-watch` is fake-only until the
-  `--ready-marker` PR lands.
-- `--target-page=N` is in upstream CLI but errors at runtime; the
-  sidecar gates emission on `<bin> --help` advertising it.
+- `SIDECAR_COMPILER=supertex` (the once-compiler) is the only
+  real engine path today; the streaming variant waits on the
+  upstream `--daemon DIR` mode.
 - `app.db` only powers `/healthz` today (`SELECT 1`, reports
   `db: { state }`). Same endpoint reports `blobs: { state }` via
   `BlobStore.health()`; the future S3 adapter must implement it.
@@ -310,18 +314,20 @@ walk the realpath correctly.
 
 ## Candidate supertex (upstream) work
 
-PRs against `github.com/jamievicary/supertex`. Tracked in M3.5
-unless noted.
+PRs against `github.com/jamievicary/supertex`.
 
-1. `--ready-marker <STRING>` — end-of-compile-round stdout
-   signal. Required for `SupertexWatchCompiler` against real
-   supertex. (M3.5)
-2. `--target-page=N` — stop-after-page; flag declared, errors
-   today. (M3.5)
-3. **Checkpoint serialise/restore to a single blob.** (M7)
+1. **`--daemon DIR` mode.** Single long-running supertex process
+   per project: stdin command channel (`recompile,N\n`), chunked
+   PDF output (`1.out`, `2.out`, …), stdout control protocol
+   (`[N.out]` / `[rollback K]` / `[round-done]`). Replaces the
+   per-edit spawn cost of the current once-path and removes the
+   need for any in-sidecar PDF-stability heuristic. Once landed,
+   a new streaming compiler in `apps/sidecar/src/compiler/`
+   consumes it; `awaitPdfStable` either retires or moves to a
+   pre-`[round-done]` settle inside that compiler.
+2. **Checkpoint serialise/restore to a single blob.** (M7)
 
-(The original "long-running daemon mode" item was superseded by
-the iter-8 survey: watch mode + inotify already covers it. The
-iter-14 `ShipoutSegmenter` approximates per-shipout deltas
-without upstream changes; richer delta protocol can come later
-if the approximation proves lossy.)
+(History: the previous two-flag plan — `--ready-marker` and
+`--target-page=N` — was superseded by (1); the sidecar code
+built against it (`SupertexWatchCompiler`, `ShipoutSegmenter`,
+`featureDetect`) was removed in iter 41.)
