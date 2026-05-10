@@ -119,107 +119,25 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Iter 20 — refactor.** Extracted the duplicated `SpawnFn` type
-(was hand-rolled in `featureDetect.ts`, `supertexOnce.ts`,
-`supertexWatch.ts`) and the `outDir`/`shipoutsPath`/`pdfPath`
-layout into `apps/sidecar/src/compiler/supertexShared.ts`
-(`SpawnFn`, `defaultSpawnFn`, `supertexPaths(workDir, sourceName)`).
-Both supertex compilers now share a single source of truth for
-the project workspace paths. No behaviour change.
+**Next ordinary iteration should pick up M3.5 (upstream supertex
+PRs) or M4.3 (project hydration).** M4.2.1 stays deferred until
+a Docker-capable host or PGlite (see FUTURE_IDEAS).
 
-**M4.2.2 sidecar DB wiring landed (iter 19).**
-`apps/sidecar` now depends on `@tex-center/db`. `buildServer`
-selects a `DbHandle` from (in order): caller-supplied
-`opts.db` (not closed on shutdown), `process.env.DATABASE_URL`
-(passed through `opts.dbFactory ?? createDb`, owned and closed
-on `app.close()`), or null. The handle is exposed as
-`app.db: DbHandle | null` via fastify decoration; module
-augmentation lives in `apps/sidecar/src/server.ts`. No route
-yet reads `app.db` — that arrives with auth/session work in M5.
-Test at `apps/sidecar/test/serverDb.test.mjs` (null path,
-injected-handle path with end-not-called assertion,
-DATABASE_URL path with factory-spy + end-called assertion).
-M4.2.1 (docker-compose + apply gold integration) is deferred
-until we have a Docker-capable host or pick up PGlite.
+**Live caveats:**
 
-**M4.2.0 driver + migration runner landed (iter 18).**
-`packages/db` now ships the runtime seam: `postgres-js`
-dependency, `createDb(connectionString)` →
-`{ client, db: drizzle(client, { schema }) }` in `src/db.ts`,
-hand-rolled migration loader/applier in `src/migrations.ts`
-(lex-sorted `*.sql`, sha256-hashed, idempotent application via
-`schema_migrations` bookkeeping table, hash-mismatch on a
-shipped migration throws), and a `pnpm --filter @tex-center/db
-db:migrate` CLI at `scripts/migrate.ts` reading `DATABASE_URL`.
-Loader covered by a hermetic test at
-`packages/db/test/migrations.test.mjs`; the applier and
-`createDb` get their integration coverage when M4.2.1 lands a
-docker-compose Postgres.
-
-**M4.1 Drizzle integration (iter 17, historical).**
-`packages/db` gained a `drizzle-orm` dependency and a typed
-`pgTable` per entity in `src/drizzle.ts`, re-exported from
-`src/index.ts` as `{ users, sessions, projects, projectFiles,
-machineAssignments, schema }`. The Drizzle FKs / indexes /
-unique constraints mirror the SQL migration.
-`test/drizzle.test.mjs` cross-checks the Drizzle tables against
-`allTables` (column SQL type, notNull, PK, FK target) so the
-spec and the query layer can't drift.
-
-**M4.0 persistence data model (iter 16, historical).**
-`packages/db` was introduced with entity row types
-(`UserRow`, `SessionRow`, `ProjectRow`, `ProjectFileRow`,
-`MachineAssignmentRow`), per-table column specs
-(`usersTable`, …, `allTables`), and the initial SQL migration at
-`src/migrations/0001_initial.sql`. The schema test
-(`packages/db/test/schema.test.mjs`) asserts each table has
-exactly one PK, FK targets resolve, and every spec column
-appears in the SQL with the matching type.
-
-**M3.5 upstream supertex flags — sidecar wiring landed (iter 15).**
-`apps/sidecar/src/compiler/featureDetect.ts` runs `<bin> --help`
-once at sidecar startup (inside `defaultCompilerFactory` in
-`server.ts`), greps stdout+stderr for `--ready-marker` and
-`--target-page`, and returns a `SupertexFeatures` record. Both
-`SupertexOnceCompiler` and `SupertexWatchCompiler` accept the
-record and conditionally emit the corresponding flags:
-once-mode passes `--target-page=N` per request; watch-mode locks
-the target page at spawn time and adds `--ready-marker <STRING>`
-when supported. Defaults stay all-false so older supertex builds
-remain unaffected. Outstanding M3.5 work is purely upstream: the
-two PRs against `github.com/jamievicary/supertex` adding the
-flags themselves. Tests:
-`apps/sidecar/test/featureDetect.test.mjs` plus capability cases
-in `supertexOnceCompiler.test.mjs` /
-`supertexWatchCompiler.test.mjs`.
-
-**M3.4 (historical).** A `ShipoutSegmenter`
-(`apps/sidecar/src/compiler/pdfSegmenter.ts`) consumes the
-append-only `--live-shipouts` log; new lines added in a round are
-exactly the shipouts that were re-emitted, so the segmenter emits
-one `pdf-segment` per such line, with each segment bounded by the
-next shipout offset (or PDF EOF). Stale page entries past EOF are
-culled. First compile / no shipouts file: fall back to one
-whole-PDF segment. Wired into `SupertexWatchCompiler.compile()`.
-
-**M3.3 (historical).** `SupertexWatchCompiler`
-holds one long-lived `supertex` watch process per project,
-synchronises on a `SUPERTEX_READY` stdout marker line emitted
-once per compile round, and is reaped on `Compiler.close()`
-(SIGTERM with 2 s grace, SIGKILL fallback; verified by a paired
-`process.kill(pid, 0)` ESRCH test). Selected at boot via
-`SIDECAR_COMPILER=supertex-watch`; default stays `fixture`. Note
-the supertex binary lives at `vendor/supertex/src/supertex`
-(Python entry point), not `bin/supertex`.
-
-**Caveat — READY marker not yet upstream.** Real
-`vendor/supertex` does not emit the `SUPERTEX_READY` line today,
-so `supertex-watch` only works against the test fake. Wiring the
-sidecar half first is deliberate: it validates the lifecycle
-(spawn, single-marker sync, reap, timeout) without blocking on
-upstream. The upstream PR is folded into M3.5 (proposed shape:
-`--ready-marker <STRING>` on the watch CLI, default off so the
-flag is opt-in).
+- Real `vendor/supertex` does not yet emit the `SUPERTEX_READY`
+  marker line, so `SIDECAR_COMPILER=supertex-watch` is only
+  usable against the test fake until the upstream
+  `--ready-marker` PR lands. Wiring sidecar-first was deliberate:
+  it lets the lifecycle (spawn, marker sync, reap, timeout) be
+  validated without blocking on upstream.
+- `--target-page=N` is declared in upstream supertex CLI but
+  errors at runtime; the sidecar gates emission on
+  `<bin> --help` advertising the flag, so older builds remain
+  unaffected. Required for the "stop at viewing page"
+  optimisation.
+- No route reads `app.db` yet; the DB handle is wired into
+  `apps/sidecar` for M5/M7 to consume.
 
 ### Survey of `vendor/supertex` (iter 8)
 

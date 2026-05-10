@@ -5,12 +5,12 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 61, downloaded 0, added 0, done
+Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
-Done in 1.4s
+Done in 1.3s
 Scope: 4 of 5 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
@@ -36,7 +36,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 14 tests in 44.127s
+Ran 14 tests in 24.186s
 
 OK
 tests_normal/run_tests.sh: PASS
