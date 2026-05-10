@@ -36,6 +36,7 @@ import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { SupertexWatchCompiler } from "./compiler/supertexWatch.js";
+import { detectSupertexFeatures, type SupertexFeatures } from "./compiler/featureDetect.js";
 import { ProjectWorkspace } from "./workspace.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
@@ -77,7 +78,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const fixturePath =
     opts.fixturePdfPath ?? resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/hello.pdf");
-  const compilerFactory = opts.compilerFactory ?? defaultCompilerFactory(fixturePath);
+  const compilerFactory = opts.compilerFactory ?? (await defaultCompilerFactory(fixturePath));
 
   // If the caller didn't supply a scratchRoot, mint one under
   // os.tmpdir() so concurrent sidecar instances (e.g. the test
@@ -277,32 +278,27 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 //                               real `vendor/supertex`.
 // Anything else is rejected loudly so deploy-time typos don't
 // silently fall back to the fixture path.
-function defaultCompilerFactory(
+async function defaultCompilerFactory(
   fixturePath: string,
-): (ctx: CompilerContext) => Compiler {
+): Promise<(ctx: CompilerContext) => Compiler> {
   const which = process.env.SIDECAR_COMPILER ?? "fixture";
   if (which === "fixture") {
     return () => new FixtureCompiler(fixturePath);
   }
-  if (which === "supertex-once") {
+  if (which === "supertex-once" || which === "supertex-watch") {
     const supertexBin = process.env.SUPERTEX_BIN;
     if (!supertexBin) {
       throw new Error(
-        "SIDECAR_COMPILER=supertex-once requires SUPERTEX_BIN to point at a supertex executable",
+        `SIDECAR_COMPILER=${which} requires SUPERTEX_BIN to point at a supertex executable`,
       );
     }
-    return (ctx) =>
-      new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
-  }
-  if (which === "supertex-watch") {
-    const supertexBin = process.env.SUPERTEX_BIN;
-    if (!supertexBin) {
-      throw new Error(
-        "SIDECAR_COMPILER=supertex-watch requires SUPERTEX_BIN to point at a supertex executable",
-      );
+    const features: SupertexFeatures = await detectSupertexFeatures(supertexBin);
+    if (which === "supertex-once") {
+      return (ctx) =>
+        new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin, features });
     }
     return (ctx) =>
-      new SupertexWatchCompiler({ workDir: ctx.workspace.dir, supertexBin });
+      new SupertexWatchCompiler({ workDir: ctx.workspace.dir, supertexBin, features });
   }
   throw new Error(`unknown SIDECAR_COMPILER: ${which}`);
 }

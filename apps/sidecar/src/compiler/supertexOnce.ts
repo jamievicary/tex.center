@@ -21,6 +21,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
+import type { SupertexFeatures } from "./featureDetect.js";
 
 type SpawnFn = (
   command: string,
@@ -37,6 +38,8 @@ export interface SupertexOnceOptions {
   sourceName?: string;
   /** Wallclock cap for one compile. Default 60 s. */
   timeoutMs?: number;
+  /** Capabilities advertised by the supertex binary. */
+  features?: SupertexFeatures;
   /** Override `child_process.spawn` (used by tests). */
   spawnFn?: SpawnFn;
 }
@@ -46,6 +49,7 @@ export class SupertexOnceCompiler implements Compiler {
   private readonly supertexBin: string;
   private readonly sourceName: string;
   private readonly timeoutMs: number;
+  private readonly features: SupertexFeatures;
   private readonly spawnFn: SpawnFn;
 
   constructor(opts: SupertexOnceOptions) {
@@ -53,10 +57,11 @@ export class SupertexOnceCompiler implements Compiler {
     this.supertexBin = opts.supertexBin;
     this.sourceName = opts.sourceName ?? "main.tex";
     this.timeoutMs = opts.timeoutMs ?? 60_000;
+    this.features = opts.features ?? { readyMarker: false, targetPage: false };
     this.spawnFn = opts.spawnFn ?? (nodeSpawn as SpawnFn);
   }
 
-  async compile(_req: CompileRequest): Promise<CompileResult> {
+  async compile(req: CompileRequest): Promise<CompileResult> {
     const outDir = join(this.workDir, "out");
     await mkdir(outDir, { recursive: true });
     const sourcePath = join(this.workDir, this.sourceName);
@@ -68,6 +73,9 @@ export class SupertexOnceCompiler implements Compiler {
       "--live-shipouts",
       join(outDir, "shipouts"),
     ];
+    if (this.features.targetPage && req.targetPage > 0) {
+      args.push(`--target-page=${req.targetPage}`);
+    }
 
     let result: { code: number; stderr: string };
     try {

@@ -30,11 +30,13 @@ const args = process.argv.slice(2);
 const sourcePath = args[0];
 let outDir = null;
 let shipouts = null;
+let targetPage = null;
 for (let i = 1; i < args.length; i++) {
   const a = args[i];
   if (a === "--once") continue;
   if (a === "--output-directory") { outDir = args[++i]; continue; }
   if (a === "--live-shipouts") { shipouts = args[++i]; continue; }
+  if (a.startsWith("--target-page=")) { targetPage = a.slice("--target-page=".length); continue; }
   process.stderr.write("fake supertex: unknown arg " + a + "\\n");
   process.exit(2);
 }
@@ -49,6 +51,7 @@ if (process.env.FAKE_NO_PDF !== "1") {
   const pdf =
     "%PDF-1.4\\n% src-bytes=" + Buffer.byteLength(source, "utf8") +
     "\\n% src=" + source.replace(/[\\r\\n]/g, " ") +
+    "\\n% target-page=" + (targetPage ?? "none") +
     "\\n%%EOF\\n";
   writeFileSync(join(outDir, base + ".pdf"), pdf);
 }
@@ -147,6 +150,39 @@ child.on("close", (code) => process.exit(code ?? 1));
   const r = await c.compile({ source: "x", targetPage: 1 });
   assert.equal(r.ok, false);
   assert.match(r.error, /ENOENT|not found|no such file/i);
+  await c.close();
+}
+
+// 5. Capability-gated --target-page=N: passed when features advertise it,
+//    absent otherwise.
+{
+  const workDir = join(here, "tp-on");
+  await mkdir(workDir, { recursive: true });
+  await writeFile(join(workDir, "main.tex"), "x");
+  const c = new SupertexOnceCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    features: { readyMarker: false, targetPage: true },
+  });
+  const r = await c.compile({ source: "x", targetPage: 3 });
+  assert.equal(r.ok, true);
+  const pdf = Buffer.from(r.segments[0].bytes).toString("utf8");
+  assert.match(pdf, /target-page=3/);
+  await c.close();
+}
+{
+  const workDir = join(here, "tp-off");
+  await mkdir(workDir, { recursive: true });
+  await writeFile(join(workDir, "main.tex"), "x");
+  const c = new SupertexOnceCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    // features omitted → defaults to all-false; flag must NOT be passed.
+  });
+  const r = await c.compile({ source: "x", targetPage: 3 });
+  assert.equal(r.ok, true);
+  const pdf = Buffer.from(r.segments[0].bytes).toString("utf8");
+  assert.match(pdf, /target-page=none/);
   await c.close();
 }
 

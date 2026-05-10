@@ -59,7 +59,24 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M3.5 upstream supertex flags.** M3.4 is in: a `ShipoutSegmenter`
+**M3.5 upstream supertex flags — sidecar wiring landed (iter 15).**
+`apps/sidecar/src/compiler/featureDetect.ts` runs `<bin> --help`
+once at sidecar startup (inside `defaultCompilerFactory` in
+`server.ts`), greps stdout+stderr for `--ready-marker` and
+`--target-page`, and returns a `SupertexFeatures` record. Both
+`SupertexOnceCompiler` and `SupertexWatchCompiler` accept the
+record and conditionally emit the corresponding flags:
+once-mode passes `--target-page=N` per request; watch-mode locks
+the target page at spawn time and adds `--ready-marker <STRING>`
+when supported. Defaults stay all-false so older supertex builds
+remain unaffected. Outstanding M3.5 work is purely upstream: the
+two PRs against `github.com/jamievicary/supertex` adding the
+flags themselves. Tests:
+`apps/sidecar/test/featureDetect.test.mjs` plus capability cases
+in `supertexOnceCompiler.test.mjs` /
+`supertexWatchCompiler.test.mjs`.
+
+**M3.4 (historical).** A `ShipoutSegmenter`
 (`apps/sidecar/src/compiler/pdfSegmenter.ts`) consumes the
 append-only `--live-shipouts` log; new lines added in a round are
 exactly the shipouts that were re-emitted, so the segmenter emits
@@ -173,17 +190,16 @@ Implications for M3:
       Tested directly (`apps/sidecar/test/pdfSegmenter.test.mjs`)
       and via the watch test, whose fake binary now emits two
       shipouts per round.
-- [ ] **M3.5 — Upstream supertex flags + sidecar wiring.** Two
-      PRs against `github.com/jamievicary/supertex`:
-      (a) `--ready-marker <STRING>` — emit one stdout line per
-      compile-round end so the sidecar can synchronise
-      deterministically; required to use `supertex-watch`
-      against real supertex. (b) `--target-page=N` —
-      stop-after-page so the sidecar can honour the GOAL.md
-      "compile only as far as the visible page" optimisation.
-      Sidecar passes `targetPage` from `CompileRequest` to the
-      supertex process when the flag is supported (feature-detect
-      on startup so older supertex builds remain usable).
+- [~] **M3.5 — Upstream supertex flags + sidecar wiring.** Sidecar
+      half done (iter 15): startup feature detection via
+      `<bin> --help`; both compilers gate `--target-page=N` and
+      `--ready-marker <STRING>` on advertised capabilities.
+      Outstanding: two PRs against
+      `github.com/jamievicary/supertex` actually adding the flags
+      ((a) `--ready-marker <STRING>` end-of-round stdout signal;
+      (b) `--target-page=N` stop-after-page). Once both ship, no
+      sidecar changes are required to start using them — the
+      detector picks them up at next sidecar boot.
 
 Cutover is gradual via the `SIDECAR_COMPILER` selector; that
 env-var is deleted in M3.5 once `supertex-watch` is the default.

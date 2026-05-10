@@ -33,6 +33,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
+import type { SupertexFeatures } from "./featureDetect.js";
 import { ShipoutSegmenter } from "./pdfSegmenter.js";
 
 type SpawnFn = (
@@ -58,6 +59,8 @@ export interface SupertexWatchOptions {
   termGraceMs?: number;
   /** Extra args to append after the standard set. */
   extraArgs?: readonly string[];
+  /** Capabilities advertised by the supertex binary. */
+  features?: SupertexFeatures;
   spawnFn?: SpawnFn;
 }
 
@@ -69,7 +72,9 @@ export class SupertexWatchCompiler implements Compiler {
   private readonly timeoutMs: number;
   private readonly termGraceMs: number;
   private readonly extraArgs: readonly string[];
+  private readonly features: SupertexFeatures;
   private readonly spawnFn: SpawnFn;
+  private spawnTargetPage: number | null = null;
 
   private segmenter: ShipoutSegmenter | null = null;
   private child: ChildProcess | null = null;
@@ -89,6 +94,7 @@ export class SupertexWatchCompiler implements Compiler {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_COMPILE_TIMEOUT_MS;
     this.termGraceMs = opts.termGraceMs ?? TERM_GRACE_MS;
     this.extraArgs = opts.extraArgs ?? [];
+    this.features = opts.features ?? { readyMarker: false, targetPage: false };
     this.spawnFn = opts.spawnFn ?? (nodeSpawn as SpawnFn);
   }
 
@@ -97,12 +103,16 @@ export class SupertexWatchCompiler implements Compiler {
     return this.child?.pid ?? null;
   }
 
-  async compile(_req: CompileRequest): Promise<CompileResult> {
+  async compile(req: CompileRequest): Promise<CompileResult> {
     if (this.closed) return { ok: false, error: "supertex watch: compiler closed" };
     const outDir = join(this.workDir, "out");
     await mkdir(outDir, { recursive: true });
 
     if (!this.child) {
+      // The watch process locks `--target-page=N` at spawn time;
+      // mid-session changes to the visible page are out of scope
+      // until upstream supertex grows a control channel for it.
+      this.spawnTargetPage = req.targetPage > 0 ? req.targetPage : null;
       try {
         await this.spawnWatcher();
       } catch (e) {
@@ -186,8 +196,14 @@ export class SupertexWatchCompiler implements Compiler {
       outDir,
       "--live-shipouts",
       join(outDir, "shipouts"),
-      ...this.extraArgs,
     ];
+    if (this.features.readyMarker) {
+      args.push("--ready-marker", this.readyMarker);
+    }
+    if (this.features.targetPage && this.spawnTargetPage !== null) {
+      args.push(`--target-page=${this.spawnTargetPage}`);
+    }
+    args.push(...this.extraArgs);
     const child = this.spawnFn(this.supertexBin, args, {
       cwd: this.workDir,
       stdio: ["ignore", "pipe", "pipe"],

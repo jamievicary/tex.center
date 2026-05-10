@@ -33,10 +33,14 @@ const args = process.argv.slice(2);
 const sourcePath = args[0];
 let outDir = null;
 let shipouts = null;
+let readyMarker = "SUPERTEX_READY";
+let targetPage = null;
 for (let i = 1; i < args.length; i++) {
   const a = args[i];
   if (a === "--output-directory") { outDir = args[++i]; continue; }
   if (a === "--live-shipouts") { shipouts = args[++i]; continue; }
+  if (a === "--ready-marker") { readyMarker = args[++i]; continue; }
+  if (a.startsWith("--target-page=")) { targetPage = a.slice("--target-page=".length); continue; }
   process.stderr.write("fake supertex-watch: unknown arg " + a + "\\n");
   process.exit(2);
 }
@@ -44,7 +48,7 @@ if (!sourcePath || !outDir) {
   process.stderr.write("fake supertex-watch: missing source/outdir\\n");
   process.exit(3);
 }
-const READY = "SUPERTEX_READY";
+const READY = readyMarker;
 const suppress = process.env.FAKE_SUPPRESS_READY === "1";
 const base = basename(sourcePath).replace(/\\.tex$/, "");
 let round = 0;
@@ -63,6 +67,7 @@ function compileOnce() {
   const chunkB =
     "% round=" + round +
     " src-bytes=" + Buffer.byteLength(source, "utf8") +
+    " target-page=" + (targetPage ?? "none") +
     " src=" + source.replace(/[\\r\\n]/g, " ") +
     "\\n%%EOF\\n";
   const pdf = chunkA + chunkB;
@@ -207,6 +212,28 @@ child.on("close", (code, signal) => {
   const r = await c.compile({ source: "x", targetPage: 1 });
   assert.equal(r.ok, false);
   assert.match(r.error, /timed out/);
+  await c.close();
+  await ws.dispose();
+}
+
+// 5. Capability-gated flags: features advertise both --ready-marker
+//    and --target-page → both reach the spawned binary. The fake
+//    accepts a custom ready-marker string and bakes the target-page
+//    into its emitted PDF so we can assert on it.
+{
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "feat" });
+  await ws.writeMain("hello");
+  const c = new SupertexWatchCompiler({
+    workDir: ws.dir,
+    supertexBin: fakeBin,
+    timeoutMs: 5_000,
+    readyMarker: "CUSTOM_READY",
+    features: { readyMarker: true, targetPage: true },
+  });
+  const r = await c.compile({ source: "ignored", targetPage: 7 });
+  assert.equal(r.ok, true, "feat compile expected ok");
+  const txt = Buffer.from(r.segments[1].bytes).toString("utf8");
+  assert.match(txt, /target-page=7/, "fake should record target-page from spawn args");
   await c.close();
   await ws.dispose();
 }
