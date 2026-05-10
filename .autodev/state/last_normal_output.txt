@@ -7,7 +7,7 @@ Packages: -80
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
-Done in 2s
+Done in 3.5s
 Scope: 3 of 4 workspace projects
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
@@ -19,12 +19,13 @@ apps/web typecheck: Getting Svelte diagnostics...
 apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
 test_protocol_codec (test_node_suites.TestNodeSuites.test_protocol_codec) ... ok
+test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 4 tests in 16.287s
+Ran 5 tests in 23.736s
 
 OK
 tests_normal/run_tests.sh: PASS

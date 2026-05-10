@@ -7,12 +7,11 @@
 //     `compile-status`,
 //   - server-pushed PDF segments (tag 0x20).
 //
-// The "compile loop" is currently a stub: any change to the
-// project's primary `Y.Text` triggers a debounced shipment of
-// the static fixture PDF as a single full-buffer segment. The
-// stub stands in until M3 wires real supertex.
+// The compile loop talks to a `Compiler` (see `./compiler/types.ts`).
+// Today the only implementation is `FixtureCompiler`, which ships a
+// static hello-world PDF irrespective of source. M3 swaps in a
+// supertex-backed compiler behind the same seam.
 
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -28,6 +27,9 @@ import {
   encodePdfSegment,
 } from "@tex-center/protocol";
 
+import type { Compiler } from "./compiler/types.js";
+import { FixtureCompiler } from "./compiler/fixture.js";
+
 const COMPILE_DEBOUNCE_MS = 100;
 
 interface ProjectState {
@@ -35,7 +37,7 @@ interface ProjectState {
   text: Y.Text;
   viewers: Set<ProjectClient>;
   compileTimer: NodeJS.Timeout | null;
-  fixturePdf: Uint8Array | null;
+  compiler: Compiler;
 }
 
 interface ProjectClient {
@@ -45,6 +47,7 @@ interface ProjectClient {
 
 export interface SidecarOptions {
   fixturePdfPath?: string;
+  compilerFactory?: () => Compiler;
   logger?: boolean;
 }
 
@@ -54,6 +57,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const fixturePath =
     opts.fixturePdfPath ?? resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/hello.pdf");
+  const compilerFactory = opts.compilerFactory ?? (() => new FixtureCompiler(fixturePath));
 
   const projects = new Map<string, ProjectState>();
 
@@ -67,17 +71,10 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       text,
       viewers: new Set(),
       compileTimer: null,
-      fixturePdf: null,
+      compiler: compilerFactory(),
     };
     projects.set(id, p);
     return p;
-  }
-
-  async function loadFixture(p: ProjectState): Promise<Uint8Array> {
-    if (p.fixturePdf) return p.fixturePdf;
-    const buf = await readFile(fixturePath);
-    p.fixturePdf = new Uint8Array(buf);
-    return p.fixturePdf;
   }
 
   function broadcast(p: ProjectState, frame: Uint8Array, except?: ProjectClient): void {
@@ -95,27 +92,31 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }, COMPILE_DEBOUNCE_MS);
   }
 
+  function maxViewingPage(p: ProjectState): number {
+    let max = 1;
+    for (const c of p.viewers) {
+      if (c.viewingPage > max) max = c.viewingPage;
+    }
+    return max;
+  }
+
   async function runCompile(p: ProjectState): Promise<void> {
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
-    try {
-      const pdf = await loadFixture(p);
-      const frame = encodePdfSegment({
-        totalLength: pdf.length,
-        offset: 0,
-        bytes: pdf,
-      });
-      broadcast(p, frame);
-      broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
-    } catch (e) {
+    const result = await p.compiler.compile({
+      source: p.text.toString(),
+      targetPage: maxViewingPage(p),
+    });
+    if (!result.ok) {
       broadcast(
         p,
-        encodeControl({
-          type: "compile-status",
-          state: "error",
-          detail: e instanceof Error ? e.message : String(e),
-        }),
+        encodeControl({ type: "compile-status", state: "error", detail: result.error }),
       );
+      return;
     }
+    for (const seg of result.segments) {
+      broadcast(p, encodePdfSegment(seg));
+    }
+    broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
   }
 
   app.get("/healthz", async () => ({ ok: true, protocol: PROTOCOL_VERSION }));
@@ -206,6 +207,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         clearTimeout(p.compileTimer);
         p.compileTimer = null;
       }
+      await p.compiler.close();
       p.doc.destroy();
     }
     projects.clear();
