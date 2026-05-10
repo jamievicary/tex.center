@@ -196,7 +196,20 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
   }
 
-  app.get("/healthz", async () => ({ ok: true, protocol: PROTOCOL_VERSION }));
+  app.get("/healthz", async () => {
+    let db: { state: "absent" | "up" | "down"; error?: string };
+    if (app.db) {
+      try {
+        await app.db.client`SELECT 1`;
+        db = { state: "up" };
+      } catch (e) {
+        db = { state: "down", error: e instanceof Error ? e.message : String(e) };
+      }
+    } else {
+      db = { state: "absent" };
+    }
+    return { ok: db.state !== "down", protocol: PROTOCOL_VERSION, db };
+  });
 
   app.register(async (instance) => {
     instance.get("/ws/project/:projectId", { websocket: true }, (socket, req) => {

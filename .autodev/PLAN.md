@@ -136,8 +136,10 @@ a Docker-capable host or PGlite (see FUTURE_IDEAS).
   `<bin> --help` advertising the flag, so older builds remain
   unaffected. Required for the "stop at viewing page"
   optimisation.
-- No route reads `app.db` yet; the DB handle is wired into
-  `apps/sidecar` for M5/M7 to consume.
+- The sidecar's `/healthz` is the only consumer of `app.db`
+  today (probes via `` client`SELECT 1` ``, reports
+  `db: { state: "absent" | "up" | "down" }`); routes that read
+  or write entity rows still wait on M5/M7.
 
 ### Survey of `vendor/supertex` (iter 8)
 
