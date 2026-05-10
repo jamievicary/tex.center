@@ -24,6 +24,7 @@ import websocketPlugin from "@fastify/websocket";
 import * as Y from "yjs";
 
 import {
+  MAIN_DOC_NAME,
   PROTOCOL_VERSION,
   decodeFrame,
   encodeControl,
@@ -84,7 +85,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     let p = projects.get(id);
     if (p) return p;
     const doc = new Y.Doc();
-    const text = doc.getText("main.tex");
+    const text = doc.getText(MAIN_DOC_NAME);
     const workspace = new ProjectWorkspace({ rootDir: scratchRoot, projectId: id });
     p = {
       doc,

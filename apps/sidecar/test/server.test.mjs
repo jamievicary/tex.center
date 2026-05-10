@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { WebSocket } from "ws";
 import * as Y from "yjs";
 
-import { decodeFrame, encodeDocUpdate } from "../../../packages/protocol/src/index.ts";
+import { MAIN_DOC_NAME, decodeFrame, encodeDocUpdate } from "../../../packages/protocol/src/index.ts";
 import { buildServer } from "../src/server.ts";
 
 const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-srv-test-"));
@@ -79,7 +79,7 @@ assert.equal(readFileSync(mainTexPath, "utf8"), "");
 
 // Drive an edit through Yjs and confirm the mirrored file picks it up.
 const clientDoc = new Y.Doc();
-clientDoc.getText("main.tex").insert(0, "hello from the client");
+clientDoc.getText(MAIN_DOC_NAME).insert(0, "hello from the client");
 const update = Y.encodeStateAsUpdate(clientDoc);
 ws.send(encodeDocUpdate(update));
 

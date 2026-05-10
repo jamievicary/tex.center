@@ -18,7 +18,7 @@
   // after `onMount` (a future iteration may guard this with a
   // suspense block — over-engineering for MVP).
   let placeholderDoc = new Y.Doc();
-  let text = $state<Y.Text>(placeholderDoc.getText(MAIN_DOC_NAME));
+  let text = $state<Y.Text>(placeholderDoc.getText("main.tex"));
 
   let snapshot = $state<WsClientSnapshot>({
     status: "connecting",

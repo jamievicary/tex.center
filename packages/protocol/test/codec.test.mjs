@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import {
+  MAIN_DOC_NAME,
   PROTOCOL_VERSION,
   TAG_DOC_UPDATE,
   TAG_CONTROL,
@@ -15,6 +16,7 @@ import {
 } from "../src/index.ts";
 
 assert.equal(PROTOCOL_VERSION, 1);
+assert.equal(MAIN_DOC_NAME, "main.tex");
 
 // doc-update round-trip
 {

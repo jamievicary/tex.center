@@ -11,6 +11,7 @@
 import * as Y from "yjs";
 
 import {
+  MAIN_DOC_NAME,
   decodeFrame,
   encodeControl,
   encodeDocUpdate,
@@ -49,7 +50,7 @@ export class WsClient {
     this.url = opts.url;
     this.onChange = opts.onChange;
     this.doc = new Y.Doc();
-    this.text = this.doc.getText("main.tex");
+    this.text = this.doc.getText(MAIN_DOC_NAME);
     this.onDocUpdate = (update, origin) => {
       if (origin === this) return;
       this.send(encodeDocUpdate(update));

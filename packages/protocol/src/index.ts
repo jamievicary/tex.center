@@ -19,6 +19,11 @@
 
 export const PROTOCOL_VERSION = 1;
 
+// The Yjs Y.Text key both sides agree on for the project's primary
+// `.tex` source. Single-file MVP; M4 generalises to one Y.Text per
+// file in the project tree, keyed by filename.
+export const MAIN_DOC_NAME = "main.tex";
+
 export const TAG_DOC_UPDATE = 0x00;
 export const TAG_AWARENESS = 0x01;
 export const TAG_CONTROL = 0x10;

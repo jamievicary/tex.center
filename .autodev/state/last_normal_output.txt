@@ -5,7 +5,7 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 70, downloaded 0, added 0, done
+Progress: resolved 0, reused 75, downloaded 0, added 0, done
 
 Done in 1.3s
 Scope: 3 of 4 workspace projects
@@ -26,7 +26,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 6 tests in 11.503s
+Ran 6 tests in 11.680s
 
 OK
 tests_normal/run_tests.sh: PASS
