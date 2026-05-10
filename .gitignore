@@ -7,6 +7,9 @@ creds/
 .env.*
 !.env.example
 
+# Node toolchain (vendored per-checkout, see tests_normal/setup_node.sh)
+.tools/
+
 # Node
 node_modules/
 .pnpm-store/

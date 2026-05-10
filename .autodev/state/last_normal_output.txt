@@ -1,2 +1,10 @@
 structural_checks: OK (3 packages)
+setup_node.sh: node v20.18.1, pnpm 9.12.0
+Scope: 3 of 4 workspace projects
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck: Done
+apps/web typecheck$ tsc --noEmit -p tsconfig.json
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/sidecar typecheck: Done
+apps/web typecheck: Done
 tests_normal/run_tests.sh: PASS

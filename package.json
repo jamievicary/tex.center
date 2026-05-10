@@ -12,5 +12,8 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "build": "pnpm -r build",
     "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
   }
 }

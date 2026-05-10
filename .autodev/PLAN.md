@@ -17,15 +17,14 @@ The work splits roughly into (A) a vertical slice we can run locally
 end-to-end, (B) supertex daemon-isation, (C) Fly deployment +
 per-project Machine spawning, (D) auth + production polish.
 
-- [~] **M0 — Repo scaffolding.** Monorepo layout (`apps/web`,
+- [x] **M0 — Repo scaffolding.** Monorepo layout (`apps/web`,
       `apps/sidecar`, `packages/protocol`), TypeScript + pnpm
-      workspace, `tests_normal/` runs structural checks (JSON
-      validity, workspace coherence, required files) plus any
-      Python unit tests. **Open subtask:** wire `tsc --noEmit`
-      across packages once a Linux Node toolchain is available
-      — see "Local toolchain" below. Submodule already at
+      workspace, `tests_normal/` runs structural checks plus
+      `pnpm -r typecheck` (tsc --noEmit) across all packages.
+      Node 20 LTS auto-provisioned into gitignored `.tools/` by
+      `tests_normal/setup_node.sh`. Submodule at
       `vendor/supertex`. _(iter 2: scaffolding + structural
-      checks landed.)_
+      checks. iter 3: Node toolchain + typecheck wired in.)_
 - [ ] **M1 — Static frontend shell.** SvelteKit app: white page with
       "Sign in with Google" button (mock auth for now), three-panel
       editor route stubbed with CodeMirror 6 and a hardcoded PDF in
@@ -61,36 +60,21 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0 is mostly landed: pnpm workspace, three packages, shared
-`tsconfig.base.json`, structural checks gating the iteration.
-Remaining: get `tsc --noEmit` running (see Local toolchain).
-Next iteration should either solve that OR start M1 (SvelteKit
-shell with the white sign-in page) — picking M1 is fine since
-M0's missing piece is a tooling issue, not a structural one.
+M0 closed. Next: M1 — SvelteKit white sign-in page +
+three-panel editor stub (CodeMirror 6, PDF.js with a fixture
+PDF). Mock auth for now; real Google OAuth lands in M5.
 
 ## Local toolchain
 
-`node` is not installed on the Linux side of this WSL2 host;
-only Windows-side `node.exe` (v24.12.0) is reachable through
-`/mnt/c/Program Files/nodejs/`. Mixing Windows node with WSL
-filesystems is slow (`/mnt/c` is much slower than the Linux fs)
-and brittle (path translation, line endings, file watchers).
-Options for getting a real typecheck wired in:
-
-1. Install Node in WSL via `nvm` (no sudo required). Most
-   straightforward, keeps everything Linux-side.
-2. Install via apt (`sudo apt install nodejs`). Needs the user's
-   sudo password — would require a discussion-mode question.
-3. Run `node.exe` from WSL with care. Workable for one-shot
-   tools, awful for `node_modules`-on-/mnt/c watch loops.
-4. Use Docker for the typecheck. Heaviest, but the production
-   image will be Docker anyway.
-
-Recommend option 1 in the next iteration that touches this:
-fetch nvm into the repo's gitignored `.tools/` (or `$HOME`),
-install Node 20 LTS, add `pnpm` via corepack, then wire
-`pnpm -r typecheck` into `tests_normal/run_tests.sh`. No human
-input required.
+Node 20.18.1 is auto-provisioned per-checkout into
+`.tools/node/` (gitignored) by
+`tests_normal/setup_node.sh`, which the normal-test runner
+calls before `pnpm -r typecheck`. The script is idempotent and
+needs no human input. pnpm is activated via corepack at the
+version pinned in root `package.json` (`packageManager`).
+`/mnt/c` is slower than a real Linux filesystem, but the cost
+is borne once at Node download (~25 MB) and per `pnpm install`;
+typecheck itself is fast.
 
 ## Open questions / risks
 
