@@ -12,13 +12,9 @@
 // stdout and stderr are inspected because help output can land on
 // either depending on the binary's argparse style.
 
-import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 
-type SpawnFn = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-) => ChildProcess;
+import { defaultSpawnFn, type SpawnFn } from "./supertexShared.js";
 
 export interface SupertexFeatures {
   readyMarker: boolean;
@@ -38,7 +34,7 @@ export async function detectSupertexFeatures(
   supertexBin: string,
   opts: DetectOptions = {},
 ): Promise<SupertexFeatures> {
-  const spawnFn = opts.spawnFn ?? (nodeSpawn as SpawnFn);
+  const spawnFn = opts.spawnFn ?? defaultSpawnFn;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   let child: ChildProcess;

@@ -28,19 +28,14 @@
 //     SIGKILL after 2 s. The child must be gone after `close()`
 //     returns (paired pgrep-style test in the suite).
 
-import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
 import type { SupertexFeatures } from "./featureDetect.js";
 import { ShipoutSegmenter } from "./pdfSegmenter.js";
-
-type SpawnFn = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-) => ChildProcess;
+import { defaultSpawnFn, supertexPaths, type SpawnFn } from "./supertexShared.js";
 
 const DEFAULT_READY_MARKER = "SUPERTEX_READY";
 const DEFAULT_COMPILE_TIMEOUT_MS = 60_000;
@@ -95,7 +90,7 @@ export class SupertexWatchCompiler implements Compiler {
     this.termGraceMs = opts.termGraceMs ?? TERM_GRACE_MS;
     this.extraArgs = opts.extraArgs ?? [];
     this.features = opts.features ?? { readyMarker: false, targetPage: false };
-    this.spawnFn = opts.spawnFn ?? (nodeSpawn as SpawnFn);
+    this.spawnFn = opts.spawnFn ?? defaultSpawnFn;
   }
 
   /** PID of the watch process, or `null` if not yet spawned / already reaped. */
@@ -105,7 +100,7 @@ export class SupertexWatchCompiler implements Compiler {
 
   async compile(req: CompileRequest): Promise<CompileResult> {
     if (this.closed) return { ok: false, error: "supertex watch: compiler closed" };
-    const outDir = join(this.workDir, "out");
+    const { outDir, shipoutsPath, pdfPath } = supertexPaths(this.workDir, this.sourceName);
     await mkdir(outDir, { recursive: true });
 
     if (!this.child) {
@@ -138,7 +133,6 @@ export class SupertexWatchCompiler implements Compiler {
       };
     }
 
-    const pdfPath = join(outDir, basename(this.sourceName, ".tex") + ".pdf");
     let bytes: Uint8Array;
     try {
       const buf = await readFile(pdfPath);
@@ -150,7 +144,7 @@ export class SupertexWatchCompiler implements Compiler {
       };
     }
     if (!this.segmenter) {
-      this.segmenter = new ShipoutSegmenter(join(outDir, "shipouts"));
+      this.segmenter = new ShipoutSegmenter(shipoutsPath);
     }
     const segments = await this.segmenter.update(bytes);
     return { ok: true, segments };
@@ -189,13 +183,13 @@ export class SupertexWatchCompiler implements Compiler {
   }
 
   private async spawnWatcher(): Promise<void> {
-    const outDir = join(this.workDir, "out");
+    const { outDir, shipoutsPath } = supertexPaths(this.workDir, this.sourceName);
     const args = [
       join(this.workDir, this.sourceName),
       "--output-directory",
       outDir,
       "--live-shipouts",
-      join(outDir, "shipouts"),
+      shipoutsPath,
     ];
     if (this.features.readyMarker) {
       args.push("--ready-marker", this.readyMarker);

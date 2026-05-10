@@ -119,6 +119,14 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
+**Iter 20 — refactor.** Extracted the duplicated `SpawnFn` type
+(was hand-rolled in `featureDetect.ts`, `supertexOnce.ts`,
+`supertexWatch.ts`) and the `outDir`/`shipoutsPath`/`pdfPath`
+layout into `apps/sidecar/src/compiler/supertexShared.ts`
+(`SpawnFn`, `defaultSpawnFn`, `supertexPaths(workDir, sourceName)`).
+Both supertex compilers now share a single source of truth for
+the project workspace paths. No behaviour change.
+
 **M4.2.2 sidecar DB wiring landed (iter 19).**
 `apps/sidecar` now depends on `@tex-center/db`. `buildServer`
 selects a `DbHandle` from (in order): caller-supplied

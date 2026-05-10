@@ -16,18 +16,12 @@
 // written the source to `<workDir>/<sourceName>` *before* calling
 // `compile()` — `ProjectWorkspace.writeMain` does that today.
 
-import { spawn as nodeSpawn, type SpawnOptions, type ChildProcess } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
 import type { SupertexFeatures } from "./featureDetect.js";
-
-type SpawnFn = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-) => ChildProcess;
+import { defaultSpawnFn, supertexPaths, type SpawnFn } from "./supertexShared.js";
 
 export interface SupertexOnceOptions {
   /** Project workspace dir; the source must already live here. */
@@ -58,11 +52,11 @@ export class SupertexOnceCompiler implements Compiler {
     this.sourceName = opts.sourceName ?? "main.tex";
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.features = opts.features ?? { readyMarker: false, targetPage: false };
-    this.spawnFn = opts.spawnFn ?? (nodeSpawn as SpawnFn);
+    this.spawnFn = opts.spawnFn ?? defaultSpawnFn;
   }
 
   async compile(req: CompileRequest): Promise<CompileResult> {
-    const outDir = join(this.workDir, "out");
+    const { outDir, shipoutsPath, pdfPath } = supertexPaths(this.workDir, this.sourceName);
     await mkdir(outDir, { recursive: true });
     const sourcePath = join(this.workDir, this.sourceName);
     const args = [
@@ -71,7 +65,7 @@ export class SupertexOnceCompiler implements Compiler {
       "--output-directory",
       outDir,
       "--live-shipouts",
-      join(outDir, "shipouts"),
+      shipoutsPath,
     ];
     if (this.features.targetPage && req.targetPage > 0) {
       args.push(`--target-page=${req.targetPage}`);
@@ -87,7 +81,6 @@ export class SupertexOnceCompiler implements Compiler {
       const detail = result.stderr.trim() || "(no stderr)";
       return { ok: false, error: `supertex exited ${result.code}: ${detail}` };
     }
-    const pdfPath = join(outDir, basename(this.sourceName, ".tex") + ".pdf");
     let bytes: Uint8Array;
     try {
       const buf = await readFile(pdfPath);
