@@ -1,0 +1,1 @@
+tests_gold/run_tests.sh: no gold tests configured yet (placeholder); treating as pass.
