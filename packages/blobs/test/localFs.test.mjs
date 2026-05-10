@@ -1,7 +1,7 @@
 // Round-trip + edge-case tests for the local-filesystem BlobStore.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -78,6 +78,25 @@ try {
       assert.throws(() => validateKey(key), new RegExp("invalid|non-empty"), `expected reject: ${JSON.stringify(key)}`);
       await assert.rejects(store.get(key), /invalid|non-empty/);
     }
+  }
+  // health: existing directory → resolves.
+  {
+    await store.health();
+  }
+
+  // health: missing root directory → throws.
+  {
+    const missing = join(root, "definitely-missing-subdir");
+    const broken = new LocalFsBlobStore({ rootDir: missing });
+    await assert.rejects(broken.health(), /not accessible|ENOENT/);
+  }
+
+  // health: root path is a file, not a directory → throws.
+  {
+    const filePath = join(root, "actually-a-file");
+    await writeFile(filePath, "hi");
+    const broken = new LocalFsBlobStore({ rootDir: filePath });
+    await assert.rejects(broken.health(), /not a directory/);
   }
 } finally {
   await rm(root, { recursive: true, force: true });

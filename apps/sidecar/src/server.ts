@@ -265,7 +265,23 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     } else {
       db = { state: "absent" };
     }
-    return { ok: db.state !== "down", protocol: PROTOCOL_VERSION, db };
+    let blobs: { state: "absent" | "up" | "down"; error?: string };
+    if (blobStore) {
+      try {
+        await blobStore.health();
+        blobs = { state: "up" };
+      } catch (e) {
+        blobs = { state: "down", error: e instanceof Error ? e.message : String(e) };
+      }
+    } else {
+      blobs = { state: "absent" };
+    }
+    return {
+      ok: db.state !== "down" && blobs.state !== "down",
+      protocol: PROTOCOL_VERSION,
+      db,
+      blobs,
+    };
   });
 
   app.register(async (instance) => {

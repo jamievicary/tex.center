@@ -32,7 +32,7 @@ async function getHealth(app) {
   return res.json();
 }
 
-// 1. No db.
+// 1. No db, no blobs.
 {
   const prev = process.env.DATABASE_URL;
   delete process.env.DATABASE_URL;
@@ -41,7 +41,57 @@ async function getHealth(app) {
     const body = await getHealth(app);
     assert.equal(body.ok, true);
     assert.deepEqual(body.db, { state: "absent" });
+    assert.deepEqual(body.blobs, { state: "absent" });
     assert.equal(typeof body.protocol, "number");
+    await app.close();
+  } finally {
+    if (prev !== undefined) process.env.DATABASE_URL = prev;
+  }
+}
+
+// 4. blob store probe succeeds.
+{
+  const prev = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    let calls = 0;
+    const blobStore = {
+      async put() {},
+      async get() { return null; },
+      async list() { return []; },
+      async delete() {},
+      async health() { calls++; },
+    };
+    const app = await buildServer({ logger: false, blobStore });
+    const body = await getHealth(app);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.blobs, { state: "up" });
+    assert.equal(calls, 1, "blob health probed exactly once per request");
+    await getHealth(app);
+    assert.equal(calls, 2);
+    await app.close();
+  } finally {
+    if (prev !== undefined) process.env.DATABASE_URL = prev;
+  }
+}
+
+// 5. blob store probe throws.
+{
+  const prev = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    const blobStore = {
+      async put() {},
+      async get() { return null; },
+      async list() { return []; },
+      async delete() {},
+      async health() { throw new Error("blob root /nope not accessible: ENOENT"); },
+    };
+    const app = await buildServer({ logger: false, blobStore });
+    const body = await getHealth(app);
+    assert.equal(body.ok, false);
+    assert.equal(body.blobs.state, "down");
+    assert.match(body.blobs.error, /ENOENT/);
     await app.close();
   } finally {
     if (prev !== undefined) process.env.DATABASE_URL = prev;

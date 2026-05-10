@@ -15,6 +15,13 @@ export interface BlobStore {
   get(key: string): Promise<Uint8Array | null>;
   list(prefix: string): Promise<string[]>;
   delete(key: string): Promise<void>;
+  /**
+   * Connectivity probe. Resolves on success; throws with a
+   * human-readable message if the backing store is unreachable
+   * or mis-configured. Used by sidecar `/healthz`. Cheap
+   * (`stat`/`HeadBucket`-class), not a full round-trip.
+   */
+  health(): Promise<void>;
 }
 
 export { LocalFsBlobStore } from "./localFs.js";

@@ -4,7 +4,7 @@
 // atomicity. `list(prefix)` walks the on-disk tree below the
 // prefix and returns full keys (not paths) in lex order.
 
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import type { BlobStore } from "./index.js";
@@ -97,6 +97,19 @@ export class LocalFsBlobStore implements BlobStore {
       }
     }
     return out;
+  }
+
+  async health(): Promise<void> {
+    let st;
+    try {
+      st = await stat(this.root);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      throw new Error(`blob root ${this.root} not accessible: ${code ?? String(err)}`);
+    }
+    if (!st.isDirectory()) {
+      throw new Error(`blob root ${this.root} is not a directory`);
+    }
   }
 
   async delete(key: string): Promise<void> {

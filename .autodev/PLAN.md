@@ -194,7 +194,10 @@ auth scaffolding.
 - The sidecar's `/healthz` is the only consumer of `app.db`
   today (probes via `` client`SELECT 1` ``, reports
   `db: { state: "absent" | "up" | "down" }`); routes that read
-  or write entity rows still wait on M5/M7.
+  or write entity rows still wait on M5/M7. As of iter 27 the
+  same endpoint also reports `blobs: { state }` via a
+  `BlobStore.health()` probe; the S3 adapter (M4.3.1) needs to
+  implement `health()` as a `HeadBucket`-class call.
 
 ### Survey of `vendor/supertex` (iter 8)
 
