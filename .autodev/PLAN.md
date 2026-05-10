@@ -85,10 +85,22 @@ per-project Machine spawning, (D) auth + production polish.
                   Gold test runs `db:migrate` against a real
                   container, asserts every spec table exists and
                   re-running is a no-op (`skipped` only).
-            - [ ] **M4.2.2 — Sidecar/web wiring.** Both apps
-                  read `DATABASE_URL` from env and import
-                  `createDb` from `@tex-center/db`. Connection
-                  pool lifecycle tied to server start/stop.
+                  **Deferred (iter 19):** harness host has no
+                  Docker, so the gold case would skip locally.
+                  Pick up once CI host has Docker, or adopt an
+                  in-process alternative (PGlite) — see
+                  FUTURE_IDEAS.
+            - [x] **M4.2.2 — Sidecar wiring.** _(iter 19.)_
+                  `apps/sidecar` depends on `@tex-center/db`;
+                  `buildServer` reads `DATABASE_URL` from env
+                  (with caller `db?` injection and a
+                  `dbFactory?` test seam), decorates
+                  `app.db: DbHandle | null`, and closes
+                  server-owned handles in the existing
+                  `onClose` hook. `apps/web` stays
+                  `adapter-static` (no SSR server), so DB
+                  access there waits for the control plane
+                  (M6/M7).
       - [ ] **M4.3 — Project hydration.** Sidecar loads project
             files from Tigris on first compile; persists
             checkpoint blobs back on `Compiler.close()`.
@@ -106,6 +118,21 @@ per-project Machine spawning, (D) auth + production polish.
       criteria end-to-end on prod, fix gaps.
 
 ## Current focus
+
+**M4.2.2 sidecar DB wiring landed (iter 19).**
+`apps/sidecar` now depends on `@tex-center/db`. `buildServer`
+selects a `DbHandle` from (in order): caller-supplied
+`opts.db` (not closed on shutdown), `process.env.DATABASE_URL`
+(passed through `opts.dbFactory ?? createDb`, owned and closed
+on `app.close()`), or null. The handle is exposed as
+`app.db: DbHandle | null` via fastify decoration; module
+augmentation lives in `apps/sidecar/src/server.ts`. No route
+yet reads `app.db` — that arrives with auth/session work in M5.
+Test at `apps/sidecar/test/serverDb.test.mjs` (null path,
+injected-handle path with end-not-called assertion,
+DATABASE_URL path with factory-spy + end-called assertion).
+M4.2.1 (docker-compose + apply gold integration) is deferred
+until we have a Docker-capable host or pick up PGlite.
 
 **M4.2.0 driver + migration runner landed (iter 18).**
 `packages/db` now ships the runtime seam: `postgres-js`

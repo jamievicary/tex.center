@@ -31,6 +31,13 @@ import {
   encodeDocUpdate,
   encodePdfSegment,
 } from "@tex-center/protocol";
+import { createDb, closeDb, type DbHandle } from "@tex-center/db";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    db: DbHandle | null;
+  }
+}
 
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
@@ -70,6 +77,18 @@ export interface SidecarOptions {
    */
   scratchRoot?: string;
   logger?: boolean;
+  /**
+   * Caller-owned database handle. If provided, `buildServer` uses
+   * it as-is and does NOT close it on shutdown — the caller's
+   * lifecycle wins.
+   */
+  db?: DbHandle;
+  /**
+   * Factory used when `db` is unset and `DATABASE_URL` is in the
+   * environment. Defaults to `createDb` from `@tex-center/db`.
+   * Test seam.
+   */
+  dbFactory?: (connectionString: string) => DbHandle;
 }
 
 export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyInstance> {
@@ -86,6 +105,17 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   // on shutdown; an externally-supplied root is left in place.
   const ownedScratchRoot = opts.scratchRoot === undefined;
   const scratchRoot = opts.scratchRoot ?? mkdtempSync(join(tmpdir(), "tex-center-sidecar-"));
+
+  let dbHandle: DbHandle | null = null;
+  let ownedDb = false;
+  if (opts.db) {
+    dbHandle = opts.db;
+  } else if (process.env.DATABASE_URL) {
+    const factory = opts.dbFactory ?? createDb;
+    dbHandle = factory(process.env.DATABASE_URL);
+    ownedDb = true;
+  }
+  app.decorate("db", dbHandle);
 
   const projects = new Map<string, ProjectState>();
 
@@ -261,6 +291,9 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     projects.clear();
     if (ownedScratchRoot) {
       await rm(scratchRoot, { recursive: true, force: true });
+    }
+    if (ownedDb && dbHandle) {
+      await closeDb(dbHandle);
     }
   });
 

@@ -5,9 +5,9 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 73, downloaded 0, added 0, done
+Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
-Done in 1.2s
+Done in 1.8s
 Scope: 4 of 5 workspace projects
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
@@ -28,6 +28,7 @@ test_sidecar_feature_detect (test_node_suites.TestNodeSuites.test_sidecar_featur
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_pdf_segmenter (test_node_suites.TestNodeSuites.test_sidecar_pdf_segmenter) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
+test_sidecar_server_db (test_node_suites.TestNodeSuites.test_sidecar_server_db) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
 test_sidecar_supertex_watch_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_watch_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
@@ -35,7 +36,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 13 tests in 25.950s
+Ran 14 tests in 32.183s
 
 OK
 tests_normal/run_tests.sh: PASS

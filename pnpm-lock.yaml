@@ -17,6 +17,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.2.0
+      '@tex-center/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@tex-center/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
