@@ -1,0 +1,42 @@
+# Credentials — NEVER commit
+creds/
+*.token
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+.pnpm-store/
+dist/
+build/
+.svelte-kit/
+.next/
+.turbo/
+.cache/
+coverage/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local TeX/build artefacts
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.out
+*.toc
+
+# Autodev internal state — keep out of the product repo
+autodev/
