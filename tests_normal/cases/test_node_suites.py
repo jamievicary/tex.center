@@ -74,6 +74,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_db_drizzle(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "drizzle.test.mjs")
 
+    def test_db_migrations(self) -> None:
+        _run_tsx(ROOT / "packages" / "db" / "test" / "migrations.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

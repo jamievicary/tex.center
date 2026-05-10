@@ -62,10 +62,33 @@ per-project Machine spawning, (D) auth + production polish.
             column (SQL type, nullability, primary key, FK
             target). The `drizzle(client, { schema })` call
             lands with M4.2 alongside the postgres driver dep.
-      - [ ] **M4.2 — Local Postgres bring-up.** `docker-compose`
-            for Postgres + Tigris/MinIO. `pnpm db:migrate`
-            applies migrations. Sidecar/web read connection
-            strings from env.
+      - [~] **M4.2 — Local Postgres bring-up.** Split:
+            - [x] **M4.2.0 — Driver + migration runner.**
+                  _(iter 18.)_ `postgres@^3.4.5` added to
+                  `packages/db`. `src/db.ts` exposes
+                  `createDb(connectionString)` →
+                  `{ client, db: drizzle(client, { schema }) }`
+                  and `closeDb`. `src/migrations.ts` exposes
+                  `Migration`, `loadMigrations(dir)` (lex-sorted
+                  `*.sql` + sha256), `MIGRATIONS_TABLE_SQL`, and
+                  `applyMigrations(sql, migrations)` (idempotent,
+                  per-migration `sql.begin` transaction, hash-
+                  mismatch throws). CLI at
+                  `packages/db/scripts/migrate.ts` reads
+                  `DATABASE_URL` and runs `pnpm --filter
+                  @tex-center/db db:migrate`. Pure loader test at
+                  `packages/db/test/migrations.test.mjs`; the
+                  applier integration lands in M4.2.1 with real
+                  Postgres.
+            - [ ] **M4.2.1 — Docker compose + apply integration.**
+                  `docker-compose.yml` for Postgres + MinIO.
+                  Gold test runs `db:migrate` against a real
+                  container, asserts every spec table exists and
+                  re-running is a no-op (`skipped` only).
+            - [ ] **M4.2.2 — Sidecar/web wiring.** Both apps
+                  read `DATABASE_URL` from env and import
+                  `createDb` from `@tex-center/db`. Connection
+                  pool lifecycle tied to server start/stop.
       - [ ] **M4.3 — Project hydration.** Sidecar loads project
             files from Tigris on first compile; persists
             checkpoint blobs back on `Compiler.close()`.
@@ -84,16 +107,29 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M4.1 Drizzle integration landed (iter 17).** `packages/db`
-gained a `drizzle-orm` dependency and a typed `pgTable` per
-entity in `src/drizzle.ts`, re-exported from `src/index.ts` as
-`{ users, sessions, projects, projectFiles, machineAssignments,
-schema }`. The Drizzle FKs / indexes / unique constraints mirror
-the SQL migration. `test/drizzle.test.mjs` cross-checks the
-Drizzle tables against `allTables` (column SQL type, notNull, PK,
-FK target) so the spec and the query layer can't drift. No DB
-connection yet; that's M4.2 with the postgres driver and
-docker-compose.
+**M4.2.0 driver + migration runner landed (iter 18).**
+`packages/db` now ships the runtime seam: `postgres-js`
+dependency, `createDb(connectionString)` →
+`{ client, db: drizzle(client, { schema }) }` in `src/db.ts`,
+hand-rolled migration loader/applier in `src/migrations.ts`
+(lex-sorted `*.sql`, sha256-hashed, idempotent application via
+`schema_migrations` bookkeeping table, hash-mismatch on a
+shipped migration throws), and a `pnpm --filter @tex-center/db
+db:migrate` CLI at `scripts/migrate.ts` reading `DATABASE_URL`.
+Loader covered by a hermetic test at
+`packages/db/test/migrations.test.mjs`; the applier and
+`createDb` get their integration coverage when M4.2.1 lands a
+docker-compose Postgres.
+
+**M4.1 Drizzle integration (iter 17, historical).**
+`packages/db` gained a `drizzle-orm` dependency and a typed
+`pgTable` per entity in `src/drizzle.ts`, re-exported from
+`src/index.ts` as `{ users, sessions, projects, projectFiles,
+machineAssignments, schema }`. The Drizzle FKs / indexes /
+unique constraints mirror the SQL migration.
+`test/drizzle.test.mjs` cross-checks the Drizzle tables against
+`allTables` (column SQL type, notNull, PK, FK target) so the
+spec and the query layer can't drift.
 
 **M4.0 persistence data model (iter 16, historical).**
 `packages/db` was introduced with entity row types

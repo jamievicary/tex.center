@@ -2,7 +2,7 @@
   "name": "@tex-center/db",
   "version": "0.0.0",
   "private": true,
-  "description": "Persistence data model for tex.center: TypeScript entity types, Drizzle table builders, table specs, and SQL migrations.",
+  "description": "Persistence data model for tex.center: TypeScript entity types, Drizzle table builders, table specs, SQL migrations, and the postgres-js connection factory.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -11,9 +11,15 @@
     "./migrations/*": "./src/migrations/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.13",
+    "tsx": "^4.19.1"
   }
 }
