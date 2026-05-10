@@ -40,3 +40,4 @@ Thumbs.db
 
 # Autodev internal state — keep out of the product repo
 autodev/
+/autodev/
