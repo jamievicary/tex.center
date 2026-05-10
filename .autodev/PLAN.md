@@ -59,17 +59,24 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M3.3 `SupertexWatchCompiler`** — replace the per-edit fork-exec
-of M3.2 with one persistent `supertex` watch process per project,
-driven by writes to `main.tex` and a tail of the
-`--live-shipouts` log. Reap the process in `Compiler.close()`
-with a paired `pgrep`-empty test. M3.2 is in: `SupertexOnceCompiler`
-spawns the binary at `$SUPERTEX_BIN` per compile, reads
-`out/<base>.pdf`, and returns it as a single segment. Selected at
-boot via `SIDECAR_COMPILER=supertex-once`; default stays `fixture`.
-Note: the supertex binary lives at `vendor/supertex/src/supertex`
-(Python entry point), not `bin/supertex` as earlier plan revisions
-implied.
+**M3.4 per-shipout deltas.** M3.3 is in: `SupertexWatchCompiler`
+holds one long-lived `supertex` watch process per project,
+synchronises on a `SUPERTEX_READY` stdout marker line emitted
+once per compile round, and is reaped on `Compiler.close()`
+(SIGTERM with 2 s grace, SIGKILL fallback; verified by a paired
+`process.kill(pid, 0)` ESRCH test). Selected at boot via
+`SIDECAR_COMPILER=supertex-watch`; default stays `fixture`. Note
+the supertex binary lives at `vendor/supertex/src/supertex`
+(Python entry point), not `bin/supertex`.
+
+**Caveat — READY marker not yet upstream.** Real
+`vendor/supertex` does not emit the `SUPERTEX_READY` line today,
+so `supertex-watch` only works against the test fake. Wiring the
+sidecar half first is deliberate: it validates the lifecycle
+(spawn, single-marker sync, reap, timeout) without blocking on
+upstream. The upstream PR is folded into M3.5 (proposed shape:
+`--ready-marker <STRING>` on the watch CLI, default off so the
+flag is opt-in).
 
 ### Survey of `vendor/supertex` (iter 8)
 
@@ -134,24 +141,33 @@ Implications for M3:
       `{ projectId, workspace }` so the spawned process can locate
       the project's scratch dir. Tested with a fake supertex Node
       script that mimics the flag parsing and writes a stub PDF.
-- [ ] **M3.3 — `SupertexWatchCompiler`.** One persistent
-      `supertex` watch process per project; sidecar writes
-      `main.tex` and waits for a new shipout entry in
-      `--live-shipouts`. Process is reaped on `Compiler.close()`
-      with a paired `pgrep`-empty test. Default flipped to
-      `supertex-watch` once stable; `fixture` retained behind a
-      flag for offline tests.
+- [x] **M3.3 — `SupertexWatchCompiler`.** _(iter 13.)_
+      `apps/sidecar/src/compiler/supertexWatch.ts` runs one
+      persistent watch process per project, synchronising on a
+      `SUPERTEX_READY` stdout marker after each compile round
+      (the contract a fake binary honours today; upstream PR
+      tracked under M3.5). Lazy spawn on first compile, lifecycle
+      managed via `Compiler.close()` (SIGTERM, 2 s grace,
+      SIGKILL fallback). Tests: happy path, edit-then-recompile,
+      child-reaped-on-close (`process.kill(pid, 0)` → ESRCH),
+      timeout when no marker. Selected via
+      `SIDECAR_COMPILER=supertex-watch`; default stays `fixture`.
 - [ ] **M3.4 — Per-shipout PDF byte-range deltas.** Use the
       `--live-shipouts` page→offset map to chunk the PDF into one
       `pdf-segment` per *changed* shipout, rather than one big
       segment. Requires tracking the last-shipped offset per
       project across compiles.
-- [ ] **M3.5 — `--target-page=N` upstream + sidecar wiring.**
-      Open PR against `github.com/jamievicary/supertex` to
-      implement the flag. Sidecar passes `targetPage` from the
-      `Compiler` request through to the supertex process when the
-      flag is supported (feature-detect on startup so older
-      supertex builds remain usable).
+- [ ] **M3.5 — Upstream supertex flags + sidecar wiring.** Two
+      PRs against `github.com/jamievicary/supertex`:
+      (a) `--ready-marker <STRING>` — emit one stdout line per
+      compile-round end so the sidecar can synchronise
+      deterministically; required to use `supertex-watch`
+      against real supertex. (b) `--target-page=N` —
+      stop-after-page so the sidecar can honour the GOAL.md
+      "compile only as far as the visible page" optimisation.
+      Sidecar passes `targetPage` from `CompileRequest` to the
+      supertex process when the flag is supported (feature-detect
+      on startup so older supertex builds remain usable).
 
 Cutover is gradual via the `SIDECAR_COMPILER` selector; that
 env-var is deleted in M3.5 once `supertex-watch` is the default.
@@ -208,7 +224,16 @@ To be raised as PRs against `github.com/jamievicary/supertex`. None
 required for M0–M2. All required by M3.
 
 1. Long-running daemon mode accepting edit ops on stdin or a UNIX
-   socket and resuming incrementally.
-2. `target_page=N` stop-after-page mode.
-3. Per-shipout reporting of PDF byte-range deltas.
-4. Checkpoint serialise/restore to a single blob.
+   socket and resuming incrementally. — **superseded** by the
+   iter-8 survey: watch mode plus inotify-on-source already
+   covers this; no new IPC channel needed.
+2. `--target-page=N` stop-after-page mode (the CLI declares the
+   flag but errors today). Tracked in M3.5.
+3. `--ready-marker <STRING>` end-of-compile-round stdout signal.
+   Required for `SupertexWatchCompiler` (M3.3) to be usable
+   against real supertex. Tracked in M3.5.
+4. Per-shipout reporting of PDF byte-range deltas. M3.4 will
+   approximate this from `--live-shipouts` (page→offset) without
+   upstream changes; a richer delta protocol can come later if
+   the approximation proves lossy.
+5. Checkpoint serialise/restore to a single blob (M7).

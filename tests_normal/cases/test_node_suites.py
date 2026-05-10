@@ -50,6 +50,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_supertex_once_compiler(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "supertexOnceCompiler.test.mjs")
 
+    def test_sidecar_supertex_watch_compiler(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "supertexWatchCompiler.test.mjs")
+
     def test_sidecar_workspace(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "workspace.test.mjs")
 

@@ -5,9 +5,9 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 66, downloaded 0, added 0, done
+Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
-Done in 1.7s
+Done in 2.3s
 Scope: 3 of 4 workspace projects
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
@@ -22,12 +22,13 @@ test_protocol_codec (test_node_suites.TestNodeSuites.test_protocol_codec) ... ok
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
+test_sidecar_supertex_watch_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_watch_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 7 tests in 20.493s
+Ran 8 tests in 47.149s
 
 OK
 tests_normal/run_tests.sh: PASS

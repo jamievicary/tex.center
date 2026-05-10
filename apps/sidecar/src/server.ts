@@ -35,6 +35,7 @@ import {
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
+import { SupertexWatchCompiler } from "./compiler/supertexWatch.js";
 import { ProjectWorkspace } from "./workspace.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
@@ -269,6 +270,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 //   - unset / "fixture"       → FixtureCompiler (default)
 //   - "supertex-once"         → SupertexOnceCompiler, spawning the
 //                               binary at `$SUPERTEX_BIN` (required).
+//   - "supertex-watch"        → SupertexWatchCompiler, one persistent
+//                               watch process per project (M3.3).
+//                               Requires upstream READY-marker support
+//                               (M3.5) before it can be used against
+//                               real `vendor/supertex`.
 // Anything else is rejected loudly so deploy-time typos don't
 // silently fall back to the fixture path.
 function defaultCompilerFactory(
@@ -287,6 +293,16 @@ function defaultCompilerFactory(
     }
     return (ctx) =>
       new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
+  }
+  if (which === "supertex-watch") {
+    const supertexBin = process.env.SUPERTEX_BIN;
+    if (!supertexBin) {
+      throw new Error(
+        "SIDECAR_COMPILER=supertex-watch requires SUPERTEX_BIN to point at a supertex executable",
+      );
+    }
+    return (ctx) =>
+      new SupertexWatchCompiler({ workDir: ctx.workspace.dir, supertexBin });
   }
   throw new Error(`unknown SIDECAR_COMPILER: ${which}`);
 }
