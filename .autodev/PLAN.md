@@ -172,20 +172,30 @@ spawning, (D) auth + production polish.
                         every termination; `tc_session` minted on
                         success (Path=/, HttpOnly, SameSite=Lax,
                         Secure on https, Max-Age=30 days).
-                  - [ ] **M5.1.2b** — Session-row persistence.
-                        Wire `@tex-center/db` into `apps/web`
-                        (mirror sidecar's `DbHandle | null` pattern
-                        with `DATABASE_URL`). Add
-                        `packages/db/src/users.ts` +
-                        `sessions.ts` (or co-locate) with a
-                        `findOrCreateUserByGoogleSub` upsert + a
-                        `insertSession({userId, exp})` helper that
-                        returns the new uuid. The route swaps
-                        `mintSid: () => randomUUID()` for a real
-                        DB-backed factory that returns the inserted
-                        row's id. Until this lands, the signed
-                        `tc_session` cookie will not pass the
-                        M5.1.3 hooks lookup.
+                  - [x] **M5.1.2b** — Session-row persistence (iter 37).
+                        `packages/db/src/users.ts` adds
+                        `findOrCreateUserByGoogleSub` (Drizzle
+                        `insert ... onConflictDoUpdate(target:
+                        google_sub)` returning the upserted row);
+                        `sessions.ts` adds
+                        `insertSession({userId, expiresAt})`.
+                        Helpers typed against `PostgresJsDatabase
+                        <Schema>`; PGlite tests cast through. New
+                        gold case `test_pglite_users_sessions.py`
+                        applies real migrations to PGlite and
+                        exercises upsert-stability, FK rejection,
+                        and `updated_at` monotonicity.
+                        `apps/web/src/lib/server/db.ts` adds a
+                        process-lifetime `getDb()` singleton that
+                        lazily reads `DATABASE_URL` and registers a
+                        SIGTERM/SIGINT close hook. The route's
+                        orchestrator injection point widened from
+                        `mintSid: () => string` to
+                        `createSession(claims) => Promise<string>`;
+                        the route binding upserts the user, inserts
+                        the session, and returns the new sid. A new
+                        500 branch in `resolveGoogleCallback` surfs
+                        DB outages.
             - [ ] **M5.1.3** — `hooks.server.ts`: read session
                   cookie on every request, expose `event.locals.session`,
                   redirect unauthenticated users on protected
@@ -203,14 +213,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5.1.2b (session-row persistence).
-Wire `@tex-center/db` into `apps/web`, add user-upsert + session-
-insert helpers in `packages/db`, swap the route's
-`mintSid: () => randomUUID()` for the DB-backed factory. After that,
-M5.1.3 (`hooks.server.ts`: read `tc_session`, lookup row, populate
-`event.locals.session`). Smaller alternatives if blocked: M3.5 PRs
-(out of repo), a multi-file-project slice on the sidecar. M4.3.1
-(S3 adapter) still waits for docker-compose; M4.3.2 checkpoint half
+**Next ordinary iteration:** M5.1.3 (`hooks.server.ts`).
+Read `tc_session` on every request, `verifySessionToken`, lookup
+the row via `@tex-center/db`'s `sessions` table (and `users` join),
+populate `event.locals.session`. Wire `event.locals.session` into
+the editor route(s) so unauthenticated visitors get redirected
+back to `/`. Smaller alternatives if blocked: M3.5 PRs (out of
+repo), a multi-file-project slice on the sidecar. M4.3.1 (S3
+adapter) still waits for docker-compose; M4.3.2 checkpoint half
 waits for M3.5/M7.
 
 ## Live caveats

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tex-center/auth": "workspace:*",
+    "@tex-center/db": "workspace:*",
     "@tex-center/protocol": "workspace:*",
     "@codemirror/commands": "^6.7.1",
     "@codemirror/state": "^6.5.0",

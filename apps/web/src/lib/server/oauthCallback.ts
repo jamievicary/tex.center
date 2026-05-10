@@ -18,10 +18,11 @@
 //   7. Mint a signed `tc_session` cookie carrying a fresh `sid`.
 //   8. 302 to `/editor` (configurable).
 //
-// Persistence of the session row is intentionally NOT done here yet
-// (M5.1.2b will wire `@tex-center/db` into `apps/web` and add the
-// user-upsert + sessions-insert step). The signed cookie will not
-// pass the M5.1.3 `hooks.server.ts` lookup until that lands.
+// Session-row persistence (user upsert + sessions insert) is the
+// caller's job, injected as `createSession(claims)` →
+// `Promise<sid>`. The orchestrator stays pure; failures bubble up
+// to a 500 branch so DB outages produce a real error, not a
+// silently-broken cookie.
 
 import {
   signSessionToken,
@@ -92,8 +93,14 @@ export interface ResolveGoogleCallbackInput {
   readonly successPath: string;
   /** Redirect target when the email is not allowed. */
   readonly signedOutPath: string;
-  /** Fresh opaque session id (uuid). Injected for determinism in tests. */
-  readonly mintSid: () => string;
+  /**
+   * Persist the session for the verified user and return a fresh
+   * opaque session id (uuid) to embed in the signed cookie. The
+   * production binding upserts the user by `google_sub` and inserts
+   * a `sessions` row; tests inject a deterministic stub. Failures
+   * are caught and surfaced as 500.
+   */
+  readonly createSession: (claims: VerifiedIdToken) => Promise<string>;
   readonly exchangeCode: ExchangeCodeFn;
   readonly verifyIdToken: VerifyIdTokenFn;
 }
@@ -184,7 +191,16 @@ export async function resolveGoogleCallback(
     };
   }
 
-  const sid = input.mintSid();
+  let sid: string;
+  try {
+    sid = await input.createSession(claims);
+  } catch (err) {
+    return errorWith(
+      500,
+      `Session persistence failed: ${errorMessage(err)}`,
+      [clearState],
+    );
+  }
   const exp = input.nowSeconds + input.sessionTtlSeconds;
   const sessionToken = signSessionToken({ sid, exp }, input.signingKey);
   const sessionCookie = formatSessionCookie(

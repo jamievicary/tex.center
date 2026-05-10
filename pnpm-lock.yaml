@@ -57,6 +57,9 @@ importers:
       '@tex-center/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@tex-center/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@tex-center/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

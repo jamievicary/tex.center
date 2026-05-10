@@ -41,7 +41,11 @@ function baseInput(overrides = {}) {
     sessionCookieName: "tc_session",
     successPath: "/editor",
     signedOutPath: "/",
-    mintSid: () => "fixed-sid-uuid",
+    createSession: async (claims) => {
+      assert.equal(claims.sub, "1234567890");
+      assert.equal(claims.email, "jamievicary@gmail.com");
+      return "fixed-sid-uuid";
+    },
     exchangeCode: async ({ code, verifier }) => {
       assert.equal(code, "GOOGLE_AUTH_CODE");
       assert.equal(verifier, pkce.verifier);
@@ -286,6 +290,24 @@ function getCookieValue(cookie, name) {
   assert.equal(r.kind, "error");
   assert.equal(r.status, 401);
   assert.match(r.body, /signature is bad/);
+}
+
+// --- createSession throws → 500 ------------------------------------
+
+{
+  const r = await resolveGoogleCallback(
+    baseInput({
+      createSession: async () => {
+        throw new Error("db is down");
+      },
+    }),
+  );
+  assert.equal(r.kind, "error");
+  assert.equal(r.status, 500);
+  assert.match(r.body, /db is down/);
+  // State cookie still cleared on this terminal branch.
+  assert.equal(r.setCookies.length, 1);
+  assert.ok(r.setCookies[0].startsWith("tc_oauth_state=;"));
 }
 
 console.log("apps/web oauthCallback resolver: all assertions passed");

@@ -6,13 +6,16 @@
 // signed session cookie. See `$lib/server/oauthCallback.ts` for the
 // pure orchestrator; this file wires the real I/O.
 
-import { randomUUID } from "node:crypto";
-
 import { isAllowedEmail } from "@tex-center/auth";
+import {
+  findOrCreateUserByGoogleSub,
+  insertSession,
+} from "@tex-center/db";
 import type { RequestHandler } from "@sveltejs/kit";
 
 import { loadOAuthConfig } from "$lib/server/oauthConfig.js";
 import { resolveGoogleCallback } from "$lib/server/oauthCallback.js";
+import { getDb } from "$lib/server/db.js";
 import {
   makeExchangeCodeForTokens,
   verifyGoogleIdToken,
@@ -56,7 +59,24 @@ export const GET: RequestHandler = async ({ url, request }) => {
     sessionCookieName: SESSION_COOKIE_NAME,
     successPath: SUCCESS_PATH,
     signedOutPath: SIGNED_OUT_PATH,
-    mintSid: () => randomUUID(),
+    createSession: async (claims) => {
+      const { db } = getDb();
+      if (claims.email === null) {
+        // Allowlist gate runs before us, but guard the type narrowing:
+        // an allowed email is always non-null in practice.
+        throw new Error("createSession: verified ID token has no email");
+      }
+      const user = await findOrCreateUserByGoogleSub(db, {
+        googleSub: claims.sub,
+        email: claims.email,
+        displayName: claims.name,
+      });
+      const expiresAt = new Date(
+        (Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS) * 1000,
+      );
+      const session = await insertSession(db, { userId: user.id, expiresAt });
+      return session.id;
+    },
     exchangeCode: makeExchangeCodeForTokens({
       clientId: config.clientId,
       clientSecret: config.clientSecret,
