@@ -31,6 +31,14 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Atomic-write temp files. `ProjectWorkspace.writeMain` uses
+# `<target>.tmp`; the Claude Code Edit tool produces
+# `<target>.tmp.<pid>.<ms>`. Either leaking past their rename is a
+# bug — ignore so a leak stays untracked rather than landing in a
+# commit (iter 25 committed one such file by accident).
+*.tmp
+*.tmp.[0-9]*
+
 # Local TeX/build artefacts
 *.aux
 *.log
