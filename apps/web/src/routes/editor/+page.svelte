@@ -9,6 +9,8 @@
 
   import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
 
+  let { data } = $props();
+
   let files = $state<string[]>([MAIN_DOC_NAME]);
   let selected = $state<string>(MAIN_DOC_NAME);
 
@@ -54,6 +56,17 @@
 </script>
 
 <div class="shell">
+  <header class="topbar">
+    <div class="brand">tex.center</div>
+    {#if data.user}
+      <div class="who">
+        <span class="email">{data.user.displayName ?? data.user.email}</span>
+        <form method="POST" action="/auth/logout">
+          <button type="submit" class="signout">Sign out</button>
+        </form>
+      </div>
+    {/if}
+  </header>
   <aside class="tree">
     <FileTree {files} bind:selected />
   </aside>
@@ -76,19 +89,58 @@
   .shell {
     display: grid;
     grid-template-columns: 220px 1fr 1fr;
+    grid-template-rows: 36px 1fr;
+    grid-template-areas:
+      "top top top"
+      "tree editor preview";
     height: 100vh;
     width: 100vw;
   }
+  .topbar {
+    grid-area: top;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafafa;
+    font-size: 0.85rem;
+  }
+  .brand {
+    font-weight: 600;
+  }
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .email {
+    color: #374151;
+  }
+  .signout {
+    border: 1px solid #d1d5db;
+    background: white;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .signout:hover {
+    background: #f3f4f6;
+  }
   .tree {
+    grid-area: tree;
     border-right: 1px solid #e5e7eb;
     overflow: auto;
   }
   .editor {
+    grid-area: editor;
     border-right: 1px solid #e5e7eb;
     overflow: hidden;
     min-width: 0;
   }
   .preview {
+    grid-area: preview;
     overflow: auto;
     background: #f3f4f6;
     min-width: 0;

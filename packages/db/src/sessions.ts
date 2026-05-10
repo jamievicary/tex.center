@@ -61,3 +61,20 @@ export async function getSessionWithUser(
   if (!r) return null;
   return { session: r.session, user: r.user };
 }
+
+/**
+ * Delete a session row by id. Returns `true` if a row was deleted,
+ * `false` if no row matched. Used by `/auth/logout`; harmless on
+ * unknown sids so a stale/forged cookie posting to the route just
+ * no-ops on the DB side and still gets a clear-cookie response.
+ */
+export async function deleteSession(
+  db: DrizzleDb,
+  sid: string,
+): Promise<boolean> {
+  const rows = await db
+    .delete(sessions)
+    .where(eq(sessions.id, sid))
+    .returning({ id: sessions.id });
+  return rows.length > 0;
+}

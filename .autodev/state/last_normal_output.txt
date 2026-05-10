@@ -5,16 +5,16 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 74, downloaded 0, added 0, done
+Progress: resolved 0, reused 79, downloaded 0, added 0, done
 
-Done in 2.7s
+Done in 1.8s
 Scope: 6 of 7 workspace projects
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck: Done
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
+packages/protocol typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
@@ -42,6 +42,7 @@ test_sidecar_server_health (test_node_suites.TestNodeSuites.test_sidecar_server_
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
 test_sidecar_supertex_watch_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_watch_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
+test_web_logout (test_node_suites.TestNodeSuites.test_web_logout) ... ok
 test_web_oauth_callback (test_node_suites.TestNodeSuites.test_web_oauth_callback) ... ok
 test_web_oauth_start (test_node_suites.TestNodeSuites.test_web_oauth_start) ... ok
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
@@ -49,7 +50,7 @@ test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 test_web_session_hook (test_node_suites.TestNodeSuites.test_web_session_hook) ... ok
 
 ----------------------------------------------------------------------
-Ran 23 tests in 51.760s
+Ran 24 tests in 56.132s
 
 OK
 tests_normal/run_tests.sh: PASS

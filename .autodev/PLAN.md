@@ -196,6 +196,22 @@ spawning, (D) auth + production polish.
                         the session, and returns the new sid. A new
                         500 branch in `resolveGoogleCallback` surfs
                         DB outages.
+            - [x] **M5.1.4** — Editor UI consumption + logout (iter
+                  39). `apps/web/src/routes/editor/+page.server.ts`
+                  surfaces `{user: {email, displayName}}` from
+                  `event.locals.session`. `+page.svelte` adds a
+                  topbar with the user's name + a `POST /auth/logout`
+                  form. `packages/db/src/sessions.ts` gains
+                  `deleteSession(db, sid) → boolean`. Pure
+                  orchestrator `apps/web/src/lib/server/logout.ts`
+                  (`resolveLogout`) deletes-if-present and always
+                  emits clear-cookie + 303 to `/`. Route file at
+                  `apps/web/src/routes/auth/logout/+server.ts`;
+                  POST-only, CSRF posture = SameSite=Lax + same-
+                  origin form. Unit test `logout.test.mjs` + PGlite
+                  gold-test extension for `deleteSession` (unknown
+                  sid → false, known sid → true + user kept, repeat
+                  → false).
             - [x] **M5.1.3** — `hooks.server.ts` (iter 38).
                   `packages/db/src/sessions.ts` adds
                   `getSessionWithUser(db, sid)` (`sessions ⋈
@@ -232,18 +248,18 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5 is functionally complete — auth
-loop closes, `/editor` is gated. Two natural next steps:
-(a) M6 Dockerfile + `fly.toml` for `apps/web` + GitHub Actions
-deploy, or (b) consume `event.locals.session` in the editor UI
-(server-side load passing user `displayName`/`email` to the
-client, sign-out button posting to a new `/auth/logout`). (b) is
-cheaper and unblocks visible smoke-testing; (a) is the
-remaining structural milestone before acceptance. Default to
-(b) first if no infra ask comes in. Smaller alternatives if
-blocked: M3.5 PRs (out of repo), a multi-file-project slice on
+**Next ordinary iteration:** M5 fully consumed — `/editor`
+renders a topbar showing the user's display name/email with a
+working `POST /auth/logout` (iter 39). Remaining structural
+milestone before acceptance is M6: Dockerfile + `fly.toml` for
+`apps/web` + GitHub Actions deploy to Fly. Smaller alternatives
+if blocked: M3.5 PRs (out of repo), a multi-file-project slice on
 the sidecar. M4.3.1 (S3 adapter) still waits for docker-compose;
 M4.3.2 checkpoint half waits for M3.5/M7.
+
+M5 tail items deferred to FUTURE_IDEAS: session sweeper for
+expired rows, JWKS clock-skew tolerance, GET-via-shim for
+logout-from-link.
 
 ## Live caveats
 

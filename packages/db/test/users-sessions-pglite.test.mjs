@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   applyMigrations,
+  deleteSession,
   findOrCreateUserByGoogleSub,
   getSessionWithUser,
   insertSession,
@@ -138,6 +139,27 @@ try {
     '11111111-1111-1111-1111-111111111111',
   );
   assert.equal(miss, null);
+
+  // --- deleteSession: unknown sid → false, no rows removed -------
+  const noop = await deleteSession(
+    db,
+    '22222222-2222-2222-2222-222222222222',
+  );
+  assert.equal(noop, false);
+  const stillThere = await getSessionWithUser(db, session.id);
+  assert.ok(stillThere, 'unknown-sid delete must not affect other rows');
+
+  // --- deleteSession: real sid → true, row gone, user kept -------
+  const removed = await deleteSession(db, session.id);
+  assert.equal(removed, true);
+  const after = await getSessionWithUser(db, session.id);
+  assert.equal(after, null);
+  const userStill = await db.select().from(users).where(eq(users.id, created.id));
+  assert.equal(userStill.length, 1, 'deleteSession must not cascade to users');
+
+  // --- deleteSession: second call on the same sid → false --------
+  const repeated = await deleteSession(db, session.id);
+  assert.equal(repeated, false);
 
   console.log('users + sessions PGlite test: OK');
 } finally {
