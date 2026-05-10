@@ -1,7 +1,7 @@
 test_apply_against_pglite (test_pglite_migrations.TestPgliteMigrations.test_apply_against_pglite) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 2.964s
+Ran 1 test in 3.202s
 
 OK
 tests_gold/run_tests.sh: PASS

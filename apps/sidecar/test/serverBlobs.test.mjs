@@ -81,13 +81,60 @@ async function bootClient(app) {
   await app.close();
 }
 
+// --- Run 1b: failing compile still persists source -----------------
+// Persistence must not be gated on compile success; otherwise an
+// edit that triggers a TeX error would silently vanish on restart.
+{
+  const failingCompilerFactory = () => ({
+    async compile() {
+      return { ok: false, error: "boom" };
+    },
+    async close() {},
+  });
+  const app = await buildServer({
+    logger: false,
+    blobStore,
+    compilerFactory: failingCompilerFactory,
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+
+  const { ws, frames, text } = await bootClient(app);
+  const startBlob = await blobStore.get(`projects/${projectId}/files/main.tex`);
+  const startText = new TextDecoder().decode(startBlob);
+  await waitFor(() => text.toString() === startText, "hydrated for failing-compile run", frames);
+
+  const target = `${startText}\n% even though compile fails`;
+  const before = Y.encodeStateVector(text.doc);
+  text.doc.transact(() => {
+    text.delete(0, text.length);
+    text.insert(0, target);
+  });
+  ws.send(encodeDocUpdate(Y.encodeStateAsUpdate(text.doc, before)));
+
+  await waitFor(async () => {
+    const persisted = await blobStore.get(`projects/${projectId}/files/main.tex`);
+    return persisted && new TextDecoder().decode(persisted) === target;
+  }, "blob updated despite failing compile", frames);
+
+  // Sanity: the server did broadcast a compile-status:error frame,
+  // confirming the failing-compiler path actually ran.
+  const errored = frames.some(
+    (f) => f.kind === "control" && f.message.type === "compile-status" && f.message.state === "error",
+  );
+  assert.equal(errored, true, "expected compile-status:error from failing compiler");
+
+  ws.close();
+  await new Promise((r) => ws.once("close", r));
+  await app.close();
+}
+
 // --- Run 2: cold-start hydration sees the persisted edit -----------
 {
   const app = await buildServer({ logger: false, blobStore });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
   const { ws, frames, text } = await bootClient(app);
-  const expected = `${initial}\n% extra line`;
+  const expected = `${initial}\n% extra line\n% even though compile fails`;
   await waitFor(() => text.toString() === expected, "rehydrated edit", frames);
 
   ws.close();

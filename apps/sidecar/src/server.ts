@@ -225,6 +225,20 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       );
       return;
     }
+    // Persist source before invoking the compiler. A failed compile
+    // must not lose the user's edits — once the source is on the
+    // workspace disk it is also durable in the blob store.
+    if (blobStore && source !== p.persistedSource) {
+      try {
+        await blobStore.put(mainTexKey(p.id), new TextEncoder().encode(source));
+        p.persistedSource = source;
+      } catch (e) {
+        app.log.warn(
+          { err: e instanceof Error ? e.message : String(e) },
+          "blob persist failed",
+        );
+      }
+    }
     const result = await p.compiler.compile({
       source,
       targetPage: maxViewingPage(p),
@@ -238,17 +252,6 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }
     for (const seg of result.segments) {
       broadcast(p, encodePdfSegment(seg));
-    }
-    if (blobStore && source !== p.persistedSource) {
-      try {
-        await blobStore.put(mainTexKey(p.id), new TextEncoder().encode(source));
-        p.persistedSource = source;
-      } catch (e) {
-        app.log.warn(
-          { err: e instanceof Error ? e.message : String(e) },
-          "blob persist failed",
-        );
-      }
     }
     broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
   }
