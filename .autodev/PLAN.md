@@ -59,13 +59,17 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M3.2 `SupertexOnceCompiler`** — spawns
-`vendor/supertex/bin/supertex paper.tex --once --output-directory
-<ws>/out` per compile, reads PDF off disk, returns a single segment.
-Selected via `SIDECAR_COMPILER=supertex-once`; default stays
-`fixture` until parity is good. Dev loop today: sidecar+web pnpm
-dev tasks, Yjs↔CM6 round-trip, sidecar mirrors `main.tex` to scratch
-dir per compile and ships fixture PDF.
+**M3.3 `SupertexWatchCompiler`** — replace the per-edit fork-exec
+of M3.2 with one persistent `supertex` watch process per project,
+driven by writes to `main.tex` and a tail of the
+`--live-shipouts` log. Reap the process in `Compiler.close()`
+with a paired `pgrep`-empty test. M3.2 is in: `SupertexOnceCompiler`
+spawns the binary at `$SUPERTEX_BIN` per compile, reads
+`out/<base>.pdf`, and returns it as a single segment. Selected at
+boot via `SIDECAR_COMPILER=supertex-once`; default stays `fixture`.
+Note: the supertex binary lives at `vendor/supertex/src/supertex`
+(Python entry point), not `bin/supertex` as earlier plan revisions
+implied.
 
 ### Survey of `vendor/supertex` (iter 8)
 
@@ -118,14 +122,18 @@ Implications for M3:
       `Y.Text` to `<scratchRoot>/<id>/main.tex` at the head of every
       compile; disposes per-project dirs on close. Mirror is dark
       code until M3.2 reads it.
-- [ ] **M3.2 — `SupertexOnceCompiler`.** Spawns
-      `vendor/supertex/bin/supertex paper.tex --once
-      --output-directory <work>/out --live-shipouts <work>/shipouts`
-      per compile call, reads the resulting PDF off disk, returns
-      it as a single segment. Slow (full rebuild every edit) but
-      end-to-end real. Selected via env var
-      `SIDECAR_COMPILER=supertex-once`; default stays
-      `fixture` until parity is good.
+- [x] **M3.2 — `SupertexOnceCompiler`.** _(iter 12.)_
+      `apps/sidecar/src/compiler/supertexOnce.ts` spawns
+      `$SUPERTEX_BIN main.tex --once --output-directory <ws>/out
+      --live-shipouts <ws>/out/shipouts` per compile, with a
+      60 s wallclock cap (SIGKILL on timeout) and structured
+      failure paths for non-zero exit, missing PDF, and ENOENT
+      on the binary itself. `buildServer` selects between
+      `FixtureCompiler` (default) and `SupertexOnceCompiler` via
+      `$SIDECAR_COMPILER`; the compiler factory now receives
+      `{ projectId, workspace }` so the spawned process can locate
+      the project's scratch dir. Tested with a fake supertex Node
+      script that mimics the flag parsing and writes a stub PDF.
 - [ ] **M3.3 — `SupertexWatchCompiler`.** One persistent
       `supertex` watch process per project; sidecar writes
       `main.tex` and waits for a new shipout entry in

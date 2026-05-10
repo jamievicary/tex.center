@@ -34,6 +34,7 @@ import {
 
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
+import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { ProjectWorkspace } from "./workspace.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
@@ -52,9 +53,14 @@ interface ProjectClient {
   viewingPage: number;
 }
 
+export interface CompilerContext {
+  projectId: string;
+  workspace: ProjectWorkspace;
+}
+
 export interface SidecarOptions {
   fixturePdfPath?: string;
-  compilerFactory?: () => Compiler;
+  compilerFactory?: (ctx: CompilerContext) => Compiler;
   /**
    * Root directory under which per-project scratch dirs live. If
    * omitted, a process-unique tempdir under `os.tmpdir()` is
@@ -70,7 +76,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const fixturePath =
     opts.fixturePdfPath ?? resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/hello.pdf");
-  const compilerFactory = opts.compilerFactory ?? (() => new FixtureCompiler(fixturePath));
+  const compilerFactory = opts.compilerFactory ?? defaultCompilerFactory(fixturePath);
 
   // If the caller didn't supply a scratchRoot, mint one under
   // os.tmpdir() so concurrent sidecar instances (e.g. the test
@@ -92,7 +98,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       text,
       viewers: new Set(),
       compileTimer: null,
-      compiler: compilerFactory(),
+      compiler: compilerFactory({ projectId: id, workspace }),
       workspace,
     };
     projects.set(id, p);
@@ -257,4 +263,30 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   });
 
   return app;
+}
+
+// Selects the compiler implementation based on `$SIDECAR_COMPILER`:
+//   - unset / "fixture"       → FixtureCompiler (default)
+//   - "supertex-once"         → SupertexOnceCompiler, spawning the
+//                               binary at `$SUPERTEX_BIN` (required).
+// Anything else is rejected loudly so deploy-time typos don't
+// silently fall back to the fixture path.
+function defaultCompilerFactory(
+  fixturePath: string,
+): (ctx: CompilerContext) => Compiler {
+  const which = process.env.SIDECAR_COMPILER ?? "fixture";
+  if (which === "fixture") {
+    return () => new FixtureCompiler(fixturePath);
+  }
+  if (which === "supertex-once") {
+    const supertexBin = process.env.SUPERTEX_BIN;
+    if (!supertexBin) {
+      throw new Error(
+        "SIDECAR_COMPILER=supertex-once requires SUPERTEX_BIN to point at a supertex executable",
+      );
+    }
+    return (ctx) =>
+      new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
+  }
+  throw new Error(`unknown SIDECAR_COMPILER: ${which}`);
 }
