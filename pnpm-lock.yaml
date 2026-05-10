@@ -57,6 +57,12 @@ importers:
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
+      y-codemirror.next:
+        specifier: ^0.3.5
+        version: 0.3.5(@codemirror/state@6.6.0)(@codemirror/view@6.42.1)(yjs@13.6.30)
+      yjs:
+        specifier: ^13.6.30
+        version: 13.6.30
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.6
@@ -1134,6 +1140,13 @@ packages:
       utf-8-validate:
         optional: true
 
+  y-codemirror.next@0.3.5:
+    resolution: {integrity: sha512-VluNu3e5HfEXybnypnsGwKAj+fKLd4iAnR7JuX1Sfyydmn1jCBS5wwEL/uS04Ch2ib0DnMAOF6ZRR/8kK3wyGw==}
+    peerDependencies:
+      '@codemirror/state': ^6.0.0
+      '@codemirror/view': ^6.0.0
+      yjs: ^13.5.6
+
   yjs@13.6.30:
     resolution: {integrity: sha512-vv/9h42eCMC81ZHDFswuu/MKzkl/vyq1BhaNGfHyOonwlG4CJbQF4oiBBJPvfdeCt/PlVDWh7Nov9D34YY09uQ==}
     engines: {node: '>=16.0.0', npm: '>=8.0.0'}
@@ -2035,6 +2048,13 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.20.0: {}
+
+  y-codemirror.next@0.3.5(@codemirror/state@6.6.0)(@codemirror/view@6.42.1)(yjs@13.6.30):
+    dependencies:
+      '@codemirror/state': 6.6.0
+      '@codemirror/view': 6.42.1
+      lib0: 0.2.117
+      yjs: 13.6.30
 
   yjs@13.6.30:
     dependencies:

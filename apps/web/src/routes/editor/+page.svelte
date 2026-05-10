@@ -1,13 +1,49 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
+  import * as Y from "yjs";
+
   import Editor from "$lib/Editor.svelte";
   import FileTree from "$lib/FileTree.svelte";
   import PdfViewer from "$lib/PdfViewer.svelte";
+  import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
 
   let files = $state<string[]>(["main.tex"]);
   let selected = $state<string>("main.tex");
-  let doc = $state<string>(
-    "\\documentclass{article}\n\\begin{document}\nHello, tex.center.\n\\end{document}\n",
-  );
+
+  // Until the WS connects we display nothing in the editor + viewer.
+  // The editor mounts against a transient Y.Doc until then so
+  // CodeMirror has something to bind; the real one replaces it
+  // after `onMount` (a future iteration may guard this with a
+  // suspense block — over-engineering for MVP).
+  let placeholderDoc = new Y.Doc();
+  let text = $state<Y.Text>(placeholderDoc.getText("main.tex"));
+
+  let snapshot = $state<WsClientSnapshot>({
+    status: "connecting",
+    pdfBytes: null,
+    lastError: null,
+    compileState: "unknown",
+  });
+
+  let client: WsClient | null = null;
+
+  onMount(() => {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${proto}//${window.location.host}/ws/project/default`;
+    client = new WsClient({
+      url,
+      onChange: (s) => {
+        snapshot = s;
+      },
+    });
+    text = client.text;
+    client.setViewingPage(1);
+  });
+
+  onDestroy(() => {
+    client?.destroy();
+    placeholderDoc.destroy();
+  });
 </script>
 
 <div class="shell">
@@ -15,10 +51,17 @@
     <FileTree {files} bind:selected />
   </aside>
   <section class="editor">
-    <Editor bind:value={doc} />
+    {#key text}
+      <Editor {text} />
+    {/key}
   </section>
   <section class="preview">
-    <PdfViewer src="/fixture.pdf" />
+    <PdfViewer src={snapshot.pdfBytes} />
+    {#if snapshot.compileState === "running"}
+      <div class="badge">compiling…</div>
+    {:else if snapshot.compileState === "error"}
+      <div class="badge error">error: {snapshot.lastError}</div>
+    {/if}
   </section>
 </div>
 
@@ -42,5 +85,19 @@
     overflow: auto;
     background: #f3f4f6;
     min-width: 0;
+    position: relative;
+  }
+  .badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .badge.error {
+    background: #b91c1c;
   }
 </style>

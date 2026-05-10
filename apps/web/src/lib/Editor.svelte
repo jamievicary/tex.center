@@ -2,8 +2,10 @@
   import { onDestroy, onMount } from "svelte";
   import { EditorView, basicSetup } from "codemirror";
   import { EditorState } from "@codemirror/state";
+  import { yCollab } from "y-codemirror.next";
+  import type * as Y from "yjs";
 
-  let { value = $bindable<string>("") }: { value: string } = $props();
+  let { text }: { text: Y.Text } = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | undefined;
@@ -11,15 +13,8 @@
   onMount(() => {
     if (!host) return;
     const state = EditorState.create({
-      doc: value,
-      extensions: [
-        basicSetup,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) {
-            value = u.state.doc.toString();
-          }
-        }),
-      ],
+      doc: text.toString(),
+      extensions: [basicSetup, yCollab(text, null)],
     });
     view = new EditorView({ state, parent: host });
   });

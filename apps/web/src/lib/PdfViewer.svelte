@@ -1,42 +1,61 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy } from "svelte";
 
-  let { src }: { src: string } = $props();
+  let { src }: { src: Uint8Array | string | null } = $props();
 
   let host: HTMLDivElement | undefined = $state();
-  let cancelled = false;
+  let renderToken = 0;
 
-  onMount(async () => {
-    if (!host) return;
+  $effect(() => {
+    if (!host || !src) return;
+    const token = ++renderToken;
+    const target = host;
+    void render(src, target, () => token === renderToken);
+  });
+
+  async function render(
+    src: Uint8Array | string,
+    target: HTMLDivElement,
+    isCurrent: () => boolean,
+  ): Promise<void> {
     // pdfjs-dist ships an ESM build with a worker module reference.
-    // Vite resolves the worker via `?worker&url`. The dynamic import
-    // keeps PDF.js out of the SSR/prerender path (which it can't run
-    // under) — the editor route is `ssr = false` from the layout.
+    // The dynamic import keeps PDF.js out of the SSR/prerender path
+    // (which it can't run under) — the editor route is `ssr = false`.
     const pdfjs = await import("pdfjs-dist");
     const workerUrl = (
       await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
     ).default;
     pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+    if (!isCurrent()) return;
 
-    const loadingTask = pdfjs.getDocument(src);
+    // pdfjs mutates the source buffer; hand it a copy so external
+    // refs (e.g. the WsClient's snapshot) remain safe to inspect.
+    const docSrc =
+      typeof src === "string" ? src : { data: new Uint8Array(src) };
+    const loadingTask = pdfjs.getDocument(docSrc);
     const pdf = await loadingTask.promise;
-    if (cancelled) return;
+    if (!isCurrent()) {
+      void pdf.destroy();
+      return;
+    }
+    target.replaceChildren();
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
+      if (!isCurrent()) return;
       const viewport = page.getViewport({ scale: 1.5 });
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
-      host.appendChild(canvas);
+      target.appendChild(canvas);
       await page.render({ canvasContext: ctx, viewport }).promise;
-      if (cancelled) return;
+      if (!isCurrent()) return;
     }
-  });
+  }
 
   onDestroy(() => {
-    cancelled = true;
+    renderToken++;
   });
 </script>
 

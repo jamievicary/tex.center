@@ -36,17 +36,19 @@ per-project Machine spawning, (D) auth + production polish.
       the generated `.svelte-kit/tsconfig.json` to extend
       `tsconfig.base.json` so structural intent is preserved.
       _(iter 4.)_
-- [~] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
+- [x] **M2 — Sidecar service skeleton.** Fastify + `ws` server with
       Yjs document persistence in memory, "viewing page N" channel,
       and a stub compile loop that hands back a static PDF to the
       browser. Defines `packages/protocol` (Yjs awareness fields,
       compile messages, PDF byte-range patch messages).
-      _(iter 5: server half landed — `packages/protocol` codec
-      with tagged binary frames, sidecar boots Fastify +
-      `@fastify/websocket`, holds one `Y.Doc` per project, emits
-      hello + PDF segments, observes Y.Text changes with a 100 ms
-      debounce. Unit tests under `tests_normal/cases/test_node_suites.py`
-      via `pnpm exec tsx`. Browser-side wiring still TODO.)_
+      _(iter 5: server half. iter 6: browser half — `apps/web`
+      gains `WsClient` (one Y.Doc, decodes binary frames, applies
+      PDF segments via a `PdfBuffer`), `Editor.svelte` binds to a
+      `Y.Text` via `y-codemirror.next`, `PdfViewer.svelte` accepts
+      `Uint8Array | string`, `+page.svelte` wires it together, and
+      Vite proxies `/ws/* → ws://127.0.0.1:3001`. Static
+      `apps/web/static/fixture.pdf` deleted; the sidecar fixture
+      stays until M3.)_
 - [ ] **M3 — supertex daemon mode.** Decide whether to add daemon
       mode upstream or wrap with a thin per-project supervisor that
       drives `vendor/supertex` per-edit. Likely upstream PR to
@@ -73,15 +75,31 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0 + M1 closed. M2 server half landed (iter 5). Next: M2
-**browser** half — `apps/web` opens a WebSocket to the sidecar,
-mirrors the `Y.Doc` against the CodeMirror buffer (Yjs ↔ CM6
-binding, e.g. `y-codemirror.next`), feeds incoming PDF segments
-into PdfViewer (which becomes a `Uint8Array` consumer rather
-than a URL consumer), and emits `view` control messages when the
-visible page changes. The dev experience needs a Vite proxy from
-`/ws/*` to `127.0.0.1:3001`. Once that lands, the M1 static
-`/fixture.pdf` reference can be deleted.
+M0–M2 closed. The dev loop is now: `pnpm -F @tex-center/sidecar dev`
+plus `pnpm -F @tex-center/web dev`, browser at `localhost:3000/editor`,
+Yjs↔CM6 round-trip, sidecar ships fixture PDF on every text change.
+Next: **M3 supertex daemon mode**. Concrete subgoals likely:
+
+1. Survey `vendor/supertex` to see what daemon/socket support
+   already exists; identify missing primitives.
+2. Define the sidecar↔supertex IPC (likely a JSON-or-bytes pipe
+   over a child process spawned per project).
+3. Replace `runCompile` in `apps/sidecar/src/server.ts` with calls
+   that drive supertex against a real `.tex`. Keep the fixture
+   path as a fallback for now.
+4. Real `view` page tracking from the browser (PdfViewer must
+   report which page is most-visible; probably an
+   `IntersectionObserver` over canvases) and forward to
+   supertex's `target_page=N`.
+5. Per-shipout PDF byte-range deltas → `pdf-segment` frames.
+
+Likely a multi-iteration milestone, with scaffolding pattern: an
+"adapter" module behind the existing stub interface that an
+iteration can flip on once it's ready.
+
+The M2 browser bits are exercised by typechecks + the `PdfBuffer`
+unit test only — Svelte component tests via Playwright are M8
+gold-suite work.
 
 ## Local toolchain
 
