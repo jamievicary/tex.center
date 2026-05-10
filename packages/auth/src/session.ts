@@ -1,23 +1,17 @@
 // HMAC-signed session tokens.
 //
-// A session token is `<payloadB64u>.<sigB64u>` where:
+// A session token is `<payloadB64u>.<sigB64u>` (see `signed.ts`)
+// where the JSON payload is `{ sid, exp }`. `sid` is an opaque
+// server-side row id; `exp` is unix-seconds. Verification checks
+// the signature in constant time, then expiry against a caller-
+// supplied `nowSeconds` (tests stay deterministic; prod caller can
+// stub time).
 //
-//   payload = JSON.stringify({ sid: <uuid>, exp: <unix-seconds> })
-//   sig     = HMAC_SHA256(key, payloadB64u)
-//
-// Both halves are base64url, no padding. The payload is *not*
-// encrypted — sid is opaque (a server-side row id), exp is a
-// number; nothing here is sensitive on its own. The signature
-// guarantees the cookie was minted by us, the expiry caps replay,
-// and the server-side session row is the actual source of truth
-// (revocable, per-user). Verification checks the signature in
-// constant time, then the expiry against a caller-supplied
-// `nowSeconds` (so tests are deterministic and the prod caller
-// can stub time if needed).
+// Nothing in the payload is sensitive on its own — the server-side
+// row is the source of truth, revocable per-user. The signature
+// guarantees the cookie was minted by us; the expiry caps replay.
 
-import { createHmac, timingSafeEqual } from "node:crypto";
-
-import { b64uDecode, b64uEncode } from "./b64u.js";
+import { signJsonString, verifySignedJson } from "./signed.js";
 
 export interface SessionPayload {
   /** Opaque server-side session id (uuid). */
@@ -40,9 +34,6 @@ export function signSessionToken(
   payload: SessionPayload,
   key: Uint8Array,
 ): string {
-  if (key.byteLength === 0) {
-    throw new Error("signSessionToken: key must be non-empty");
-  }
   if (typeof payload.sid !== "string" || payload.sid.length === 0) {
     throw new Error("signSessionToken: payload.sid must be a non-empty string");
   }
@@ -50,9 +41,7 @@ export function signSessionToken(
     throw new Error("signSessionToken: payload.exp must be an integer");
   }
   const json = JSON.stringify({ sid: payload.sid, exp: payload.exp });
-  const payloadB64u = b64uEncode(Buffer.from(json, "utf8"));
-  const sig = hmac(key, payloadB64u);
-  return `${payloadB64u}.${b64uEncode(sig)}`;
+  return signJsonString(json, key);
 }
 
 export function verifySessionToken(
@@ -60,42 +49,12 @@ export function verifySessionToken(
   key: Uint8Array,
   nowSeconds: number,
 ): VerifyResult {
-  if (typeof token !== "string") {
-    return { ok: false, reason: "malformed" };
-  }
-  const dot = token.indexOf(".");
-  if (dot <= 0 || dot === token.length - 1) {
-    return { ok: false, reason: "malformed" };
-  }
-  if (token.indexOf(".", dot + 1) !== -1) {
-    return { ok: false, reason: "malformed" };
-  }
-  const payloadB64u = token.slice(0, dot);
-  const sigB64u = token.slice(dot + 1);
+  const r = verifySignedJson(token, key);
+  if (!r.ok) return { ok: false, reason: r.reason };
 
-  const expected = hmac(key, payloadB64u);
-  let provided: Buffer;
-  try {
-    provided = b64uDecode(sigB64u);
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
-  if (provided.byteLength !== expected.byteLength) {
-    return { ok: false, reason: "bad-signature" };
-  }
-  if (!timingSafeEqual(provided, expected)) {
-    return { ok: false, reason: "bad-signature" };
-  }
-
-  let payloadJson: string;
-  try {
-    payloadJson = b64uDecode(payloadB64u).toString("utf8");
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(payloadJson);
+    parsed = JSON.parse(r.payloadJson);
   } catch {
     return { ok: false, reason: "bad-payload" };
   }
@@ -116,10 +75,4 @@ export function verifySessionToken(
     return { ok: false, reason: "expired" };
   }
   return { ok: true, payload: { sid, exp } };
-}
-
-function hmac(key: Uint8Array, data: string): Buffer {
-  const h = createHmac("sha256", key);
-  h.update(data, "utf8");
-  return h.digest();
 }

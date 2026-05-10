@@ -77,6 +77,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_page_tracker(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pageTracker.test.mjs")
 
+    def test_web_oauth_start(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "oauthStart.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 
@@ -94,6 +97,9 @@ class TestNodeSuites(unittest.TestCase):
 
     def test_auth_pkce(self) -> None:
         _run_tsx(ROOT / "packages" / "auth" / "test" / "pkce.test.mjs")
+
+    def test_auth_state(self) -> None:
+        _run_tsx(ROOT / "packages" / "auth" / "test" / "state.test.mjs")
 
 
 if __name__ == "__main__":

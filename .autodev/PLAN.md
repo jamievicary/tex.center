@@ -135,10 +135,24 @@ spawning, (D) auth + production polish.
                   dynamically. Build output goes to
                   `apps/web/build/` (already gitignored), run
                   with `node apps/web/build/index.js`.
-            - [ ] **M5.1.1** — `/auth/google/start` `+server.ts`:
-                  generate PKCE pair, mint signed state cookie
-                  carrying `{state, verifier, exp}` via
-                  `@tex-center/auth`, 302 to Google authorize.
+            - [x] **M5.1.1** — `/auth/google/start` `+server.ts`
+                  (iter 35). `packages/auth` factored a generic
+                  `signed.ts` (HMAC-SHA256 over opaque
+                  payload-strings); `session.ts` rewritten on top,
+                  new `state.ts` adds
+                  `signStateCookie`/`verifyStateCookie` for
+                  `{state, verifier, exp}`. The route reads config
+                  via `loadOAuthConfig()` (env +
+                  `creds/google-oauth.json`), generates PKCE +
+                  random state, calls the pure
+                  `buildGoogleAuthorizeRedirect` builder
+                  (`apps/web/src/lib/server/oauthStart.ts`), and
+                  302-redirects to Google with `Set-Cookie:
+                  tc_oauth_state=…; Path=/auth; HttpOnly;
+                  SameSite=Lax; Secure (https only); Max-Age=600`.
+                  `Cache-Control: no-store`. `secureCookie` keys
+                  off `url.protocol === "https:"` so dev over
+                  localhost still works.
             - [ ] **M5.1.2** — `/auth/google/callback`
                   `+server.ts`: verify state cookie, exchange
                   code+verifier for tokens, JWKS-verify the ID
@@ -161,11 +175,17 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5.1.1 (`/auth/google/start`
-`+server.ts` — now unblocked by the iter-34 adapter-node swap);
-a small multi-file project slice; or M3.5 upstream PRs (not
-actionable in-repo). M4.3.1 (S3 adapter) waits for the
-docker-compose stack; M4.3.2 checkpoint half waits for M3.5/M7.
+**Next ordinary iteration:** M5.1.2 (`/auth/google/callback`):
+verify state cookie, exchange `code + verifier` for tokens against
+Google's token endpoint, JWKS-verify the ID token (`jose` or hand-
+rolled with `node:crypto`), allowlist-check `email` +
+`email_verified`, persist a session row in Postgres
+(`@tex-center/db`), mint a signed session cookie via
+`signSessionToken`, 302 to `/editor`. Same `loadOAuthConfig()` for
+client secret + redirect URI; same signing key. Smaller alternatives
+if M5.1.2 needs prerequisites: M3.5 PRs (out of repo) or a small
+multi-file-project slice. M4.3.1 (S3 adapter) waits for docker-
+compose; M4.3.2 checkpoint half waits for M3.5/M7.
 
 ## Live caveats
 

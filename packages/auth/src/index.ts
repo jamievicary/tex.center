@@ -31,3 +31,10 @@ export {
   isValidVerifier,
   type PkcePair,
 } from "./pkce.js";
+export {
+  signStateCookie,
+  verifyStateCookie,
+  type StatePayload,
+  type StateVerifyResult,
+  type StateVerifyFailure,
+} from "./state.js";

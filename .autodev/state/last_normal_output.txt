@@ -5,17 +5,17 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 79, downloaded 0, added 0, done
 
-Done in 4.1s
+Done in 1.5s
 Scope: 6 of 7 workspace projects
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
-packages/auth typecheck: Done
 packages/protocol typecheck: Done
+packages/auth typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
@@ -26,6 +26,7 @@ apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
 test_auth (test_node_suites.TestNodeSuites.test_auth) ... ok
 test_auth_pkce (test_node_suites.TestNodeSuites.test_auth_pkce) ... ok
+test_auth_state (test_node_suites.TestNodeSuites.test_auth_state) ... ok
 test_blobs_local_fs (test_node_suites.TestNodeSuites.test_blobs_local_fs) ... ok
 test_db_drizzle (test_node_suites.TestNodeSuites.test_db_drizzle) ... ok
 test_db_migrations (test_node_suites.TestNodeSuites.test_db_migrations) ... ok
@@ -41,11 +42,12 @@ test_sidecar_server_health (test_node_suites.TestNodeSuites.test_sidecar_server_
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
 test_sidecar_supertex_watch_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_watch_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
+test_web_oauth_start (test_node_suites.TestNodeSuites.test_web_oauth_start) ... ok
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 19 tests in 55.964s
+Ran 21 tests in 82.840s
 
 OK
 tests_normal/run_tests.sh: PASS
