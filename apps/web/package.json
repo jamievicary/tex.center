@@ -21,7 +21,7 @@
     "yjs": "^13.6.30"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.6",
+    "@sveltejs/adapter-node": "^5.2.9",
     "@sveltejs/kit": "^2.9.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.4",
     "svelte": "^5.15.0",

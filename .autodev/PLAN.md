@@ -116,12 +116,38 @@ spawning, (D) auth + production polish.
             (`generatePkce` / `computeChallenge` / `isValidVerifier`,
             S256 only, RFC 7636 Appendix B vector covered) added in
             iter 33; shared `b64u.ts` extracted from `session.ts`.
-      - [ ] **M5.1** — Google OAuth callback wiring (PKCE, JWKS
+      - [~] **M5.1** — Google OAuth callback wiring (PKCE, JWKS
             verify of the ID token, mint a session row + cookie
-            via `packages/auth`). Requires apps/web to gain a
-            server tier (move off `adapter-static` for the
-            callback route, or split a Fastify control-plane
-            app) — pick at the iteration that lands it.
+            via `packages/auth`).
+            - [x] **M5.1.0** — `apps/web` swapped from
+                  `@sveltejs/adapter-static` to `adapter-node`
+                  (iter 34). Architecture decision: one origin,
+                  SvelteKit `+server.ts` routes are the control
+                  plane's HTTP surface. The "Fastify" call in
+                  GOAL is already satisfied by `apps/sidecar`
+                  (the per-project tier); a separate control-
+                  plane Fastify app would just duplicate routing
+                  + static-asset serving that SvelteKit's Node
+                  server already does. Pages keep `prerender =
+                  true; ssr = false` so the white sign-in page
+                  and editor shell still ship as static
+                  artefacts; only `+server.ts` endpoints render
+                  dynamically. Build output goes to
+                  `apps/web/build/` (already gitignored), run
+                  with `node apps/web/build/index.js`.
+            - [ ] **M5.1.1** — `/auth/google/start` `+server.ts`:
+                  generate PKCE pair, mint signed state cookie
+                  carrying `{state, verifier, exp}` via
+                  `@tex-center/auth`, 302 to Google authorize.
+            - [ ] **M5.1.2** — `/auth/google/callback`
+                  `+server.ts`: verify state cookie, exchange
+                  code+verifier for tokens, JWKS-verify the ID
+                  token, allowlist-check email, persist a
+                  session row, mint signed session cookie.
+            - [ ] **M5.1.3** — `hooks.server.ts`: read session
+                  cookie on every request, expose `event.locals.session`,
+                  redirect unauthenticated users on protected
+                  routes.
 - [ ] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
       `fly.toml`, GitHub Actions on push to `main`, custom domain
       `tex.center` via Cloudflare. Scales to zero.
@@ -135,14 +161,11 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M3.5 upstream PRs (not actionable
-in-repo); a small multi-file project slice (still single-
-`main.tex` everywhere); or M5.1 — wire the now-complete
-`packages/auth` (allowlist + signed sessions + PKCE) into a real
-OAuth callback (needs an apps/web server tier — pick adapter swap
-vs. split Fastify control-plane at that iteration).
-M4.3.1 (S3 adapter) waits for the docker-compose stack; M4.3.2
-checkpoint half waits for M3.5/M7.
+**Next ordinary iteration:** M5.1.1 (`/auth/google/start`
+`+server.ts` — now unblocked by the iter-34 adapter-node swap);
+a small multi-file project slice; or M3.5 upstream PRs (not
+actionable in-repo). M4.3.1 (S3 adapter) waits for the
+docker-compose stack; M4.3.2 checkpoint half waits for M3.5/M7.
 
 ## Live caveats
 
