@@ -1,0 +1,31 @@
+# Fly.io app config for the tex.center control plane.
+#
+# This is the always-on (but scale-to-zero) web tier that serves
+# the white sign-in page, the editor shell, and the OAuth / session
+# HTTP surface. Per-project supertex Machines (M7) are separate
+# apps spawned by this control plane via the Machines API; they
+# are not configured here.
+#
+# Build context: repo root. The image is built by Fly's remote
+# builder from apps/web/Dockerfile (multi-stage, runtime image
+# carries only apps/web/build/ on top of node:slim).
+
+app = "tex-center"
+primary_region = "fra"
+
+[build]
+  dockerfile = "apps/web/Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

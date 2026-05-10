@@ -259,9 +259,20 @@ spawning, (D) auth + production polish.
             (drift would only surface inside Docker otherwise).
             Image not built in CI: no docker in tests_normal, and
             the actual build will run on Fly's builder.
-      - [ ] **M6.1** — `fly.toml` for the control-plane Machine
-            (`auto_stop_machines = true`, `min_machines_running =
-            0`, `internal_port = 3000`, single Frankfurt region).
+      - [x] **M6.1** — `fly.toml` at repo root (iter 43).
+            `app = "tex-center"`, `primary_region = "fra"`,
+            `[build] dockerfile = "apps/web/Dockerfile"`,
+            `[http_service]` with `internal_port = 3000`,
+            `force_https = true`, `auto_stop_machines = "stop"`,
+            `auto_start_machines = true`, `min_machines_running =
+            0`, single `[[vm]] shared-cpu-1x / 512mb`. No
+            `[checks]` block yet — `apps/web` exposes no
+            `/healthz`, so adding one would gate deploys on a
+            route that always 404s. Structural test
+            `tests_normal/cases/test_fly_toml.py` parses the TOML
+            and asserts: app name, primary region present,
+            dockerfile path, scale-to-zero triple, port matches
+            Dockerfile `EXPOSE`/`PORT=3000`, force_https on.
       - [ ] **M6.2** — GitHub Actions workflow on push to `main`:
             `flyctl deploy --remote-only --dockerfile
             apps/web/Dockerfile`. Needs `FLY_API_TOKEN` repo
@@ -278,10 +289,10 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.1 — `fly.toml` for the control
-plane (single Machine, scale-to-zero, `internal_port = 3000`).
-Then M6.2 (GitHub Actions deploy) and M6.3 (custom domain).
-M6.0 (Dockerfile) landed iter 42. Smaller alternatives if blocked:
+**Next ordinary iteration:** M6.2 — GitHub Actions workflow on
+push to `main` (`superfly/flyctl-actions/setup-flyctl` →
+`flyctl deploy --remote-only`). Then M6.3 (custom domain). M6.0
+(Dockerfile) landed iter 42; M6.1 (`fly.toml`) landed iter 43. Smaller alternatives if blocked:
 a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
 once a streaming compile path exists. M4.3.1 (S3 adapter) still
 waits for docker-compose; M4.3.2 checkpoint half waits for the

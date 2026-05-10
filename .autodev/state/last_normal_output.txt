@@ -5,15 +5,14 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 17, downloaded 0, added 0
-Progress: resolved 0, reused 66, downloaded 0, added 0, done
+Progress: resolved 0, reused 80, downloaded 0, added 0, done
 
-Done in 4.7s
+Done in 2.2s
 Scope: 6 of 7 workspace projects
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
@@ -25,6 +24,12 @@ apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/p
 apps/web typecheck: Getting Svelte diagnostics...
 apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
+test_app_name (test_fly_toml.TestFlyToml.test_app_name) ... ok
+test_build_dockerfile_points_at_web (test_fly_toml.TestFlyToml.test_build_dockerfile_points_at_web) ... ok
+test_http_service_forces_https (test_fly_toml.TestFlyToml.test_http_service_forces_https) ... ok
+test_http_service_port_matches_dockerfile (test_fly_toml.TestFlyToml.test_http_service_port_matches_dockerfile) ... ok
+test_http_service_scale_to_zero (test_fly_toml.TestFlyToml.test_http_service_scale_to_zero) ... ok
+test_primary_region_set (test_fly_toml.TestFlyToml.test_primary_region_set) ... ok
 test_auth (test_node_suites.TestNodeSuites.test_auth) ... ok
 test_auth_pkce (test_node_suites.TestNodeSuites.test_auth_pkce) ... ok
 test_auth_state (test_node_suites.TestNodeSuites.test_auth_state) ... ok
@@ -56,7 +61,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 29 tests in 76.140s
+Ran 35 tests in 61.967s
 
 OK
 tests_normal/run_tests.sh: PASS
