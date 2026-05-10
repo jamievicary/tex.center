@@ -241,9 +241,33 @@ spawning, (D) auth + production polish.
                   `apps/web/test/sessionHook.test.mjs` covers every
                   `reason`; PGlite gold test extended for
                   `getSessionWithUser`.
-- [ ] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
+- [~] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
       `fly.toml`, GitHub Actions on push to `main`, custom domain
       `tex.center` via Cloudflare. Scales to zero.
+      - [x] **M6.0** — `apps/web/Dockerfile` (multi-stage) +
+            `apps/web/.dockerignore` (iter 42). Builder stage
+            installs the pnpm workspace from copied manifests
+            (`--frozen-lockfile`) and runs `pnpm --filter
+            @tex-center/web build`; runtime stage carries only
+            `apps/web/build/` (adapter-node bundles all deps),
+            `HOST=0.0.0.0`, `PORT=3000`, `CMD ["node",
+            "build/index.js"]`. Pinned `PNPM_VERSION` mirrors root
+            `packageManager`. Static structural test
+            `tests_normal/cases/test_web_dockerfile.py` enforces
+            multi-stage + entrypoint + that every workspace
+            package has a manifest COPY before the install layer
+            (drift would only surface inside Docker otherwise).
+            Image not built in CI: no docker in tests_normal, and
+            the actual build will run on Fly's builder.
+      - [ ] **M6.1** — `fly.toml` for the control-plane Machine
+            (`auto_stop_machines = true`, `min_machines_running =
+            0`, `internal_port = 3000`, single Frankfurt region).
+      - [ ] **M6.2** — GitHub Actions workflow on push to `main`:
+            `flyctl deploy --remote-only --dockerfile
+            apps/web/Dockerfile`. Needs `FLY_API_TOKEN` repo
+            secret seeded from `creds/fly.token`.
+      - [ ] **M6.3** — Custom domain `tex.center` via Cloudflare
+            (`flyctl certs create` + DNS records).
 - [ ] **M7 — Per-project Machines.** Control plane spawns/wakes a
       Machine per project; routes WS to it; ~10 min idle auto-stop;
       state persisted to Tigris on stop, rehydrated on start. Image
@@ -254,14 +278,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M5 fully consumed (iter 39); M3
-re-scoped (iter 41, see retired note above). Remaining structural
-milestone before acceptance is M6: Dockerfile + `fly.toml` for
-`apps/web` + GitHub Actions deploy to Fly. Smaller alternatives if
-blocked: a multi-file-project slice on the sidecar; wiring
-`awaitPdfStable` once a streaming compile path exists. M4.3.1 (S3
-adapter) still waits for docker-compose; M4.3.2 checkpoint half
-waits for the upstream `--daemon DIR` mode / M7.
+**Next ordinary iteration:** M6.1 — `fly.toml` for the control
+plane (single Machine, scale-to-zero, `internal_port = 3000`).
+Then M6.2 (GitHub Actions deploy) and M6.3 (custom domain).
+M6.0 (Dockerfile) landed iter 42. Smaller alternatives if blocked:
+a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
+once a streaming compile path exists. M4.3.1 (S3 adapter) still
+waits for docker-compose; M4.3.2 checkpoint half waits for the
+upstream `--daemon DIR` mode / M7.
 
 M5 tail items deferred to FUTURE_IDEAS: session sweeper for
 expired rows, JWKS clock-skew tolerance, GET-via-shim for

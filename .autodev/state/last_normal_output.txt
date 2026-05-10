@@ -5,21 +5,21 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 64, downloaded 0, added 0
-Progress: resolved 0, reused 79, downloaded 0, added 0, done
+Progress: resolved 0, reused 17, downloaded 0, added 0
+Progress: resolved 0, reused 66, downloaded 0, added 0, done
 
-Done in 4.5s
+Done in 4.7s
 Scope: 6 of 7 workspace projects
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -47,9 +47,16 @@ test_web_oauth_start (test_node_suites.TestNodeSuites.test_web_oauth_start) ... 
 test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ... ok
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 test_web_session_hook (test_node_suites.TestNodeSuites.test_web_session_hook) ... ok
+test_files_exist (test_web_dockerfile.TestWebDockerfile.test_files_exist) ... ok
+test_install_layer_covers_every_workspace_package (test_web_dockerfile.TestWebDockerfile.test_install_layer_covers_every_workspace_package) ... ok
+test_install_runs_frozen (test_web_dockerfile.TestWebDockerfile.test_install_runs_frozen) ... ok
+test_multi_stage (test_web_dockerfile.TestWebDockerfile.test_multi_stage) ... ok
+test_pnpm_version_pinned_to_root (test_web_dockerfile.TestWebDockerfile.test_pnpm_version_pinned_to_root) ... ok
+test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entrypoint) ... ok
+test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 22 tests in 63.455s
+Ran 29 tests in 76.140s
 
 OK
 tests_normal/run_tests.sh: PASS

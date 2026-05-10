@@ -1,0 +1,64 @@
+# Build context is the repo root. Exclude everything not needed by
+# apps/web's image build to keep the context small and avoid
+# poisoning the cache layer with unrelated edits.
+
+# Node / build outputs
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+**/coverage
+**/.cache
+
+# Tests, autodev state, vendored toolchain
+tests_normal
+tests_gold
+.autodev
+autodev
+.tools
+.git
+.github
+
+# Credentials must never enter an image layer
+creds
+**/.env
+**/.env.*
+!**/.env.example
+**/*.token
+**/*.pem
+**/*.key
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+**/*.swp
+
+# Atomic-write temp files
+**/*.tmp
+**/*.tmp.[0-9]*
+
+# TeX/PDF artefacts (sidecar fixtures excluded too — runtime image
+# is web-only)
+**/*.aux
+**/*.synctex.gz
+**/*.fls
+**/*.fdb_latexmk
+**/*.toc
+**/*.pdf
+
+# Vendored submodule (supertex C source) — not used by web image
+vendor
+
+# Sidecar / blobs sources are copied selectively in the Dockerfile
+# (apps/sidecar/package.json is needed for the install layer; its
+# src/ is not). The Dockerfile's explicit COPY list is the source
+# of truth, but excluding apps/sidecar/src and packages/blobs/src
+# from the context is a belt-and-braces against accidental
+# `COPY apps/` style changes.
+apps/sidecar/src
+apps/sidecar/test
+apps/sidecar/fixtures
+packages/blobs/src
+packages/blobs/test
