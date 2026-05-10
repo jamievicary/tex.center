@@ -49,11 +49,19 @@ per-project Machine spawning, (D) auth + production polish.
             with entity row types, table column specs, and
             initial SQL migration. Spec/SQL drift caught by
             `packages/db/test/schema.test.mjs`.
-      - [ ] **M4.1 — Drizzle integration.** Add `drizzle-orm`,
-            re-express `tables` as Drizzle table builders driven
-            by the same column spec, expose a typed query
-            client. Migration tooling (`drizzle-kit`) optional;
-            we already maintain the SQL by hand.
+      - [x] **M4.1 — Drizzle integration.** _(iter 17.)_
+            `drizzle-orm@^0.45.2` added to `packages/db`.
+            `packages/db/src/drizzle.ts` declares a Drizzle
+            `pgTable` for each entity (`users`, `sessions`,
+            `projects`, `projectFiles`, `machineAssignments`)
+            with the FK / index / unique constraints matching
+            the migration. Re-exported from
+            `packages/db/src/index.ts`. The cross-check test at
+            `packages/db/test/drizzle.test.mjs` asserts the
+            Drizzle schema and `allTables` agree column-by-
+            column (SQL type, nullability, primary key, FK
+            target). The `drizzle(client, { schema })` call
+            lands with M4.2 alongside the postgres driver dep.
       - [ ] **M4.2 — Local Postgres bring-up.** `docker-compose`
             for Postgres + Tigris/MinIO. `pnpm db:migrate`
             applies migrations. Sidecar/web read connection
@@ -76,18 +84,26 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-**M4.0 persistence data model landed (iter 16).** New
-`packages/db` workspace package owns the canonical entity types
+**M4.1 Drizzle integration landed (iter 17).** `packages/db`
+gained a `drizzle-orm` dependency and a typed `pgTable` per
+entity in `src/drizzle.ts`, re-exported from `src/index.ts` as
+`{ users, sessions, projects, projectFiles, machineAssignments,
+schema }`. The Drizzle FKs / indexes / unique constraints mirror
+the SQL migration. `test/drizzle.test.mjs` cross-checks the
+Drizzle tables against `allTables` (column SQL type, notNull, PK,
+FK target) so the spec and the query layer can't drift. No DB
+connection yet; that's M4.2 with the postgres driver and
+docker-compose.
+
+**M4.0 persistence data model (iter 16, historical).**
+`packages/db` was introduced with entity row types
 (`UserRow`, `SessionRow`, `ProjectRow`, `ProjectFileRow`,
-`MachineAssignmentRow`), a per-table column spec
+`MachineAssignmentRow`), per-table column specs
 (`usersTable`, …, `allTables`), and the initial SQL migration at
-`src/migrations/0001_initial.sql`. No DB connection, no Drizzle
-dep yet — pure declarations. The schema test
+`src/migrations/0001_initial.sql`. The schema test
 (`packages/db/test/schema.test.mjs`) asserts each table has
-exactly one PK, FK targets resolve, and every column declared in
-the spec appears in the SQL with the matching type. This is the
-foundation slice for the rest of M4 — Drizzle wiring and a
-real Postgres bring-up land in subsequent iterations.
+exactly one PK, FK targets resolve, and every spec column
+appears in the SQL with the matching type.
 
 **M3.5 upstream supertex flags — sidecar wiring landed (iter 15).**
 `apps/sidecar/src/compiler/featureDetect.ts` runs `<bin> --help`

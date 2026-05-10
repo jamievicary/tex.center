@@ -71,6 +71,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 
+    def test_db_drizzle(self) -> None:
+        _run_tsx(ROOT / "packages" / "db" / "test" / "drizzle.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

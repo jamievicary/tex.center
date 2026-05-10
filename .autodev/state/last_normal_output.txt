@@ -5,12 +5,12 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 55, downloaded 0, added 0, done
+Progress: resolved 0, reused 69, downloaded 0, added 0, done
 
-Done in 1.6s
+Done in 2s
 Scope: 4 of 5 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
 packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
@@ -20,6 +20,7 @@ apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/p
 apps/web typecheck: Getting Svelte diagnostics...
 apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
+test_db_drizzle (test_node_suites.TestNodeSuites.test_db_drizzle) ... ok
 test_db_schema (test_node_suites.TestNodeSuites.test_db_schema) ... ok
 test_protocol_codec (test_node_suites.TestNodeSuites.test_protocol_codec) ... ok
 test_sidecar_feature_detect (test_node_suites.TestNodeSuites.test_sidecar_feature_detect) ... ok
@@ -33,7 +34,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 11 tests in 18.736s
+Ran 12 tests in 28.643s
 
 OK
 tests_normal/run_tests.sh: PASS
