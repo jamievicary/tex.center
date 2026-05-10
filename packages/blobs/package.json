@@ -1,0 +1,19 @@
+{
+  "name": "@tex-center/blobs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Blob storage abstraction for tex.center: BlobStore interface (Tigris/S3 in prod) and a local-filesystem adapter for tests and dev.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.13",
+    "tsx": "^4.19.1"
+  }
+}

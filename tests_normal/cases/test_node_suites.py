@@ -83,6 +83,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_db_migrations(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "migrations.test.mjs")
 
+    def test_blobs_local_fs(self) -> None:
+        _run_tsx(ROOT / "packages" / "blobs" / "test" / "localFs.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

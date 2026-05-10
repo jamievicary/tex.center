@@ -111,9 +111,35 @@ per-project Machine spawning, (D) auth + production polish.
                   `adapter-static` (no SSR server), so DB
                   access there waits for the control plane
                   (M6/M7).
-      - [ ] **M4.3 — Project hydration.** Sidecar loads project
+      - [~] **M4.3 — Project hydration.** Sidecar loads project
             files from Tigris on first compile; persists
             checkpoint blobs back on `Compiler.close()`.
+            Sub-milestones:
+            - [x] **M4.3.0 — `BlobStore` primitive.** _(iter 24.)_
+                  New `packages/blobs` with the `BlobStore`
+                  interface (`get`/`put`/`list`/`delete` keyed by
+                  forward-slash strings, `Uint8Array` payloads)
+                  and a `LocalFsBlobStore` adapter that maps key
+                  segments onto disk under a caller-provided root
+                  with atomic write-then-rename. Shared
+                  `validateKey` rejects empty / absolute /
+                  trailing-slash / `.` / `..` / NUL / backslash
+                  and any non-`[A-Za-z0-9._-]` segment, so the
+                  same guarantees will hold for the future S3
+                  adapter. Tested at
+                  `packages/blobs/test/localFs.test.mjs`.
+            - [ ] **M4.3.1 — S3/Tigris adapter.** Implement
+                  `S3BlobStore` against the AWS SDK behind the
+                  same interface; gold-test against MinIO once
+                  the docker-compose item from
+                  `FUTURE_IDEAS.md` lands.
+            - [ ] **M4.3.2 — Sidecar wiring.** On project open,
+                  hydrate `ProjectWorkspace` from a configured
+                  `BlobStore` (key prefix
+                  `projects/<id>/files/`). On `Compiler.close()`,
+                  persist the checkpoint blob back. Selector via
+                  env (`BLOB_STORE=local` for tests/dev, `s3` for
+                  prod).
 - [ ] **M5 — Auth.** Google OAuth (Authorization Code), server-side
       sessions, allowlist `jamievicary@gmail.com`. Replace mock auth
       from M1.
@@ -130,9 +156,11 @@ per-project Machine spawning, (D) auth + production polish.
 ## Current focus
 
 **Next ordinary iteration should pick up M3.5 (upstream supertex
-PRs) or M4.3 (project hydration).** M4.2 is now fully closed —
-both schema-string-regex (tests_normal) and DDL-against-real-PG
-(tests_gold via PGlite) coverage are in place.
+PRs) or M4.3.2 (sidecar wiring of `BlobStore`).** M4.3.0 (the
+`BlobStore` primitive + local-FS adapter) landed in iter 24;
+M4.3.1 (S3 adapter) waits for the docker-compose stack so it can
+be gold-tested against MinIO. The sidecar wiring (M4.3.2) can
+proceed against `LocalFsBlobStore` immediately.
 
 **Live caveats:**
 

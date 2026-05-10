@@ -1,17 +1,19 @@
-structural_checks: OK (4 packages)
+structural_checks: OK (5 packages)
 setup_node.sh: node v20.18.1, pnpm 9.12.0
-Scope: all 5 workspace projects
+Scope: all 6 workspace projects
 Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 67, downloaded 0, added 0, done
+Progress: resolved 0, reused 74, downloaded 0, added 0, done
 
-Done in 1.5s
-Scope: 4 of 5 workspace projects
+Done in 1.1s
+Scope: 5 of 6 workspace projects
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
@@ -20,6 +22,7 @@ apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/p
 apps/web typecheck: Getting Svelte diagnostics...
 apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
+test_blobs_local_fs (test_node_suites.TestNodeSuites.test_blobs_local_fs) ... ok
 test_db_drizzle (test_node_suites.TestNodeSuites.test_db_drizzle) ... ok
 test_db_migrations (test_node_suites.TestNodeSuites.test_db_migrations) ... ok
 test_db_schema (test_node_suites.TestNodeSuites.test_db_schema) ... ok
@@ -37,7 +40,7 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 
 ----------------------------------------------------------------------
-Ran 15 tests in 50.326s
+Ran 16 tests in 27.468s
 
 OK
 tests_normal/run_tests.sh: PASS
