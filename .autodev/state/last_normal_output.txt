@@ -5,17 +5,17 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 72, downloaded 0, added 0, done
 
-Done in 2.3s
+Done in 2.4s
 Scope: 6 of 7 workspace projects
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
@@ -31,10 +31,16 @@ test_steps_check_out_and_setup_flyctl (test_deploy_workflow.TestDeployWorkflow.t
 test_triggers_on_push_to_main (test_deploy_workflow.TestDeployWorkflow.test_triggers_on_push_to_main) ... ok
 test_app_name (test_fly_toml.TestFlyToml.test_app_name) ... ok
 test_build_dockerfile_points_at_web (test_fly_toml.TestFlyToml.test_build_dockerfile_points_at_web) ... ok
+test_http_service_check_points_at_healthz (test_fly_toml.TestFlyToml.test_http_service_check_points_at_healthz) ... ok
 test_http_service_forces_https (test_fly_toml.TestFlyToml.test_http_service_forces_https) ... ok
 test_http_service_port_matches_dockerfile (test_fly_toml.TestFlyToml.test_http_service_port_matches_dockerfile) ... ok
 test_http_service_scale_to_zero (test_fly_toml.TestFlyToml.test_http_service_scale_to_zero) ... ok
 test_primary_region_set (test_fly_toml.TestFlyToml.test_primary_region_set) ... ok
+test_exports_get_handler (test_healthz_route.TestHealthzRoute.test_exports_get_handler) ... ok
+test_no_cache (test_healthz_route.TestHealthzRoute.test_no_cache) ... ok
+test_payload_carries_protocol_marker (test_healthz_route.TestHealthzRoute.test_payload_carries_protocol_marker) ... ok
+test_payload_marks_ok (test_healthz_route.TestHealthzRoute.test_payload_marks_ok) ... ok
+test_prerender_disabled (test_healthz_route.TestHealthzRoute.test_prerender_disabled) ... ok
 test_auth (test_node_suites.TestNodeSuites.test_auth) ... ok
 test_auth_pkce (test_node_suites.TestNodeSuites.test_auth_pkce) ... ok
 test_auth_state (test_node_suites.TestNodeSuites.test_auth_state) ... ok
@@ -66,7 +72,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 40 tests in 59.951s
+Ran 46 tests in 61.367s
 
 OK
 tests_normal/run_tests.sh: PASS

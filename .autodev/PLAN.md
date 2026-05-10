@@ -273,6 +273,19 @@ spawning, (D) auth + production polish.
             and asserts: app name, primary region present,
             dockerfile path, scale-to-zero triple, port matches
             Dockerfile `EXPOSE`/`PORT=3000`, force_https on.
+      - [x] **M6.2.1** — `/healthz` liveness route on `apps/web`
+            (iter 45). `apps/web/src/routes/healthz/+server.ts`
+            exports `GET` returning `{ok: true, protocol:
+            "tex-center-web-v1"}` with `Cache-Control: no-store`
+            and `prerender = false` (so the route runs server-side,
+            not as a static asset). No DB touch: Fly readiness on a
+            transient Postgres outage would scale every Machine
+            out and serve nothing. `fly.toml` adds a single
+            `[[http_service.checks]]` block (`/healthz`, GET, 30s
+            interval, 10s grace, 5s timeout). Structural test
+            `test_healthz_route.py` (5 cases) asserts the route
+            shape; `test_fly_toml.py` gains a case asserting the
+            check's `path` matches an existing route file.
       - [x] **M6.2** — GitHub Actions workflow on push to `main`
             (iter 44). `.github/workflows/deploy.yml`: single
             `deploy` job, `actions/checkout@v4` →
@@ -307,7 +320,7 @@ spawning, (D) auth + production polish.
 via Cloudflare (`flyctl certs create tex.center` + apex A/AAAA
 records pointing at the Fly app). M6.0 (Dockerfile) landed iter
 42; M6.1 (`fly.toml`) landed iter 43; M6.2 (Actions workflow)
-landed iter 44. Smaller alternatives if blocked:
+landed iter 44; M6.2.1 (`/healthz` + Fly check) landed iter 45. Smaller alternatives if blocked:
 a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
 once a streaming compile path exists. M4.3.1 (S3 adapter) still
 waits for docker-compose; M4.3.2 checkpoint half waits for the

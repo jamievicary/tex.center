@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FLY_TOML = ROOT / "fly.toml"
 DOCKERFILE = ROOT / "apps" / "web" / "Dockerfile"
+HEALTHZ_ROUTE = (
+    ROOT / "apps" / "web" / "src" / "routes" / "healthz" / "+server.ts"
+)
 
 
 class TestFlyToml(unittest.TestCase):
@@ -58,6 +61,28 @@ class TestFlyToml(unittest.TestCase):
         # The product is HTTPS-only (cookies are Secure on https://).
         svc = self.cfg.get("http_service", {})
         self.assertIs(svc.get("force_https"), True)
+
+    def test_http_service_check_points_at_healthz(self) -> None:
+        # Fly's HTTP readiness probe must hit a real route in
+        # apps/web. If the path drifts, every Machine boots into
+        # "unhealthy" and the deploy hangs.
+        svc = self.cfg.get("http_service", {})
+        checks = svc.get("checks", [])
+        self.assertTrue(
+            checks,
+            "fly.toml should declare at least one [[http_service.checks]] block",
+        )
+        paths = {c.get("path") for c in checks}
+        self.assertIn("/healthz", paths)
+        self.assertTrue(
+            HEALTHZ_ROUTE.is_file(),
+            f"fly.toml references /healthz but {HEALTHZ_ROUTE.relative_to(ROOT)} missing",
+        )
+        # Probe should be a cheap GET; POST/PUT would imply
+        # side-effects and Fly wouldn't retry idempotently.
+        for c in checks:
+            if c.get("path") == "/healthz":
+                self.assertEqual(c.get("method", "GET").upper(), "GET")
 
 
 if __name__ == "__main__":

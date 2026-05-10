@@ -2,7 +2,7 @@ test_apply_against_pglite (test_pglite_migrations.TestPgliteMigrations.test_appl
 test_users_and_sessions (test_pglite_users_sessions.TestPgliteUsersSessions.test_users_and_sessions) ... ok
 
 ----------------------------------------------------------------------
-Ran 2 tests in 10.185s
+Ran 2 tests in 10.688s
 
 OK
 tests_gold/run_tests.sh: PASS
