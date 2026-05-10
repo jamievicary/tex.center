@@ -75,10 +75,15 @@ per-project Machine spawning, (D) auth + production polish.
 
 ## Current focus
 
-M0–M2 closed. The dev loop is now: `pnpm -F @tex-center/sidecar dev`
-plus `pnpm -F @tex-center/web dev`, browser at `localhost:3000/editor`,
-Yjs↔CM6 round-trip, sidecar ships fixture PDF on every text change.
-Next: **M3 supertex daemon mode**.
+M0–M2 closed; M3.0 (compiler seam) and M3.1 (on-disk workspace
+mirror) closed. The dev loop is now: `pnpm -F @tex-center/sidecar
+dev` plus `pnpm -F @tex-center/web dev`, browser at
+`localhost:3000/editor`, Yjs↔CM6 round-trip, sidecar mirrors
+`main.tex` to a scratch dir every compile and ships the fixture PDF.
+Next: **M3.2 `SupertexOnceCompiler`** — selectable via
+`SIDECAR_COMPILER=supertex-once`, spawns
+`vendor/supertex/bin/supertex paper.tex --once
+--output-directory <ws>/out` and returns the resulting PDF.
 
 ### Survey of `vendor/supertex` (iter 8)
 
@@ -129,12 +134,16 @@ Implications for M3:
       `FixtureCompiler` implementation
       (`apps/sidecar/src/compiler/fixture.ts`). Future M3 slices
       drop in a `SupertexCompiler` behind the same seam.
-- [ ] **M3.1 — Project filesystem layout.** Per-project working
-      directory under a sidecar-owned scratch root (`.scratch/<id>/`
-      in dev). Yjs `Y.Text` for `main.tex` is mirrored to disk on
-      every text change. Adds a `ProjectWorkspace` helper around
-      `node:fs/promises`. Still under `FixtureCompiler` — the
-      mirror exists but no compiler reads from it yet.
+- [x] **M3.1 — Project filesystem layout.** Iter 9.
+      `apps/sidecar/src/workspace.ts` — `ProjectWorkspace` with
+      `init()` / `writeMain()` (atomic tmp+rename) / `dispose()`
+      and a strict `[A-Za-z0-9_-]+` projectId regex so URL path
+      params can't escape the scratch root. Server creates one
+      per project under `opts.scratchRoot ?? mkdtemp(os.tmpdir())`,
+      mirrors `Y.Text` to `<root>/<id>/main.tex` at the head of
+      every compile cycle, and on `onClose` disposes each
+      workspace + removes the owned root. `FixtureCompiler`
+      still ignores the mirror — it's dark code until M3.2.
 - [ ] **M3.2 — `SupertexOnceCompiler`.** Spawns
       `vendor/supertex/bin/supertex paper.tex --once
       --output-directory <work>/out --live-shipouts <work>/shipouts`

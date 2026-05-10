@@ -14,6 +14,10 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import Fastify, { type FastifyInstance } from "fastify";
 import websocketPlugin from "@fastify/websocket";
@@ -29,6 +33,7 @@ import {
 
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
+import { ProjectWorkspace } from "./workspace.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
 
@@ -38,6 +43,7 @@ interface ProjectState {
   viewers: Set<ProjectClient>;
   compileTimer: NodeJS.Timeout | null;
   compiler: Compiler;
+  workspace: ProjectWorkspace;
 }
 
 interface ProjectClient {
@@ -48,6 +54,12 @@ interface ProjectClient {
 export interface SidecarOptions {
   fixturePdfPath?: string;
   compilerFactory?: () => Compiler;
+  /**
+   * Root directory under which per-project scratch dirs live. If
+   * omitted, a process-unique tempdir under `os.tmpdir()` is
+   * created and removed on `app.close()`.
+   */
+  scratchRoot?: string;
   logger?: boolean;
 }
 
@@ -59,6 +71,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     opts.fixturePdfPath ?? resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/hello.pdf");
   const compilerFactory = opts.compilerFactory ?? (() => new FixtureCompiler(fixturePath));
 
+  // If the caller didn't supply a scratchRoot, mint one under
+  // os.tmpdir() so concurrent sidecar instances (e.g. the test
+  // suite) don't collide. The "owned" flag drives full removal
+  // on shutdown; an externally-supplied root is left in place.
+  const ownedScratchRoot = opts.scratchRoot === undefined;
+  const scratchRoot = opts.scratchRoot ?? mkdtempSync(join(tmpdir(), "tex-center-sidecar-"));
+
   const projects = new Map<string, ProjectState>();
 
   function getProject(id: string): ProjectState {
@@ -66,12 +85,14 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     if (p) return p;
     const doc = new Y.Doc();
     const text = doc.getText("main.tex");
+    const workspace = new ProjectWorkspace({ rootDir: scratchRoot, projectId: id });
     p = {
       doc,
       text,
       viewers: new Set(),
       compileTimer: null,
       compiler: compilerFactory(),
+      workspace,
     };
     projects.set(id, p);
     return p;
@@ -102,8 +123,25 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   async function runCompile(p: ProjectState): Promise<void> {
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
+    const source = p.text.toString();
+    // Mirror current source to the on-disk workspace before
+    // compiling. M3.1 lays down the file; the FixtureCompiler
+    // ignores it. M3.2+ compilers will read from this path.
+    try {
+      await p.workspace.writeMain(source);
+    } catch (e) {
+      broadcast(
+        p,
+        encodeControl({
+          type: "compile-status",
+          state: "error",
+          detail: e instanceof Error ? e.message : String(e),
+        }),
+      );
+      return;
+    }
     const result = await p.compiler.compile({
-      source: p.text.toString(),
+      source,
       targetPage: maxViewingPage(p),
     });
     if (!result.ok) {
@@ -208,9 +246,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         p.compileTimer = null;
       }
       await p.compiler.close();
+      await p.workspace.dispose();
       p.doc.destroy();
     }
     projects.clear();
+    if (ownedScratchRoot) {
+      await rm(scratchRoot, { recursive: true, force: true });
+    }
   });
 
   return app;
