@@ -40,10 +40,27 @@ per-project Machine spawning, (D) auth + production polish.
       `target_page=N` stop, (3) per-shipout PDF byte-range deltas,
       (4) checkpoint serialise/restore to a single blob. Hook the
       sidecar into it; replace the M2 stub.
-- [ ] **M4 — Persistence.** Postgres (Drizzle) for users, sessions,
+- [~] **M4 — Persistence.** Postgres (Drizzle) for users, sessions,
       projects, file metadata. Tigris for file blobs, checkpoint
       blobs, PDF segments. Local dev brings up both in Docker
       Compose. Project open/close hydrates from Tigris.
+      Sub-milestones:
+      - [x] **M4.0 — Data model.** _(iter 16.)_ `packages/db`
+            with entity row types, table column specs, and
+            initial SQL migration. Spec/SQL drift caught by
+            `packages/db/test/schema.test.mjs`.
+      - [ ] **M4.1 — Drizzle integration.** Add `drizzle-orm`,
+            re-express `tables` as Drizzle table builders driven
+            by the same column spec, expose a typed query
+            client. Migration tooling (`drizzle-kit`) optional;
+            we already maintain the SQL by hand.
+      - [ ] **M4.2 — Local Postgres bring-up.** `docker-compose`
+            for Postgres + Tigris/MinIO. `pnpm db:migrate`
+            applies migrations. Sidecar/web read connection
+            strings from env.
+      - [ ] **M4.3 — Project hydration.** Sidecar loads project
+            files from Tigris on first compile; persists
+            checkpoint blobs back on `Compiler.close()`.
 - [ ] **M5 — Auth.** Google OAuth (Authorization Code), server-side
       sessions, allowlist `jamievicary@gmail.com`. Replace mock auth
       from M1.
@@ -58,6 +75,19 @@ per-project Machine spawning, (D) auth + production polish.
       criteria end-to-end on prod, fix gaps.
 
 ## Current focus
+
+**M4.0 persistence data model landed (iter 16).** New
+`packages/db` workspace package owns the canonical entity types
+(`UserRow`, `SessionRow`, `ProjectRow`, `ProjectFileRow`,
+`MachineAssignmentRow`), a per-table column spec
+(`usersTable`, …, `allTables`), and the initial SQL migration at
+`src/migrations/0001_initial.sql`. No DB connection, no Drizzle
+dep yet — pure declarations. The schema test
+(`packages/db/test/schema.test.mjs`) asserts each table has
+exactly one PK, FK targets resolve, and every column declared in
+the spec appears in the SQL with the matching type. This is the
+foundation slice for the rest of M4 — Drizzle wiring and a
+real Postgres bring-up land in subsequent iterations.
 
 **M3.5 upstream supertex flags — sidecar wiring landed (iter 15).**
 `apps/sidecar/src/compiler/featureDetect.ts` runs `<bin> --help`

@@ -83,6 +83,8 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@20.19.40)
 
+  packages/db: {}
+
   packages/protocol: {}
 
 packages:
