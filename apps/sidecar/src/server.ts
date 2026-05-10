@@ -32,7 +32,7 @@ import {
   encodePdfSegment,
 } from "@tex-center/protocol";
 import { createDb, closeDb, type DbHandle } from "@tex-center/db";
-import { LocalFsBlobStore, type BlobStore } from "@tex-center/blobs";
+import { type BlobStore } from "@tex-center/blobs";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -46,6 +46,11 @@ import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { SupertexWatchCompiler } from "./compiler/supertexWatch.js";
 import { detectSupertexFeatures, type SupertexFeatures } from "./compiler/featureDetect.js";
 import { ProjectWorkspace } from "./workspace.js";
+import {
+  createProjectPersistence,
+  defaultBlobStoreFromEnv,
+  type ProjectPersistence,
+} from "./persistence.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
 
@@ -57,26 +62,7 @@ interface ProjectState {
   compileTimer: NodeJS.Timeout | null;
   compiler: Compiler;
   workspace: ProjectWorkspace;
-  /** Last source persisted to the blob store; used to skip no-op writes. */
-  persistedSource: string | null;
-  /**
-   * `true` only after blob hydration completed without throwing
-   * (whether or not the blob existed). Persistence is gated on
-   * this so a transient `blobStore.get()` failure doesn't cause
-   * the next compile to overwrite the remote blob with the empty
-   * in-memory Y.Text.
-   */
-  canPersist: boolean;
-  hydrated: Promise<void>;
-}
-
-/**
- * Blob-store key for the canonical source of a project's main file.
- * Today there's only `main.tex`; once multi-file projects land
- * (post-MVP), this becomes a directory listing.
- */
-function mainTexKey(projectId: string): string {
-  return `projects/${projectId}/files/main.tex`;
+  persistence: ProjectPersistence;
 }
 
 interface ProjectClient {
@@ -156,6 +142,12 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     const doc = new Y.Doc();
     const text = doc.getText(MAIN_DOC_NAME);
     const workspace = new ProjectWorkspace({ rootDir: scratchRoot, projectId: id });
+    const persistence = createProjectPersistence({
+      blobStore,
+      projectId: id,
+      text,
+      log: app.log,
+    });
     const state: ProjectState = {
       id,
       doc,
@@ -164,30 +156,8 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       compileTimer: null,
       compiler: compilerFactory({ projectId: id, workspace }),
       workspace,
-      persistedSource: null,
-      canPersist: blobStore === undefined,
-      hydrated: Promise.resolve(),
+      persistence,
     };
-    if (blobStore) {
-      state.hydrated = (async () => {
-        try {
-          const bytes = await blobStore.get(mainTexKey(id));
-          if (bytes && bytes.length > 0) {
-            const source = new TextDecoder().decode(bytes);
-            text.insert(0, source);
-            state.persistedSource = source;
-          } else if (bytes) {
-            state.persistedSource = "";
-          }
-          state.canPersist = true;
-        } catch (e) {
-          app.log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId: id },
-            "blob hydration failed; persistence disabled this session",
-          );
-        }
-      })();
-    }
     projects.set(id, state);
     return state;
   }
@@ -216,7 +186,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   }
 
   async function runCompile(p: ProjectState): Promise<void> {
-    await p.hydrated;
+    await p.persistence.awaitHydrated();
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
     const source = p.text.toString();
     // Mirror current source to the on-disk workspace before
@@ -238,17 +208,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // Persist source before invoking the compiler. A failed compile
     // must not lose the user's edits — once the source is on the
     // workspace disk it is also durable in the blob store.
-    if (blobStore && p.canPersist && source !== p.persistedSource) {
-      try {
-        await blobStore.put(mainTexKey(p.id), new TextEncoder().encode(source));
-        p.persistedSource = source;
-      } catch (e) {
-        app.log.warn(
-          { err: e instanceof Error ? e.message : String(e) },
-          "blob persist failed",
-        );
-      }
-    }
+    await p.persistence.maybePersist(source);
     const result = await p.compiler.compile({
       source,
       targetPage: maxViewingPage(p),
@@ -317,7 +277,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       // Hydration may still be in flight; await before snapshotting
       // so the client sees the persisted source on first frame.
       client.send(encodeControl({ type: "hello", protocol: PROTOCOL_VERSION }));
-      void project.hydrated.then(() => {
+      void project.persistence.awaitHydrated().then(() => {
         if (socket.readyState !== socket.OPEN) return;
         const initialState = Y.encodeStateAsUpdate(project.doc);
         if (initialState.length > 0) {
@@ -402,26 +362,6 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   });
 
   return app;
-}
-
-// Selects a default `BlobStore` from environment:
-//   - `BLOB_STORE` unset / "none" → null (no persistence)
-//   - "local" → `LocalFsBlobStore` rooted at `$BLOB_STORE_LOCAL_DIR`
-//   - "s3" → reserved for M4.3.1; rejected for now
-function defaultBlobStoreFromEnv(): BlobStore | undefined {
-  const which = process.env.BLOB_STORE;
-  if (!which || which === "none") return undefined;
-  if (which === "local") {
-    const dir = process.env.BLOB_STORE_LOCAL_DIR;
-    if (!dir) {
-      throw new Error("BLOB_STORE=local requires BLOB_STORE_LOCAL_DIR");
-    }
-    return new LocalFsBlobStore({ rootDir: dir });
-  }
-  if (which === "s3") {
-    throw new Error("BLOB_STORE=s3 not implemented yet (M4.3.1)");
-  }
-  throw new Error(`unknown BLOB_STORE: ${which}`);
 }
 
 // Selects the compiler implementation based on `$SIDECAR_COMPILER`:
