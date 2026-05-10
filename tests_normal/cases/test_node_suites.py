@@ -47,6 +47,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_pdf_buffer(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pdfBuffer.test.mjs")
 
+    def test_web_page_tracker(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "pageTracker.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

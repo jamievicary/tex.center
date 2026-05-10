@@ -1,10 +1,27 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
 
-  let { src }: { src: Uint8Array | string | null } = $props();
+  import { PageTracker } from "./pageTracker";
+
+  let {
+    src,
+    onPageChange,
+  }: {
+    src: Uint8Array | string | null;
+    onPageChange?: (page: number) => void;
+  } = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let renderToken = 0;
+
+  // One IO + tracker per viewer instance, reused across renders.
+  // The IO root is the scrolling preview pane (the parent of the
+  // host); we use the document viewport as fallback for SSR-safety
+  // by passing `root: null` and relying on the preview pane being
+  // viewport-sized in practice. (M3 page tracking; refine if the
+  // preview pane stops being the scroll viewport.)
+  const tracker = new PageTracker();
+  let observer: IntersectionObserver | null = null;
 
   $effect(() => {
     if (!host || !src) return;
@@ -12,6 +29,26 @@
     const target = host;
     void render(src, target, () => token === renderToken);
   });
+
+  function ensureObserver(): IntersectionObserver | null {
+    if (typeof IntersectionObserver === "undefined") return null;
+    if (observer) return observer;
+    const thresholds = Array.from({ length: 11 }, (_, i) => i / 10);
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const pageAttr = (e.target as HTMLElement).dataset.page;
+          if (!pageAttr) continue;
+          const page = Number(pageAttr);
+          if (!Number.isFinite(page)) continue;
+          const next = tracker.update(page, e.intersectionRatio);
+          if (next !== null) onPageChange?.(next);
+        }
+      },
+      { threshold: thresholds },
+    );
+    return observer;
+  }
 
   async function render(
     src: Uint8Array | string,
@@ -38,7 +75,11 @@
       void pdf.destroy();
       return;
     }
+    // Tear down old canvases + observation before rendering anew.
+    observer?.disconnect();
+    tracker.reset();
     target.replaceChildren();
+    const io = ensureObserver();
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       if (!isCurrent()) return;
@@ -46,9 +87,11 @@
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      canvas.dataset.page = String(pageNum);
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
       target.appendChild(canvas);
+      io?.observe(canvas);
       await page.render({ canvasContext: ctx, viewport }).promise;
       if (!isCurrent()) return;
     }
@@ -56,6 +99,8 @@
 
   onDestroy(() => {
     renderToken++;
+    observer?.disconnect();
+    observer = null;
   });
 </script>
 

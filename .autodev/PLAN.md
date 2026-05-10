@@ -87,10 +87,12 @@ Next: **M3 supertex daemon mode**. Concrete subgoals likely:
 3. Replace `runCompile` in `apps/sidecar/src/server.ts` with calls
    that drive supertex against a real `.tex`. Keep the fixture
    path as a fallback for now.
-4. Real `view` page tracking from the browser (PdfViewer must
-   report which page is most-visible; probably an
-   `IntersectionObserver` over canvases) and forward to
-   supertex's `target_page=N`.
+4. ~~Real `view` page tracking from the browser~~ — done iter 7:
+   `PdfViewer` runs an `IntersectionObserver` over per-page
+   canvases; a pure `PageTracker` reports transitions; the editor
+   page forwards them via `WsClient.setViewingPage`. Forwarding
+   to supertex's `target_page=N` is still pending the daemon
+   integration.
 5. Per-shipout PDF byte-range deltas → `pdf-segment` frames.
 
 Likely a multi-iteration milestone, with scaffolding pattern: an

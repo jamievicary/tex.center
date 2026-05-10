@@ -37,8 +37,13 @@
       },
     });
     text = client.text;
+    // Default until IntersectionObserver fires from PdfViewer.
     client.setViewingPage(1);
   });
+
+  function handlePageChange(page: number): void {
+    client?.setViewingPage(page);
+  }
 
   onDestroy(() => {
     client?.destroy();
@@ -56,7 +61,7 @@
     {/key}
   </section>
   <section class="preview">
-    <PdfViewer src={snapshot.pdfBytes} />
+    <PdfViewer src={snapshot.pdfBytes} onPageChange={handlePageChange} />
     {#if snapshot.compileState === "running"}
       <div class="badge">compiling…</div>
     {:else if snapshot.compileState === "error"}
