@@ -126,6 +126,19 @@ export async function resolveGoogleCallback(
   const clearState = clearCookie(input.stateCookieName, "/auth", input.secureCookie);
 
   if (input.queryError !== null && input.queryError !== "") {
+    // `access_denied` is the OAuth 2.0 spec code for "user cancelled
+    // on the consent screen" — expected user behaviour, not an error
+    // to display. Send them back to the white sign-in page, matching
+    // the allowlist-deny branch below. Any other `error=` code is
+    // genuinely unexpected (Google misconfig, malformed request) and
+    // surfaces as a 400 with the code echoed for the operator.
+    if (input.queryError === "access_denied") {
+      return {
+        kind: "redirect",
+        location: input.signedOutPath,
+        setCookies: [clearState],
+      };
+    }
     return errorWith(400, `OAuth error from Google: ${redactError(input.queryError)}`, [
       clearState,
     ]);

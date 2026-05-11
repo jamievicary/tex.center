@@ -195,15 +195,27 @@ function getCookieValue(cookie, name) {
   assert.match(r.body, /malformed/i);
 }
 
-// --- Google ?error= → 400 with the code echoed ---------------------
+// --- Google ?error=access_denied → redirect to / (user cancelled) --
 
 {
   const r = await resolveGoogleCallback(
     baseInput({ queryError: "access_denied" }),
   );
+  assert.equal(r.kind, "redirect");
+  assert.equal(r.location, "/");
+  assert.equal(r.setCookies.length, 1);
+  assert.match(r.setCookies[0], /tc_oauth_state=;.*Max-Age=0/);
+}
+
+// --- Other Google ?error= codes → 400 with the code echoed --------
+
+{
+  const r = await resolveGoogleCallback(
+    baseInput({ queryError: "invalid_request" }),
+  );
   assert.equal(r.kind, "error");
   assert.equal(r.status, 400);
-  assert.match(r.body, /access_denied/);
+  assert.match(r.body, /invalid_request/);
 }
 
 // --- Google ?error= with weird chars → "unknown" -------------------
