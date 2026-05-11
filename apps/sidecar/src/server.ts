@@ -144,7 +144,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     const persistence = createProjectPersistence({
       blobStore,
       projectId: id,
-      text,
+      doc,
       log: app.log,
     });
     const state: ProjectState = {

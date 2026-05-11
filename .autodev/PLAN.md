@@ -135,12 +135,16 @@ spawning, (D) auth + production polish.
 (requires live Fly + Cloudflare tokens, runs outside autodev).
 
 Smaller in-tree alternatives if blocked:
-- Multi-file-project slice on the sidecar (today hydration is
-  `main.tex`-only). Listing primitive `listProjectFiles` landed
-  iter 55; protocol `file-list` control + FileTree wiring landed
-  iter 56. Next coherent slice: per-file `Y.Text` hydration so
-  selecting a non-`main.tex` file shows its contents in the
-  editor (needs per-file doc names in the wire format).
+- Multi-file-project slice on the sidecar. Listing primitive
+  `listProjectFiles` landed iter 55; protocol `file-list` control +
+  FileTree wiring landed iter 56; per-file `Y.Text` hydration
+  landed iter 58 (server loads every listed file into
+  `doc.getText(<name>)` in one transaction; client rebinds the
+  editor via `WsClient.getText(selected)`; non-`main.tex` files are
+  editor-readOnly until persistence covers them). Next coherent
+  slice: multi-file persistence — `maybePersist` tracking per-file
+  source so editing `refs.bib` survives reconnect, then drop the
+  readOnly guard.
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7).

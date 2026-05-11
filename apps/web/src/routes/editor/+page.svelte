@@ -40,10 +40,21 @@
         snapshot = s;
       },
     });
-    text = client.text;
+    text = client.getText(selected);
     // Default until IntersectionObserver fires from PdfViewer.
     client.setViewingPage(1);
   });
+
+  // Switching the selected file rebinds the editor to that file's
+  // Y.Text. Non-`main.tex` files are read-only until multi-file
+  // persistence lands (today only `main.tex` is persisted back to
+  // the blob store; allowing edits elsewhere would silently lose
+  // them on reconnect).
+  $effect(() => {
+    if (client) text = client.getText(selected);
+  });
+
+  let editorReadOnly = $derived(selected !== MAIN_DOC_NAME);
 
   function handlePageChange(page: number): void {
     client?.setViewingPage(page);
@@ -72,7 +83,7 @@
   </aside>
   <section class="editor">
     {#key text}
-      <Editor {text} />
+      <Editor {text} readOnly={editorReadOnly} />
     {/key}
   </section>
   <section class="preview">

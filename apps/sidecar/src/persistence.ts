@@ -21,14 +21,21 @@
 // When `blobStore` is `undefined`, hydration resolves immediately
 // and `maybePersist` is a no-op — the sidecar runs purely in-memory.
 //
-// Today only `main.tex` is persisted; multi-file is post-MVP and
-// will turn `persistedSource` into a per-file map keyed by relative
-// path.
+// Hydration loads every persisted file under `projects/<id>/files/`
+// into its own `Y.Text` on the project's single `Y.Doc`, keyed by
+// the relative path (so `main.tex`, `refs.bib`, etc. each live on
+// `doc.getText(<name>)`). Only `main.tex` is *persisted* back today
+// — non-main files are read-only at the editor layer until a
+// multi-file persistence step lands. The Y.Doc-level update wire
+// format already carries every type, so no protocol change is
+// needed for the read side.
 
 import * as Y from "yjs";
 
 import type { BlobStore } from "@tex-center/blobs";
 import { LocalFsBlobStore } from "@tex-center/blobs";
+
+import { MAIN_DOC_NAME } from "@tex-center/protocol";
 
 export interface PersistenceLogger {
   warn(detail: { err: string; projectId?: string }, msg: string): void;
@@ -88,10 +95,10 @@ export interface ProjectPersistence {
 export function createProjectPersistence(args: {
   blobStore: BlobStore | undefined;
   projectId: string;
-  text: Y.Text;
+  doc: Y.Doc;
   log: PersistenceLogger;
 }): ProjectPersistence {
-  const { blobStore, projectId, text, log } = args;
+  const { blobStore, projectId, doc, log } = args;
 
   if (!blobStore) {
     return {
@@ -105,13 +112,27 @@ export function createProjectPersistence(args: {
 
   const hydrated: Promise<void> = (async () => {
     try {
-      const bytes = await blobStore.get(mainTexKey(projectId));
-      if (bytes && bytes.length > 0) {
-        const source = new TextDecoder().decode(bytes);
-        text.insert(0, source);
-        persistedSource = source;
-      } else if (bytes) {
-        persistedSource = "";
+      const files = await listProjectFiles(blobStore, projectId);
+      // Bulk-load every file into its own Y.Text inside a single
+      // transaction so observers see one coherent update rather
+      // than one per file.
+      const dec = new TextDecoder();
+      const loaded = await Promise.all(
+        files.map(async (name) => ({
+          name,
+          bytes: await blobStore.get(`${projectFilesDir(projectId)}/${name}`),
+        })),
+      );
+      doc.transact(() => {
+        for (const { name, bytes } of loaded) {
+          if (!bytes || bytes.length === 0) continue;
+          const t = doc.getText(name);
+          if (t.length === 0) t.insert(0, dec.decode(bytes));
+        }
+      });
+      const mainEntry = loaded.find((l) => l.name === MAIN_DOC_NAME);
+      if (mainEntry?.bytes) {
+        persistedSource = dec.decode(mainEntry.bytes);
       }
       canPersist = true;
     } catch (e) {

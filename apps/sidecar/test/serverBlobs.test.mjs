@@ -23,9 +23,10 @@ const blobStore = new LocalFsBlobStore({ rootDir: blobRoot });
 
 const projectId = "alpha";
 const initial = "\\documentclass{article}\\begin{document}hello\\end{document}";
+const refsBibContents = "@book{x,...}";
 await blobStore.put(`projects/${projectId}/files/main.tex`, new TextEncoder().encode(initial));
-// Sibling file to exercise multi-file `file-list`.
-await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().encode("@book{x,...}"));
+// Sibling file to exercise multi-file `file-list` + hydration.
+await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().encode(refsBibContents));
 
 async function waitFor(check, label, frames) {
   const deadline = Date.now() + 5000;
@@ -58,8 +59,18 @@ async function bootClient(app) {
   const app = await buildServer({ logger: false, blobStore });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  const { ws, frames, text } = await bootClient(app);
+  const { ws, frames, clientDoc, text } = await bootClient(app);
   await waitFor(() => text.toString() === initial, "hydrated initial", frames);
+
+  // Multi-file hydration: refs.bib must be present on the same
+  // Y.Doc, keyed by its relative path. The single doc-level update
+  // carries every Y.Text, so the client sees both files in one
+  // frame.
+  await waitFor(
+    () => clientDoc.getText("refs.bib").toString() === refsBibContents,
+    "refs.bib hydrated",
+    frames,
+  );
 
   // The blob store has `main.tex` plus a sibling `refs.bib`; the
   // file-list control message must reflect both, sorted.

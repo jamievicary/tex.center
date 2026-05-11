@@ -137,6 +137,17 @@ export class WsClient {
     this.send(encodeControl({ type: "view", page }));
   }
 
+  /**
+   * Returns the `Y.Text` for a given filename on the project doc.
+   * Each persisted file is hydrated by the server into
+   * `doc.getText(<relative-path>)`; calling this with an unknown
+   * name still returns a (possibly-empty) `Y.Text` because Yjs
+   * auto-creates the type on first access.
+   */
+  getText(name: string): Y.Text {
+    return this.doc.getText(name);
+  }
+
   snapshot(): WsClientSnapshot {
     return {
       status: this._status,
