@@ -74,6 +74,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_supertex_once_compiler(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "supertexOnceCompiler.test.mjs")
 
+    def test_sidecar_daemon_protocol(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "daemonProtocol.test.mjs")
+
     def test_sidecar_pdf_stability_watcher(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "pdfStabilityWatcher.test.mjs")
 

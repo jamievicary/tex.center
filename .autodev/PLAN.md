@@ -250,11 +250,29 @@ spawning, (D) auth + production polish.
               this when M7.5.2 wires the daemon compiler — make
               the Dockerfile RUN `make -C vendor/supertex all`
               and update `SUPERTEX_BIN`.
-            - **M7.5.1** — Pure-logic protocol parser in
-              `apps/sidecar/src/compiler/daemonProtocol.ts` for
-              the four stdout line types (`[N.out]`,
-              `[rollback K]`, `[error <reason>]`, `[round-done]`);
-              unknown lines = protocol violation.
+            - [x] **M7.5.1** — Pure-logic protocol parser in
+              `apps/sidecar/src/compiler/daemonProtocol.ts`
+              _(iter 91.)_ Exports `parseDaemonLine(line) →
+              DaemonEvent` for the four stdout line types
+              (`[N.out]`, `[rollback K]`, `[error <reason>]`,
+              `[round-done]`); unknown / malformed lines map to
+              `{ kind: "violation", raw }`. Stateful
+              `DaemonLineBuffer` splits incoming stdout chunks
+              on `\n`, holds back partial trailing lines, and
+              `flush()` returns a violation event for any
+              non-empty trailing data at EOF (the daemon always
+              terminates its lines, so a partial at EOF is a
+              protocol error). Accepts `string` or `Uint8Array`
+              chunks (utf-8 decode). Test
+              `daemonProtocol.test.mjs` (registered in
+              `test_node_suites.py`) covers every recognised
+              shape, a dozen-plus malformed inputs (including
+              negative integers, leading/trailing whitespace,
+              missing brackets), chunk-boundary splits across
+              calls, EOF-with-partial-line, and a mixed
+              rollback-then-shipouts-then-round-done sequence
+              mirroring the wire format from
+              `vendor/supertex/tools/supertex_daemon.c`.
             - **M7.5.2** — `SupertexDaemonCompiler` next to
               `SupertexOnceCompiler`: one persistent process per
               project, lazy spawn, lifecycle via `Compiler.close()`
