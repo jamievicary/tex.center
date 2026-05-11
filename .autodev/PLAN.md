@@ -252,17 +252,70 @@ spawning, (D) auth + production polish.
               on EOF); flip `SIDECAR_COMPILER` default to
               `supertex-daemon` only after this suite is green.
 
-- [ ] **M8 — Acceptance pass.** Walk the seven `GOAL.md` acceptance
-      criteria end-to-end on prod, fix gaps. Playwright lives here.
+- [~] **M8 — Acceptance pass + Playwright (pulled forward).**
+      Walk the seven `GOAL.md` acceptance criteria end-to-end on
+      prod, fix gaps. Playwright infrastructure is pulled forward
+      ahead of M7.0.3 so the next control-plane redeploy has a
+      browser-level acceptance signal (motivation: iter-73
+      `/healthz`+`/` probes missed the OAuth bug iter-76 caught;
+      see discussion 77). The full seven-criterion acceptance
+      pass remains the M8 endpoint.
+      - [ ] **M8.pw.0** — Playwright skeleton. Workspace devDep
+            `@playwright/test`; `tests_gold/setup_playwright.sh`
+            provisions Chromium under `.tools/playwright/`
+            (gitignored, idempotent, DrvFs-aware: symlink to
+            `~/.cache/tex-center-pw/<hash>/` on `/mnt/*` checkouts
+            mirroring `setup_node.sh`'s pattern);
+            `tests_gold/playwright.config.ts` with two projects
+            (`local` boots `pnpm --filter @tex-center/web dev`
+            via `webServer:`; `live` targets `https://tex.center`,
+            no webServer); one trivial test asserting `/` DOM
+            contains exactly one "Sign in with Google" button +
+            no marketing copy; `tests_gold/cases/test_playwright.py`
+            shells out to `pnpm exec playwright test
+            --project=local`.
+      - [ ] **M8.pw.1** — Session-cookie injection + authed
+            surface. `tests_gold/lib/mintSession.ts` (reads
+            `SESSION_SIGNING_KEY` from env; inserts a `sessions`
+            row with `expires_at = now() + 5min` so abandoned
+            rows self-clean via `deleteExpiredSessions`; returns
+            signed cookie); Playwright `authedPage` fixture;
+            `tests_gold/lib/flyProxy.ts` launches `flyctl proxy
+            5433:5432 -a tex-center-db` for `live` target with a
+            health check that surfaces proxy failures distinctly
+            from Playwright flakes. First wave of tests: `/` →
+            `/editor` redirect when authed, `/editor` three-panel
+            layout DOM presence, `/projects` lists the user's
+            projects, sign-out clears cookie + lands on white `/`.
+            Tests teardown their inserted rows in `afterAll`.
+      - [ ] **M8.pw.2** — Deploy-iteration verification. Extend
+            `deploy/VERIFY.md` to require `live`-target Playwright
+            pass as the deploy-success signal. `tests_gold` case
+            for `live` is gated on `TEXCENTER_LIVE_TESTS=1`
+            (passes with a clear "skipped" log when unset so the
+            default gold run stays clean). Update deploy-touching
+            iteration template so M7.0.3 / future control-plane
+            redeploys run the `live` suite at the end.
+      - [ ] **M8.acceptance** — Walk the seven `GOAL.md`
+            acceptance criteria end-to-end on prod, fix gaps.
+            Real OAuth consent-screen driving stays out of scope
+            (HTTP-handshake check from `deploy/VERIFY.md` probe 3
+            plus cookie-injection-authed editor tests cover the
+            same surface a human-driven smoke test would catch).
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.2 — author
-`apps/sidecar/fly.toml` for a `tex-center-sidecar` Fly app in `fra`
-(no public IPs, internal port 3001), then `flyctl deploy
---remote-only`. M7.0.1 landed iter 75 (engine ELF vendored at
-`vendor/engine/x86_64-linux/lualatex-incremental`, runtime stage
-COPYs + wraps + dumps fmt).
+**Next ordinary iteration:** M8.pw.0 — Playwright skeleton.
+Repointed from M7.0.2 per discussion 77: pw.0 + pw.1 land before
+the next control-plane redeploy (M7.0.3). M7.0.2 is internal-only
+(no public IP, no control-plane image roll) so the OAuth-class-bug
+argument doesn't apply to it; it slots between pw.1 and pw.2 in
+the queue. Concrete next-iteration scope: workspace devDep
+`@playwright/test`, `tests_gold/setup_playwright.sh` (DrvFs-aware
+Chromium provisioner mirroring `setup_node.sh`),
+`tests_gold/playwright.config.ts` with `local` (+ `webServer:`)
+and `live` projects, one trivial `/` DOM test,
+`tests_gold/cases/test_playwright.py` runner integration.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive
