@@ -125,6 +125,24 @@ class TestSidecarDockerfile(unittest.TestCase):
         )
         self.assertRegex(runtime, r"/opt/engine/bin:\$PATH")
 
+    def test_runtime_sets_texmfcnf_for_kpathsea(self) -> None:
+        # The vendored engine ELF was compiled with SELFAUTO-derived
+        # kpathsea search paths rooted at /opt/engine, so without an
+        # explicit TEXMFCNF it can't find Debian's texmf.cnf and the
+        # fmt-dump aborts with `! I can't find file 'lualatex.ini'`.
+        # Iter 87 hit this in production; iter 88 fix is a global
+        # runtime ENV pointing at the system texmf trees. This guard
+        # exists because the structural test never builds an image,
+        # so silent regression of TEXMFCNF would otherwise stay
+        # invisible until the next deploy.
+        runtime = _runtime_stage(self.text)
+        self.assertRegex(
+            runtime,
+            r"TEXMFCNF=\S*?/usr/share/texlive/texmf-dist/web2c",
+            "runtime stage must set TEXMFCNF including the system "
+            "texlive texmf.cnf directory",
+        )
+
     def test_runtime_dumps_lualatex_fmt(self) -> None:
         # The .fmt is texlive-version-specific so it must be
         # regenerated against the apt'd texlive-full at image build

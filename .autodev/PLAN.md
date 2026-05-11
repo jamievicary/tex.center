@@ -150,10 +150,18 @@ spawning, (D) auth + production polish.
                   `/opt/engine/...`) can't locate the
                   apt-installed TL 2022 `texmf.cnf` and aborts
                   with `! I can't find file 'lualatex.ini'`.
-                  Fix: prepend the right `TEXMFCNF`/`TEXMF*`
-                  envs to the fmt-dump RUN layer, and add a
-                  structural-test guard so this can't drift
-                  again. Diagnosis evidence in iter 87 log.
+                  **Fix landed iter 88**: runtime stage now sets
+                  `TEXMFCNF=/etc/texmf/web2c:/usr/share/texlive/
+                  texmf-dist/web2c` (after the apt-install RUN;
+                  setting it before broke the `context` package's
+                  `luatools --make cont-en` postinst), and
+                  `test_sidecar_dockerfile.py::
+                  test_runtime_sets_texmfcnf_for_kpathsea`
+                  guards regression. **Deploy retry pending**:
+                  iter 88 ran out of wallclock before the
+                  rebuilt image could be pushed; next iteration
+                  reruns `flyctl deploy ... -a tex-center-sidecar
+                  --config apps/sidecar/fly.toml .`.
                   Route (b) taken (iter 75): the prebuilt
                   stripped ELF is vendored at
                   `vendor/engine/x86_64-linux/lualatex-incremental`
@@ -459,12 +467,16 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** Fix the M7.0.1 kpathsea regression
-in `apps/sidecar/Dockerfile` (fmt-dump RUN needs `TEXMFCNF`
-pointing at the apt-installed TL 2022 tree), add a guard to
-`test_sidecar_dockerfile.py`, then retry the M7.0.2 first
-deploy. Queue after: M7.0.2 first-deploy → pw.2 → M7.0.3.
-Manifest + app-create halves of M7.0.2 already landed in iter 87.
+**Next ordinary iteration:** Retry the M7.0.2 first deploy of
+`tex-center-sidecar`. The Dockerfile kpathsea fix landed iter 88
+(TEXMFCNF env after apt-install) but the deploy itself hasn't
+run yet — apt-install layer can't reuse cache because the runtime
+stage's ENV ordering changed, so budget ~25 min wallclock for the
+fresh build + push + machine create. Canonical command:
+`flyctl deploy --remote-only --no-public-ips
+-a tex-center-sidecar --config apps/sidecar/fly.toml .` (always
+pass both `-a` and `--config` — iter 87 misfire). Queue after:
+pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

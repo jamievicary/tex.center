@@ -82,6 +82,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
+# The vendored engine ELF was compiled with SELFAUTO-derived default
+# search paths rooted at `/opt/engine`, so kpathsea can't find Debian's
+# `texmf.cnf` on its own (it lives under /usr/share/texlive and
+# /etc/texmf). Set TEXMFCNF explicitly so both the fmt-dump RUN below
+# and runtime invocations via the wrapper resolve correctly; Debian's
+# texmf.cnf hard-codes absolute TEXMF* paths so once kpathsea reads it
+# the rest follows.
+#
+# This MUST come after the texlive-full apt-install: the `context`
+# package's postinst runs `luatools --make cont-en` against its own
+# texmf tree, and a TEXMFCNF that only mentions /usr/share/texlive
+# would break it (iter 88: setting TEXMFCNF before apt-install caused
+# `context (--configure)` to fail and the whole layer to abort).
+ENV TEXMFCNF=/etc/texmf/web2c:/usr/share/texlive/texmf-dist/web2c
+
 WORKDIR /opt/repo
 COPY --from=builder /repo /opt/repo
 
