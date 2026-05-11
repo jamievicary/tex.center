@@ -110,31 +110,71 @@ spawning, (D) auth + production polish.
                   injectable-`fetch` I/O wrappers; CLI flags
                   `--zone --ipv4 --ipv6 [--acme-name --acme-value]
                   [--dry-run]`). _(iter 46.)_
-            - [ ] **M6.3.1** — Out-of-tree one-shot: `flyctl apps
-                  create tex-center`; first deploy via workflow;
-                  `flyctl certs create tex.center`; capture
-                  anycast IPs (`flyctl ips list -a tex-center
-                  --json`) and ACME challenge; run the iter-46
-                  script with them. M8 verifies end-to-end.
-                  **One-shot manual steps before first push:**
-                  `flyctl apps create tex-center`; `gh secret set
-                  FLY_API_TOKEN < creds/fly.token`.
+            - [ ] **M6.3.1** — Live deploy of the control plane.
+                  Ordinary in-tree iteration; runs `flyctl`, `gh`,
+                  and the Cloudflare API against live services
+                  using `creds/{fly,github,cloudflare}.token`.
+                  Eight steps (per discussion 70):
+                  1. `FLY_API_TOKEN=$(cat creds/fly.token) flyctl
+                     apps create tex-center` (region `fra`).
+                  2. `GH_TOKEN=$(cat creds/github.token) gh secret
+                     set FLY_API_TOKEN < creds/fly.token` on
+                     `github.com/jamievicary/tex.center`.
+                  3. First deploy — push a no-op commit to `main`
+                     or `flyctl deploy --remote-only` directly.
+                  4. `flyctl ips allocate-v4` + `allocate-v6`;
+                     capture addresses.
+                  5. `flyctl certs create tex.center`; capture
+                     ACME DNS-01 challenge name + value.
+                  6. Run `scripts/cloudflare-dns.mjs` with the
+                     captured IPs and ACME challenge to upsert
+                     apex `A`/`AAAA` and `_acme-challenge` TXT.
+                     Poll `flyctl certs show tex.center` until
+                     `Ready`.
+                  7. Probe `https://tex.center/healthz` → 200;
+                     probe `https://tex.center/` → white sign-in.
+                  8. Commit captured state (IPs, app metadata)
+                     into a `deploy/` doc; never commit tokens.
 
-- [ ] **M7 — Per-project Machines.** Control plane spawns/wakes a
-      Machine per project; routes WS to it; ~10 min idle auto-stop;
-      state persisted to Tigris on stop, rehydrated on start. Image
-      carries full TeX Live + supertex. Introduces the checkpoint-
-      blob protocol on the compiler interface (closes M4.3.2 tail).
+- [~] **M7 — Sidecar + per-project Machines.** Ordinary in-tree
+      milestone (not out-of-tree). Decomposed into sub-milestones;
+      M7.0 is the smallest deployable cut that makes the live
+      site actually compile LaTeX.
+      - [ ] **M7.0** — Single shared sidecar Machine. Build
+            `apps/sidecar/Dockerfile` carrying TeX Live (full) +
+            supertex built from `vendor/supertex`. Push to Fly's
+            registry. Deploy as a second Fly Machine alongside the
+            control plane. Wire control plane to proxy
+            `/ws/project/<id>` to the sidecar over Fly internal
+            networking (`<app>.internal` or 6PN). This is **not**
+            the final architecture (per-project Machines per
+            GOAL.md), but it is the smallest thing that compiles
+            real LaTeX on prod. Decision recorded in discussion
+            70_answer.
+      - [ ] **M7.1** — Machines API client in the control plane:
+            spawn, wake, idle-stop, destroy. Replace the shared
+            sidecar with on-demand per-project Machines.
+      - [ ] **M7.2** — `/ws/project/<id>` routing: control plane
+            looks up (or creates) the project's Machine and proxies
+            the WS to it.
+      - [ ] **M7.3** — ~10-min idle auto-stop on per-project
+            Machines.
+      - [ ] **M7.4** — Checkpoint blob protocol on the compiler
+            interface; persist on idle-stop, rehydrate on wake.
+            Closes the M4.3.2 tail.
 
 - [ ] **M8 — Acceptance pass.** Walk the seven `GOAL.md` acceptance
       criteria end-to-end on prod, fix gaps. Playwright lives here.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.3.1 — out-of-tree one-shot
-(requires live Fly + Cloudflare tokens, runs outside autodev).
+**Next ordinary iteration:** M6.3.1 — live deploy of the control
+plane to `https://tex.center`. Eight-step sequence in M6.3.1 above
+runs against live Fly + Cloudflare + GitHub using the credentials
+in `creds/`. After it lands, M7.0 (shared sidecar Machine) is next.
 
-Smaller in-tree alternatives if blocked:
+Smaller alternatives if M6.3.1 hits an unresolvable live error
+(surface the exact command + response in the iteration log first):
 - Multi-file-project slice on the sidecar. Listing primitive
   `listProjectFiles` landed iter 55; protocol `file-list` control +
   FileTree wiring landed iter 56; per-file `Y.Text` hydration
