@@ -94,7 +94,7 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
 
 // file-op-error control message round-trip
 {
-  for (const op of ["create-file", "delete-file", "rename-file"]) {
+  for (const op of ["create-file", "delete-file", "rename-file", "upload-file"]) {
     const frame = encodeControl({ type: "file-op-error", op, reason: "already exists" });
     const decoded = decodeFrame(frame);
     assert.equal(decoded.kind, "control");
@@ -104,6 +104,22 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
       reason: "already exists",
     });
   }
+}
+
+// upload-file control message round-trip
+{
+  const frame = encodeControl({
+    type: "upload-file",
+    name: "refs.bib",
+    content: "@book{x,title={Y}}\n",
+  });
+  const decoded = decodeFrame(frame);
+  assert.equal(decoded.kind, "control");
+  assert.deepEqual(decoded.message, {
+    type: "upload-file",
+    name: "refs.bib",
+    content: "@book{x,title={Y}}\n",
+  });
 }
 
 console.log("protocol codec tests: OK");

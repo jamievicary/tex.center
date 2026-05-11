@@ -374,6 +374,28 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                     encodeControl({ type: "file-list", files: project.persistence.files() }),
                   );
                 });
+            } else if (decoded.message.type === "upload-file") {
+              const { name, content } = decoded.message;
+              void project.persistence.addFile(name, content).then((res) => {
+                if (!res.added) {
+                  app.log.warn(
+                    { name, reason: res.reason, projectId: project.id },
+                    "upload-file rejected",
+                  );
+                  client.send(
+                    encodeControl({
+                      type: "file-op-error",
+                      op: "upload-file",
+                      reason: res.reason,
+                    }),
+                  );
+                  return;
+                }
+                broadcast(
+                  project,
+                  encodeControl({ type: "file-list", files: project.persistence.files() }),
+                );
+              });
             } else if (decoded.message.type === "delete-file") {
               const name = decoded.message.name;
               void project.persistence.deleteFile(name).then((res) => {

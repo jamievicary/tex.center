@@ -110,14 +110,22 @@ export interface ProjectPersistence {
    * Add a new project file. Validates `name` as a single blob-key
    * segment, rejects duplicates (any name already in `files()`),
    * and — when the blob store is wired and hydration succeeded —
-   * PUTs an empty blob so the file survives a session restart even
-   * if the user never edits it.
+   * PUTs a blob carrying `content` (default `""`) so the file
+   * survives a session restart even if the user never edits it.
+   *
+   * When `content` is non-empty, the file's `Y.Text` is populated
+   * inside a `doc.transact` so observers see one coherent update.
+   * Used by both the empty-create path (`create-file`) and the
+   * upload-from-disk path (`upload-file`).
    *
    * Returns `{ added: true }` on success, otherwise
    * `{ added: false, reason }` with a short human-readable reason.
    * The in-memory `knownFiles` set is only mutated on success.
    */
-  addFile(name: string): Promise<{ added: true } | { added: false; reason: string }>;
+  addFile(
+    name: string,
+    content?: string,
+  ): Promise<{ added: true } | { added: false; reason: string }>;
   /**
    * Delete a project file. Rejects `MAIN_DOC_NAME` (never removable;
    * the project always has a main entry) and any name not currently
@@ -168,10 +176,16 @@ export function createProjectPersistence(args: {
       awaitHydrated: () => Promise.resolve(),
       maybePersist: () => Promise.resolve(),
       files: () => Array.from(memFiles).sort(),
-      async addFile(name) {
+      async addFile(name, content) {
         const reason = validateProjectFileName(name);
         if (reason) return { added: false, reason };
         if (memFiles.has(name)) return { added: false, reason: "already exists" };
+        if (content && content.length > 0) {
+          doc.transact(() => {
+            const t = doc.getText(name);
+            if (t.length === 0) t.insert(0, content);
+          });
+        }
         memFiles.add(name);
         return { added: true };
       },
@@ -256,14 +270,18 @@ export function createProjectPersistence(args: {
   return {
     awaitHydrated: () => hydrated,
     files: () => Array.from(knownFiles).sort(),
-    async addFile(name): Promise<{ added: true } | { added: false; reason: string }> {
+    async addFile(name, content): Promise<{ added: true } | { added: false; reason: string }> {
       const reason = validateProjectFileName(name);
       if (reason) return { added: false, reason };
       if (knownFiles.has(name)) return { added: false, reason: "already exists" };
+      const body = content ?? "";
       if (canPersist) {
         try {
-          await blobStore.put(`${projectFilesDir(projectId)}/${name}`, new Uint8Array(0));
-          persistedByName.set(name, "");
+          await blobStore.put(
+            `${projectFilesDir(projectId)}/${name}`,
+            body.length === 0 ? new Uint8Array(0) : new TextEncoder().encode(body),
+          );
+          persistedByName.set(name, body);
         } catch (e) {
           log.warn(
             { err: e instanceof Error ? e.message : String(e), projectId },
@@ -271,6 +289,12 @@ export function createProjectPersistence(args: {
           );
           return { added: false, reason: "blob create failed" };
         }
+      }
+      if (body.length > 0) {
+        doc.transact(() => {
+          const t = doc.getText(name);
+          if (t.length === 0) t.insert(0, body);
+        });
       }
       knownFiles.add(name);
       return { added: true };

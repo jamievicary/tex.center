@@ -162,6 +162,20 @@ Smaller in-tree alternatives if blocked:
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
   button.
+- File-tree upload landed iter 66: `upload-file` protocol verb
+  carrying `{ name, content }` (UTF-8 text); `ProjectPersistence.
+  addFile(name, content?)` extended with an optional content
+  param — the PUT carries the encoded bytes and the file's
+  `Y.Text` is populated inside a `doc.transact` so observers see
+  one coherent update; create-file's empty-blob path is
+  unchanged. `WsClient.uploadFile`, `FileTree.svelte` hidden
+  file-input + "↑" button (rejects names via the existing local
+  validator before sending), editor-page wiring, and a new
+  serverUploadFile test (upload → file-list + Y.Text + blob;
+  duplicate + invalid rejected with `file-op-error op:
+  upload-file`; cold restart preserves content). Binary asset
+  uploads remain future work — `Y.Text` is text-only and a
+  separate binary-blob channel is the next design step there.
 - Wire-level `file-op-error` landed iter 65: protocol variant
   `{ op: create-file|delete-file|rename-file, reason }`; sidecar
   unicasts to the originator on each rejection branch (no

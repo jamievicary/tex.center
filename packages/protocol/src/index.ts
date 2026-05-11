@@ -59,9 +59,10 @@ export type ControlMessage =
   | { type: "create-file"; name: string }
   | { type: "delete-file"; name: string }
   | { type: "rename-file"; oldName: string; newName: string }
+  | { type: "upload-file"; name: string; content: string }
   | {
       type: "file-op-error";
-      op: "create-file" | "delete-file" | "rename-file";
+      op: "create-file" | "delete-file" | "rename-file" | "upload-file";
       reason: string;
     };
 

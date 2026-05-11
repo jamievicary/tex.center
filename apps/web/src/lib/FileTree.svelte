@@ -7,6 +7,7 @@
     onCreateFile,
     onDeleteFile,
     onRenameFile,
+    onUploadFile,
     serverError = null,
   }: {
     files: string[];
@@ -14,10 +15,12 @@
     onCreateFile?: (name: string) => void;
     onDeleteFile?: (name: string) => void;
     onRenameFile?: (oldName: string, newName: string) => void;
+    onUploadFile?: (name: string, content: string) => void;
     /**
      * Last server-side rejection of a file-tree op (race-rejected
-     * create / delete / rename), surfaced inline. Clears when the
-     * client receives the next `file-list` (= some op succeeded).
+     * create / delete / rename / upload), surfaced inline. Clears
+     * when the client receives the next `file-list` (= some op
+     * succeeded).
      */
     serverError?: string | null;
   } = $props();
@@ -47,6 +50,30 @@
     if (!trimmed || !onCreateFile || createError) return;
     onCreateFile(trimmed);
     newName = "";
+  }
+
+  let uploadInput: HTMLInputElement | undefined = $state();
+
+  async function handleUploadChange(e: Event): Promise<void> {
+    const input = e.currentTarget as HTMLInputElement;
+    const list = input.files;
+    if (!list || !onUploadFile) {
+      input.value = "";
+      return;
+    }
+    for (let i = 0; i < list.length; i++) {
+      const file = list.item(i);
+      if (!file) continue;
+      const reason = rejectionReason(file.name);
+      if (reason) {
+        window.alert(`Cannot upload "${file.name}": ${reason}.`);
+        continue;
+      }
+      const content = await file.text();
+      onUploadFile(file.name, content);
+    }
+    // Reset so re-selecting the same file fires `change` again.
+    input.value = "";
   }
 
   function promptRename(f: string): void {
@@ -93,16 +120,33 @@
   {/each}
 </ul>
 
-{#if onCreateFile}
+{#if onCreateFile || onUploadFile}
   <form class="new" onsubmit={handleSubmit}>
-    <input
-      type="text"
-      bind:value={newName}
-      placeholder="new-file.tex"
-      aria-label="new file name"
-      aria-invalid={createError !== null}
-    />
-    <button type="submit" disabled={createDisabled}>+</button>
+    {#if onCreateFile}
+      <input
+        type="text"
+        bind:value={newName}
+        placeholder="new-file.tex"
+        aria-label="new file name"
+        aria-invalid={createError !== null}
+      />
+      <button type="submit" disabled={createDisabled}>+</button>
+    {/if}
+    {#if onUploadFile}
+      <button
+        type="button"
+        class="up"
+        aria-label="upload files"
+        onclick={() => uploadInput?.click()}
+      >↑</button>
+      <input
+        bind:this={uploadInput}
+        type="file"
+        multiple
+        hidden
+        onchange={handleUploadChange}
+      />
+    {/if}
   </form>
   {#if createError}
     <p class="err" role="alert">{createError}</p>
@@ -176,6 +220,9 @@
   .new button:disabled {
     cursor: default;
     color: #9ca3af;
+  }
+  .new button.up {
+    padding: 0.25rem 0.5rem;
   }
   .err {
     margin: 0;

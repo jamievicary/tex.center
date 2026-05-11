@@ -159,6 +159,15 @@ export class WsClient {
   }
 
   /**
+   * Upload a text file's contents under `name`. Server validates
+   * the name and rejects duplicates; success broadcasts a refreshed
+   * `file-list` and the populated `Y.Text` arrives via doc-update.
+   */
+  uploadFile(name: string, content: string): void {
+    this.send(encodeControl({ type: "upload-file", name, content }));
+  }
+
+  /**
    * Ask the sidecar to delete a project file. The server rejects
    * `MAIN_DOC_NAME` and unknown names; on success it broadcasts a
    * refreshed `file-list`.

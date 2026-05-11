@@ -89,6 +89,7 @@
         if (selected === oldName) selected = newName;
         client?.renameFile(oldName, newName);
       }}
+      onUploadFile={(name, content) => client?.uploadFile(name, content)}
     />
   </aside>
   <section class="editor">
