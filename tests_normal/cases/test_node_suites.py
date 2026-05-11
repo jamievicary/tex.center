@@ -104,6 +104,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_auth_state(self) -> None:
         _run_tsx(ROOT / "packages" / "auth" / "test" / "state.test.mjs")
 
+    def test_scripts_cloudflare_dns(self) -> None:
+        _run_tsx(ROOT / "scripts" / "test" / "cloudflareDns.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

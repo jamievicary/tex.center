@@ -304,8 +304,29 @@ spawning, (D) auth + production polish.
             **One-shot manual steps before first push:** `flyctl
             apps create tex-center`; `gh secret set FLY_API_TOKEN
             < creds/fly.token`.
-      - [ ] **M6.3** — Custom domain `tex.center` via Cloudflare
-            (`flyctl certs create` + DNS records).
+      - [~] **M6.3** — Custom domain `tex.center` via Cloudflare.
+            - [x] **M6.3.0** — `scripts/cloudflare-dns.mjs` one-shot
+                  reconciler (iter 46). Pure `reconcileRecords`
+                  (match by `(type, name)`; updates on
+                  content/ttl/proxied drift; collapses duplicates;
+                  never touches unmanaged records). I/O wrappers
+                  (`fetchZoneId`, `listRecords`,
+                  `create|update|deleteRecord`) take an injectable
+                  `fetch` so tests stay offline. CLI: `--zone
+                  --ipv4 --ipv6 [--acme-name --acme-value]
+                  [--dry-run] [--token-file]`. Test
+                  `scripts/test/cloudflareDns.test.mjs` covers
+                  reconcile branches + every wrapper against a stub
+                  fetch. Token at `creds/cloudflare.token`.
+            - [ ] **M6.3.1** — `flyctl certs create tex.center`
+                  against the live app (requires the deploy
+                  workflow to have run once and produced a Machine
+                  with anycast IPs). Capture the IPs from `flyctl
+                  ips list -a tex-center --json` and feed them to
+                  the script; capture the ACME challenge Fly emits
+                  and re-run with `--acme-name --acme-value`. This
+                  step is one-shot and out-of-tree; M8 will verify
+                  end-to-end.
 - [ ] **M7 — Per-project Machines.** Control plane spawns/wakes a
       Machine per project; routes WS to it; ~10 min idle auto-stop;
       state persisted to Tigris on stop, rehydrated on start. Image
@@ -316,11 +337,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.3 — custom domain `tex.center`
-via Cloudflare (`flyctl certs create tex.center` + apex A/AAAA
-records pointing at the Fly app). M6.0 (Dockerfile) landed iter
-42; M6.1 (`fly.toml`) landed iter 43; M6.2 (Actions workflow)
-landed iter 44; M6.2.1 (`/healthz` + Fly check) landed iter 45. Smaller alternatives if blocked:
+**Next ordinary iteration:** M6.3.1 — out-of-tree one-shot:
+`flyctl apps create tex-center` (if not done), first deploy via the
+workflow, `flyctl certs create tex.center`, then run the iter-46
+Cloudflare script against the issued IPs + ACME challenge. M6.0
+(Dockerfile) landed iter 42; M6.1 (`fly.toml`) iter 43; M6.2
+(Actions workflow) iter 44; M6.2.1 (`/healthz` + Fly check) iter
+45; M6.3.0 (Cloudflare reconcile script) iter 46.
+Smaller alternatives if blocked:
 a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
 once a streaming compile path exists. M4.3.1 (S3 adapter) still
 waits for docker-compose; M4.3.2 checkpoint half waits for the
