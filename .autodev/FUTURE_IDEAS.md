@@ -1,5 +1,14 @@
 # Future ideas
 
+- **Source-build the patched lualatex engine.** Iter 75 vendored a
+  prebuilt ELF (`vendor/engine/x86_64-linux/lualatex-incremental`)
+  built from `jamievicary/luatex-incremental@aa053dd-dirty`. Push
+  the maintainer's local uncommitted changes upstream, then either
+  pin a submodule at a clean commit and `make` it in a dedicated
+  Docker stage (slow but reproducible), or publish release ELFs
+  from a GitHub Action and `curl` them in. Reproducibility goal:
+  `sha256sum` the bin matches between a clean rebuild and
+  what's in the repo.
 - **Unify file-op persistence return types** to `{ ok: true } | { ok: false; reason }` so `server.ts`'s `handleFileOp` (iter 70) drops its `Record<string, unknown>` cast.
 - **Session sweeper scheduling.** Storage primitive
   `deleteExpiredSessions(db, now)` landed iter 54; wire it to a

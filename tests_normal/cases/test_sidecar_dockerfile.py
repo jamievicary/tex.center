@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "apps" / "sidecar" / "Dockerfile"
 DOCKERIGNORE = ROOT / "apps" / "sidecar" / ".dockerignore"
+ENGINE_BINARY = ROOT / "vendor" / "engine" / "x86_64-linux" / "lualatex-incremental"
 
 
 class TestSidecarDockerfile(unittest.TestCase):
@@ -93,6 +94,47 @@ class TestSidecarDockerfile(unittest.TestCase):
 
     def test_install_runs_frozen(self) -> None:
         self.assertIn("pnpm install --frozen-lockfile", self.text)
+
+    def test_runtime_has_engine_binary(self) -> None:
+        # M7.0.1 vendors a prebuilt patched-luatex ELF at
+        # vendor/engine/<arch>/lualatex-incremental and the runtime
+        # stage must COPY it in. Without it, supertex's `find_engine`
+        # fails on the first project open.
+        self.assertTrue(
+            ENGINE_BINARY.is_file(),
+            f"engine binary missing: {ENGINE_BINARY.relative_to(ROOT)}",
+        )
+        # Sanity: it must actually be an ELF, not e.g. a stub or LFS
+        # pointer file.
+        with ENGINE_BINARY.open("rb") as f:
+            head = f.read(4)
+        self.assertEqual(
+            head, b"\x7fELF", "engine binary must be an ELF executable"
+        )
+        runtime = _runtime_stage(self.text)
+        self.assertRegex(
+            runtime,
+            r"COPY\s+vendor/engine/x86_64-linux/lualatex-incremental\s+",
+            "runtime stage must COPY the vendored engine binary",
+        )
+        # The supertex CLI scans $PATH for `lualatex-append` /
+        # `lualatex-incremental`; the Dockerfile must put one of them
+        # there. /opt/engine/bin is on $PATH from the ENV block above.
+        self.assertRegex(
+            runtime, r"/opt/engine/bin/lualatex-incremental"
+        )
+        self.assertRegex(runtime, r"/opt/engine/bin:\$PATH")
+
+    def test_runtime_dumps_lualatex_fmt(self) -> None:
+        # The .fmt is texlive-version-specific so it must be
+        # regenerated against the apt'd texlive-full at image build
+        # time (not vendored alongside the binary).
+        runtime = _runtime_stage(self.text)
+        self.assertRegex(
+            runtime, r"--ini\b", "runtime stage must run --ini fmt dump"
+        )
+        self.assertRegex(runtime, r"lualatex\.ini\b")
+        self.assertRegex(runtime, r"/opt/engine/web2c/lualatex\.fmt\b")
 
     def test_pnpm_version_pinned_to_root(self) -> None:
         root_pkg = json.loads((ROOT / "package.json").read_text())

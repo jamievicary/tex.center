@@ -7,11 +7,13 @@
 # The full pnpm workspace is needed at install time so the
 # `workspace:*` deps in apps/sidecar (blobs, db, protocol) resolve.
 #
-# **Engine binary.** The runtime image expects a `lualatex-append`
-# or `lualatex-incremental` binary on PATH at `/opt/engine/bin/`.
-# Provisioning that binary is M7.0.1 (build from the patched
-# luatex source or vendor a prebuilt artefact); the runtime stage
-# below leaves a clearly-marked TODO until that lands.
+# **Engine binary.** The runtime image needs a patched `luatex`
+# (a.k.a. `lualatex-append` / `lualatex-incremental`) on `$PATH`.
+# We vendor the prebuilt ELF at `vendor/engine/<arch>/lualatex-
+# incremental` and COPY it into the runtime stage; the `.fmt` is
+# regenerated against this image's `texlive-full`. See
+# `vendor/engine/README.md` for provenance and the future
+# source-build path.
 
 ARG NODE_VERSION=20.18.1
 ARG PNPM_VERSION=9.12.0
@@ -86,9 +88,33 @@ COPY --from=builder /repo /opt/repo
 # Stable path for the supertex CLI and its C artefacts.
 RUN ln -sfn /opt/repo/vendor/supertex /opt/supertex
 
-# TODO(M7.0.1): drop the patched `lualatex-incremental` (or
-# `lualatex-append`) binary into /opt/engine/bin so the supertex
-# CLI's engine lookup succeeds at startup.
+# Patched lualatex engine. The vendored ELF is the actual binary;
+# /opt/engine/bin/lualatex-incremental is a tiny wrapper that points
+# TEXFORMATS at the locally-dumped fmt before exec-ing the ELF.
+# `lualatex-append` is a symlink so supertex's `find_engine` (which
+# probes both names) is happy whichever it tries first.
+COPY vendor/engine/x86_64-linux/lualatex-incremental /opt/engine/binary
+RUN mkdir -p /opt/engine/bin /opt/engine/web2c \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'export TEXFORMATS="${TEXFORMATS:-/opt/engine/web2c}"' \
+        'exec /opt/engine/binary --fmt=lualatex "$@"' \
+        > /opt/engine/bin/lualatex-incremental \
+    && chmod +x /opt/engine/bin/lualatex-incremental \
+    && ln -s lualatex-incremental /opt/engine/bin/lualatex-append
+
+# Dump lualatex.fmt against this image's texlive-full + the patched
+# engine. Mirrors the maintainer's local setup_smoketest.sh logic:
+# run --ini in a scratch dir, drop the resulting fmt into
+# /opt/engine/web2c/. Caches into a stable layer so iterating on
+# Node/sidecar code above doesn't rebuild the fmt.
+RUN scratch="$(mktemp -d)" \
+    && cd "$scratch" \
+    && /opt/engine/binary --ini --interaction=nonstopmode \
+        --jobname=lualatex lualatex.ini < /dev/null \
+    && test -s lualatex.fmt \
+    && mv lualatex.fmt /opt/engine/web2c/lualatex.fmt \
+    && rm -rf "$scratch"
 
 EXPOSE 3001
 CMD ["pnpm", "--filter", "@tex-center/sidecar", "start"]

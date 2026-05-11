@@ -172,19 +172,27 @@ spawning, (D) auth + production polish.
                   start`. Engine-binary path `/opt/engine/bin`
                   pre-baked on `$PATH`; provisioning the binary
                   itself is M7.0.1. _(iter 74)_
-            - [ ] **M7.0.1** — Provision the `lualatex-append` /
-                  `lualatex-incremental` engine. Two routes:
-                  (a) build from the patched luatex source supertex
-                  was authored against; (b) vendor a prebuilt
-                  ELF into the repo (likely
-                  `vendor/engine/<arch>/lualatex-incremental`)
-                  and `COPY` it into the runtime stage at
-                  `/opt/engine/bin/`. Pick (b) for the first cut
-                  unless the patched source is small enough to
-                  build in-Dockerfile without exploding image
-                  build time. The structural test will gain a
-                  `test_runtime_has_engine_binary` assertion once
-                  the choice is made.
+            - [x] **M7.0.1** — Provision the patched lualatex
+                  engine. Route (b) taken (iter 75): the prebuilt
+                  stripped ELF is vendored at
+                  `vendor/engine/x86_64-linux/lualatex-incremental`
+                  (7.3MB, glibc ≤ 2.34, runs on bookworm).
+                  Runtime stage `COPY`s it to `/opt/engine/binary`,
+                  installs a tiny `/opt/engine/bin/lualatex-
+                  incremental` wrapper (sets `TEXFORMATS`, exec
+                  `binary --fmt=lualatex`), symlinks
+                  `lualatex-append` to the wrapper, and dumps
+                  `lualatex.fmt` against the image's texlive-full
+                  in a cacheable layer. Provenance:
+                  `jamievicary/luatex-incremental@aa053dd` +
+                  uncommitted maintainer working-tree as of
+                  2026-05-01 (binary is `aa053dd-dirty`). See
+                  `vendor/engine/README.md`. Structural test gains
+                  `test_runtime_has_engine_binary` and
+                  `test_runtime_dumps_lualatex_fmt`. Follow-up in
+                  FUTURE_IDEAS: push the dirty changes upstream
+                  and switch to a source-built engine for full
+                  reproducibility.
             - [ ] **M7.0.2** — `apps/sidecar/fly.toml` and a
                   second Fly app `tex-center-sidecar` in `fra`.
                   First `flyctl deploy --remote-only` against
@@ -238,11 +246,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.1 — provision the
-`lualatex-incremental` engine binary. Investigate which patched
-luatex tree supertex was authored against; pick build-in-Dockerfile
-vs. vendor-a-prebuilt-ELF. M7.0.0 (Dockerfile skeleton +
-structural test) landed iter 74.
+**Next ordinary iteration:** M7.0.2 — author
+`apps/sidecar/fly.toml` for a `tex-center-sidecar` Fly app in `fra`
+(no public IPs, internal port 3001), then `flyctl deploy
+--remote-only`. M7.0.1 landed iter 75 (engine ELF vendored at
+`vendor/engine/x86_64-linux/lualatex-incremental`, runtime stage
+COPYs + wraps + dumps fmt).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive
