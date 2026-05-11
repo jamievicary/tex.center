@@ -182,7 +182,7 @@ spawning, (D) auth + production polish.
                   FUTURE_IDEAS: push the dirty changes upstream
                   and switch to a source-built engine for full
                   reproducibility.
-            - [~] **M7.0.2** — `apps/sidecar/fly.toml` and a
+            - [x] **M7.0.2** — `apps/sidecar/fly.toml` and a
                   second Fly app `tex-center-sidecar` in `fra`.
                   First `flyctl deploy --remote-only` against
                   that app. No public IPs (sidecar is reached
@@ -196,15 +196,28 @@ spawning, (D) auth + production polish.
                         `tests_normal/cases/test_sidecar_fly_toml.py`.
                         `flyctl apps create tex-center-sidecar
                         -o personal` ran cleanly.
-                  - [ ] **First deploy.** Gated on M7.0.1
-                        Dockerfile fix (kpathsea env). Canonical
-                        command: `flyctl deploy --remote-only
-                        --no-public-ips -a tex-center-sidecar
-                        --config apps/sidecar/fly.toml .` (run
-                        from repo root; **always** pass both
-                        `-a` and `--config` — iter 87 hit a
-                        misfire where omitting them redeployed
-                        the control plane).
+                  - [x] **First deploy.** _(iter 93.)_ Image
+                        `tex-center-sidecar:deployment-01KRCEJJ…`
+                        built and ran; primary machine
+                        `d895e7ea479958` + standby `683437eb1e3378`
+                        in `fra`. End-to-end probe via `flyctl ssh`
+                        confirmed `/opt/engine/bin/lualatex-incremental`
+                        runs (LuaTeX 1.25.9, TL 2027/dev), the baked
+                        `lualatex.fmt` is at `/opt/engine/web2c/`,
+                        and a trivial `\documentclass{article}…`
+                        compiles to a valid PDF; Fastify server
+                        listens on the 6PN address. The original
+                        21:22 UTC boot was killed at 21:28 by Fly's
+                        trial-stop; resolved by moving the org to a
+                        paid card (discussion 89). Canonical
+                        command captured in `deploy/README.md`:
+                        `flyctl deploy --remote-only --no-public-ips
+                        -a tex-center-sidecar --config
+                        apps/sidecar/fly.toml .` (always pass both
+                        `-a` and `--config` — iter 87 misfire).
+                        Machines left stopped post-verification;
+                        will warm on first proxy hit once M7.0.3
+                        lands.
             - [ ] **M7.0.3** — Control-plane WS proxy. `apps/web`
                   gains a server route at `/ws/project/[id]` that
                   dials `tex-center-sidecar.internal:3001` over
@@ -506,16 +519,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** Retry the M7.0.2 first deploy of
-`tex-center-sidecar`. The Dockerfile kpathsea fix landed iter 88
-(TEXMFCNF env after apt-install) but the deploy itself hasn't
-run yet — apt-install layer can't reuse cache because the runtime
-stage's ENV ordering changed, so budget ~25 min wallclock for the
-fresh build + push + machine create. Canonical command:
-`flyctl deploy --remote-only --no-public-ips
--a tex-center-sidecar --config apps/sidecar/fly.toml .` (always
-pass both `-a` and `--config` — iter 87 misfire). Queue after:
-pw.2 → M7.0.3.
+**Next ordinary iteration:** M7.0.3 — control-plane WS proxy.
+`apps/web` gains a server route at `/ws/project/[id]` that dials
+`tex-center-sidecar.internal:3001` over Fly's 6PN and pipes the
+WebSocket through. `routeRedirect.ts` already lets `/ws/*` past
+auth; this slice adds the proxy plumbing. Sidecar M7.0.2 first
+deploy verified iter 93 (see `deploy/README.md`), so the upstream
+target is reachable. Queue after: M8.pw.2 (deploy verification
+hooks) → M7.1 (Machines API client / per-project Machines).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
