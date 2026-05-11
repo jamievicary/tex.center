@@ -59,6 +59,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_upload_file(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverUploadFile.test.mjs")
 
+    def test_sidecar_server_project_id_validation(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverProjectIdValidation.test.mjs")
+
     def test_sidecar_server_db(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverDb.test.mjs")
 

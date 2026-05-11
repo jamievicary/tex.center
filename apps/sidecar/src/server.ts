@@ -258,7 +258,15 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   app.register(async (instance) => {
     instance.get("/ws/project/:projectId", { websocket: true }, (socket, req) => {
       const params = req.params as { projectId?: string };
-      const projectId = params.projectId ?? "default";
+      const projectId = params.projectId;
+      // Reject malformed ids at the edge rather than letting
+      // `ProjectWorkspace`'s validator throw inside `getProject`.
+      // Allowed shape mirrors the workspace regex so a valid id
+      // here is always a valid scratch-dir component.
+      if (!projectId || !/^[A-Za-z0-9_-]+$/.test(projectId)) {
+        socket.close(1008, "invalid projectId");
+        return;
+      }
       const project = getProject(projectId);
 
       const client: ProjectClient = {

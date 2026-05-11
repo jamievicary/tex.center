@@ -177,11 +177,14 @@ Smaller in-tree alternatives if blocked:
   per-project Y.Doc lazily, so a freshly-created project's
   first WS connect populates the cache; persistence hydrates
   `main.tex` from the (empty) blob set, which is the same path
-  the legacy `"default"` literal exercised. Remaining: the
-  sidecar's `getProject` fallback to `"default"` (when no
-  projectId in URL) is now unreachable from the web app and
-  should be tightened in a future iteration once gold-tests
-  exercise the new routing.
+  the legacy `"default"` literal exercised.
+- Sidecar `/ws/project/:projectId` validation tightened iter 69:
+  the `?? "default"` fallback is gone; ids must match
+  `/^[A-Za-z0-9_-]+$/` (same shape `ProjectWorkspace` already
+  enforced) or the WS is closed with code `1008 invalid projectId`
+  before `getProject` runs. New `serverProjectIdValidation.test.mjs`
+  exercises `bad.id`, `has space`, `trailing!` rejection and the
+  positive `good-id_123` open path.
 - Project-row storage primitives landed iter 67:
   `packages/db/src/projects.ts` exports `createProject`,
   `getProjectById(db, id)` (null-on-miss), and
