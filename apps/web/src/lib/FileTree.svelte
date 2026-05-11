@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MAIN_DOC_NAME } from "@tex-center/protocol";
+  import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
 
   let {
     files,
@@ -17,12 +17,42 @@
 
   let newName = $state("");
 
+  // Mirror the server's `validateProjectFileName`, plus the
+  // duplicate-name and main-name rules that the server applies on
+  // top of pure validation. Returns a short reason when the candidate
+  // would be rejected, otherwise `null`.
+  function rejectionReason(candidate: string, ignore?: string): string | null {
+    const trimmed = candidate.trim();
+    if (!trimmed) return null; // empty input — caller treats as "no candidate yet"
+    const base = validateProjectFileName(trimmed);
+    if (base) return base;
+    if (trimmed === MAIN_DOC_NAME) return "name reserved";
+    if (files.includes(trimmed) && trimmed !== ignore) return "already exists";
+    return null;
+  }
+
+  let createError = $derived(rejectionReason(newName));
+  let createDisabled = $derived(!newName.trim() || createError !== null);
+
   function handleSubmit(e: Event): void {
     e.preventDefault();
     const trimmed = newName.trim();
-    if (!trimmed || !onCreateFile) return;
+    if (!trimmed || !onCreateFile || createError) return;
     onCreateFile(trimmed);
     newName = "";
+  }
+
+  function promptRename(f: string): void {
+    if (!onRenameFile) return;
+    const next = window.prompt(`Rename ${f} to:`, f);
+    const trimmed = next?.trim();
+    if (!trimmed || trimmed === f) return;
+    const reason = rejectionReason(trimmed, f);
+    if (reason) {
+      window.alert(`Cannot rename to "${trimmed}": ${reason}.`);
+      return;
+    }
+    onRenameFile(f, trimmed);
   }
 </script>
 
@@ -41,11 +71,7 @@
           type="button"
           class="ren"
           aria-label={`rename ${f}`}
-          onclick={() => {
-            const next = window.prompt(`Rename ${f} to:`, f);
-            const trimmed = next?.trim();
-            if (trimmed && trimmed !== f) onRenameFile(f, trimmed);
-          }}
+          onclick={() => promptRename(f)}
         >✎</button>
       {/if}
       {#if onDeleteFile && f !== MAIN_DOC_NAME}
@@ -67,9 +93,13 @@
       bind:value={newName}
       placeholder="new-file.tex"
       aria-label="new file name"
+      aria-invalid={createError !== null}
     />
-    <button type="submit" disabled={!newName.trim()}>+</button>
+    <button type="submit" disabled={createDisabled}>+</button>
   </form>
+  {#if createError}
+    <p class="err" role="alert">{createError}</p>
+  {/if}
 {/if}
 
 <style>
@@ -137,5 +167,11 @@
   .new button:disabled {
     cursor: default;
     color: #9ca3af;
+  }
+  .err {
+    margin: 0;
+    padding: 0.15rem 0.5rem 0.4rem;
+    font-size: 0.75rem;
+    color: #b91c1c;
   }
 </style>

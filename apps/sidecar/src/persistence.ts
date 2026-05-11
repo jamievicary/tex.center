@@ -40,7 +40,9 @@ import * as Y from "yjs";
 import type { BlobStore } from "@tex-center/blobs";
 import { LocalFsBlobStore } from "@tex-center/blobs";
 
-import { MAIN_DOC_NAME } from "@tex-center/protocol";
+import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
+
+export { validateProjectFileName };
 
 export interface PersistenceLogger {
   warn(detail: { err: string; projectId?: string }, msg: string): void;
@@ -148,22 +150,6 @@ export interface ProjectPersistence {
     oldName: string,
     newName: string,
   ): Promise<{ renamed: true } | { renamed: false; reason: string }>;
-}
-
-const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
-
-/**
- * Validate a project-relative filename. Single segment (no `/`),
- * not `.` or `..`, matches the BlobStore key segment regex. Returns
- * a reason string when invalid, otherwise `null`.
- */
-export function validateProjectFileName(name: string): string | null {
-  if (typeof name !== "string" || name.length === 0) return "empty name";
-  if (name.length > 128) return "name too long";
-  if (name === "." || name === "..") return "reserved name";
-  if (name.includes("/")) return "name must not contain '/'";
-  if (!FILE_NAME_RE.test(name)) return "name has disallowed characters";
-  return null;
 }
 
 export function createProjectPersistence(args: {

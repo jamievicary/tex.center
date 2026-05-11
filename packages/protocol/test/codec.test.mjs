@@ -13,6 +13,7 @@ import {
   encodeControl,
   encodeDocUpdate,
   encodePdfSegment,
+  validateProjectFileName,
 } from "../src/index.ts";
 
 assert.equal(PROTOCOL_VERSION, 1);
@@ -72,6 +73,23 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
 // unknown tag rejection
 {
   assert.throws(() => decodeFrame(new Uint8Array([0xff, 0, 0])));
+}
+
+// validateProjectFileName: shared client/server rule.
+{
+  // Accepted shapes — kept narrow so a future tightening doesn't
+  // require re-checking the client.
+  for (const ok of ["main.tex", "refs.bib", "appendix-A.tex", "Notes_1.tex", "a"]) {
+    assert.equal(validateProjectFileName(ok), null, `expected accept: ${ok}`);
+  }
+  // Reject reasons (string, non-empty). Spot-check each branch.
+  assert.equal(validateProjectFileName(""), "empty name");
+  assert.equal(validateProjectFileName("."), "reserved name");
+  assert.equal(validateProjectFileName(".."), "reserved name");
+  assert.equal(validateProjectFileName("a/b"), "name must not contain '/'");
+  assert.equal(validateProjectFileName("with space.tex"), "name has disallowed characters");
+  assert.equal(validateProjectFileName("emoji-🚀.tex"), "name has disallowed characters");
+  assert.equal(validateProjectFileName("a".repeat(129)), "name too long");
 }
 
 console.log("protocol codec tests: OK");

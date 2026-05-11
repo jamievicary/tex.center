@@ -24,6 +24,28 @@ export const PROTOCOL_VERSION = 1;
 // file in the project tree, keyed by filename.
 export const MAIN_DOC_NAME = "main.tex";
 
+// Allowed characters for a project-relative file name. Single
+// segment (no `/`), reasonably URL-safe, no whitespace. The sidecar
+// is the authority here (defence-in-depth); the rule lives in the
+// shared protocol package so the web client can mirror it and
+// surface validation errors immediately on the create/rename
+// affordances rather than relying on a silent server-side reject.
+const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
+const FILE_NAME_MAX_LEN = 128;
+
+/**
+ * Validate a project-relative filename. Returns a short
+ * human-readable reason when invalid, otherwise `null`.
+ */
+export function validateProjectFileName(name: string): string | null {
+  if (typeof name !== "string" || name.length === 0) return "empty name";
+  if (name.length > FILE_NAME_MAX_LEN) return "name too long";
+  if (name === "." || name === "..") return "reserved name";
+  if (name.includes("/")) return "name must not contain '/'";
+  if (!FILE_NAME_RE.test(name)) return "name has disallowed characters";
+  return null;
+}
+
 export const TAG_DOC_UPDATE = 0x00;
 export const TAG_AWARENESS = 0x01;
 export const TAG_CONTROL = 0x10;

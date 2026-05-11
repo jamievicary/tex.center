@@ -162,6 +162,15 @@ Smaller in-tree alternatives if blocked:
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
   button.
+- Client-side file-name validation landed iter 64:
+  `validateProjectFileName` lifted into `@tex-center/protocol` so
+  the web client mirrors the sidecar's name-rejection rules.
+  `FileTree.svelte` shows an inline error on the create input
+  (invalid characters, reserved `main.tex`, duplicate) and
+  `alert(reason)` on the rename prompt — the server is still
+  authoritative, but the user no longer sees silent swallowing.
+  Sidecar `persistence.ts` re-exports `validateProjectFileName`
+  from protocol so existing imports continue to work.
 - File-tree rename landed iter 63: `rename-file` protocol verb,
   `ProjectPersistence.renameFile(old, new)` (rejects `main.tex` on
   either side, unknown source, duplicate target, invalid name; on
