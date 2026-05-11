@@ -1,15 +1,14 @@
-<script lang="ts">
-  // Mock auth: real Google OAuth lands in M5. For now, the button
-  // simply navigates to the editor stub. Per GOAL.md the unauthenticated
-  // page must reveal NOTHING about what the service is — no name, no
-  // description, no marketing — only the sign-in button.
-  function signIn() {
-    window.location.assign("/editor");
-  }
-</script>
+<!--
+  Per GOAL.md the unauthenticated landing page must reveal NOTHING
+  about what the service is — no name, description, or marketing
+  copy — only the sign-in widget. A plain anchor (styled as a button)
+  pointing at /auth/google/start kicks off the Authorization Code +
+  PKCE flow: the route mints the state cookie and 302s to Google.
+  Anchor rather than <button onclick> so the flow works without JS.
+-->
 
 <main>
-  <button type="button" onclick={signIn}>Sign in with Google</button>
+  <a class="signin" href="/auth/google/start">Sign in with Google</a>
 </main>
 
 <style>
@@ -19,15 +18,17 @@
     place-items: center;
     background: #ffffff;
   }
-  button {
+  .signin {
     font: inherit;
     padding: 0.75rem 1.25rem;
     border: 1px solid #dadce0;
     border-radius: 4px;
     background: #ffffff;
+    color: inherit;
+    text-decoration: none;
     cursor: pointer;
   }
-  button:hover {
+  .signin:hover {
     background: #f8f9fa;
   }
 </style>
