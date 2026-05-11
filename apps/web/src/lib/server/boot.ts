@@ -7,12 +7,16 @@ import http from "node:http";
 import type { RequestListener, Server as HttpServer } from "node:http";
 
 import { attachWsProxy, resolveSidecarUpstream } from "./wsProxy.js";
+import type { UpgradeAuthoriser } from "./wsAuth.js";
 
 export interface BootOptions {
   readonly handler: RequestListener;
   readonly host: string;
   readonly port: number;
   readonly env: Readonly<Record<string, string | undefined>>;
+  // Optional. If absent, the WS proxy accepts all upgrades; the
+  // production entry always supplies one (see `server.ts`).
+  readonly authoriseUpgrade?: UpgradeAuthoriser;
 }
 
 export interface BootResult {
@@ -23,7 +27,12 @@ export interface BootResult {
 export function boot(opts: BootOptions): BootResult {
   const upstream = resolveSidecarUpstream(opts.env);
   const server = http.createServer(opts.handler);
-  const detachProxy = attachWsProxy(server, { upstream });
+  const detachProxy = attachWsProxy(server, {
+    upstream,
+    ...(opts.authoriseUpgrade
+      ? { authoriseUpgrade: opts.authoriseUpgrade }
+      : {}),
+  });
   server.listen(opts.port, opts.host);
   return { server, detachProxy };
 }

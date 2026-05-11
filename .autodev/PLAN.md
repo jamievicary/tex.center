@@ -283,13 +283,35 @@ spawning, (D) auth + production polish.
                         already forwards `/ws` to
                         `127.0.0.1:3001`, so no dev-server
                         change is needed.
-                  - [ ] **M7.0.3.2** — Auth gating in the upgrade
-                        handler: verify `tc_session` cookie via
-                        the same path `hooks.server.ts` uses
-                        (`resolveSessionHook`); unauthenticated
-                        upgrades → 401 + close. Without this,
-                        `/ws/project/*` is the only unauth-
-                        accessible authenticated surface.
+                  - [x] **M7.0.3.2** — Auth gating in the upgrade
+                        handler. _(iter 96.)_ `wsProxy.ts` gained
+                        an optional `authoriseUpgrade(req) →
+                        boolean|Promise<boolean>` hook; rejects
+                        write `HTTP/1.1 401 Unauthorized` and
+                        destroy without dialling upstream. Throws/
+                        rejects surface as `auth-error` events and
+                        also produce 401 (fail-closed). New
+                        `wsAuth.ts` adapts `resolveSessionHook` —
+                        same cookie name + signing key + DB
+                        lookup as `hooks.server.ts`. `server.ts`
+                        wires `makeSessionAuthoriser` using
+                        `loadSessionSigningKey()` and
+                        `getSessionWithUser`; missing/malformed
+                        key collapses to "reject every upgrade",
+                        mirroring the anonymous-everywhere
+                        fallback on the HTTP side. Tests:
+                        `wsAuth.test.mjs` (signed-cookie happy
+                        path, wrong name, tampered sig, unknown
+                        sid, DB-throw), extended
+                        `wsProxy.test.mjs` (accept, reject with
+                        upstream-not-dialled assertion, throwing
+                        authoriser → 401 + `auth-error` event).
+                        Note: the esbuild server bundle now
+                        pulls in `@tex-center/db` + drizzle
+                        (5.6 KB → 305 KB) — a second DB driver
+                        copy alongside `handler.js`'s. Acceptable
+                        for MVP; revisit if the image gets
+                        bloated.
                   - [ ] **M7.0.3.3** — Deploy + verify. Bump
                         control-plane image, hit
                         `wss://tex.center/ws/project/<id>` from a
@@ -591,18 +613,16 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.3.2 — auth gating in the upgrade
-handler: parse `Cookie:` from `req.headers.cookie` in the
-`attachWsProxy` upgrade callback (or as a wrapper around it),
-verify `tc_session` via `loadSessionSigningKey` +
-`resolveSessionHook` (same path `hooks.server.ts` uses) before
-`net.connect`-ing the upstream; unauthenticated upgrades → 401 +
-close. Without this, `/ws/project/*` is the only unauth-accessible
-authenticated surface. Iter 94 landed pure proxy module; iter 95
-landed the custom Node entry (`build/server.js`) + Dockerfile CMD
-swap. Queue after: M7.0.3.3 (deploy + verify), M8.pw.2 (deploy
-verification hooks), M7.1 (Machines API client / per-project
-Machines).
+**Next ordinary iteration:** M7.0.3.3 — deploy + verify. Build
+`apps/web` with iter-95 server-entry + iter-96 auth gating, push
+the control-plane image, hit `wss://tex.center/ws/project/<id>`
+unauthenticated (expect 401) and with a minted session cookie
+(expect the upgrade to reach the sidecar — first hit will also
+wake the stopped sidecar machine). Document in `deploy/VERIFY.md`.
+Iter 94 landed pure proxy module; iter 95 landed the custom Node
+entry (`build/server.js`) + Dockerfile CMD swap; iter 96 landed
+auth gating. Queue after: M8.pw.2 (deploy verification hooks),
+M7.1 (Machines API client / per-project Machines).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

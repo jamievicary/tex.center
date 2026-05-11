@@ -268,4 +268,122 @@ assert.ok(
 );
 assert.ok(events.some((e) => e.kind === "no-match"));
 
+// ---- authoriseUpgrade gating ----
+//
+// Fresh proxy + upstream so the auth path is isolated from the
+// per-case state above (event log, connection counters, etc.).
+{
+  const authEvents = [];
+  const authedConnections = [];
+  const upstream2 = net.createServer((sock) => {
+    authedConnections.push(sock);
+    sock.on("data", () => sock.write("HELLO\n"));
+  });
+  await new Promise((res) => upstream2.listen(0, "127.0.0.1", res));
+  const upstream2Port = upstream2.address().port;
+
+  let nextAuth = false;
+  const httpServer2 = http.createServer();
+  const detach2 = attachWsProxy(httpServer2, {
+    upstream: { host: "127.0.0.1", port: upstream2Port },
+    connectTimeoutMs: 2000,
+    authoriseUpgrade: async () => nextAuth,
+    onEvent: (e) => authEvents.push(e),
+  });
+  await new Promise((res) => httpServer2.listen(0, "127.0.0.1", res));
+  const proxy2Port = httpServer2.address().port;
+
+  const sendUpgrade = async (path) => {
+    const sock = net.connect(proxy2Port, "127.0.0.1");
+    await new Promise((res) => sock.once("connect", res));
+    sock.write(
+      `GET ${path} HTTP/1.1\r\n` +
+        `Host: localhost:${proxy2Port}\r\n` +
+        `Upgrade: websocket\r\n` +
+        `Connection: Upgrade\r\n` +
+        `Sec-WebSocket-Key: x\r\n` +
+        `Sec-WebSocket-Version: 13\r\n\r\n`,
+    );
+    return sock;
+  };
+
+  // Reject: client sees 401, upstream never dialled.
+  nextAuth = false;
+  {
+    const sock = await sendUpgrade("/ws/project/proj1");
+    const got = await readUntil(sock, (b) =>
+      b.toString("utf8").includes("401"),
+    );
+    assert.match(got.toString("utf8"), /HTTP\/1\.1 401/);
+    sock.destroy();
+  }
+  assert.equal(
+    authedConnections.length,
+    0,
+    "upstream must not be dialled on auth reject",
+  );
+  assert.ok(authEvents.some((e) => e.kind === "unauthorised"));
+
+  // Accept: bytes flow as before.
+  nextAuth = true;
+  {
+    const sock = await sendUpgrade("/ws/project/proj2");
+    const got = await readUntil(sock, (b) =>
+      b.toString("utf8").includes("HELLO"),
+    );
+    assert.ok(got.toString("utf8").includes("HELLO"));
+    sock.destroy();
+  }
+  assert.equal(authedConnections.length, 1);
+  assert.ok(authEvents.some((e) => e.kind === "upstream-connected"));
+
+  // Authoriser throws → 401, upstream not dialled, auth-error event.
+  const authEvents2 = [];
+  const httpServer3 = http.createServer();
+  const detach3 = attachWsProxy(httpServer3, {
+    upstream: { host: "127.0.0.1", port: upstream2Port },
+    connectTimeoutMs: 2000,
+    authoriseUpgrade: async () => {
+      throw new Error("db down");
+    },
+    onEvent: (e) => authEvents2.push(e),
+  });
+  await new Promise((res) => httpServer3.listen(0, "127.0.0.1", res));
+  const proxy3Port = httpServer3.address().port;
+  {
+    const sock = net.connect(proxy3Port, "127.0.0.1");
+    await new Promise((res) => sock.once("connect", res));
+    sock.write(
+      `GET /ws/project/proj3 HTTP/1.1\r\n` +
+        `Host: localhost:${proxy3Port}\r\n` +
+        `Upgrade: websocket\r\n` +
+        `Connection: Upgrade\r\n` +
+        `Sec-WebSocket-Key: x\r\n` +
+        `Sec-WebSocket-Version: 13\r\n\r\n`,
+    );
+    const got = await readUntil(sock, (b) =>
+      b.toString("utf8").includes("401"),
+    );
+    assert.match(got.toString("utf8"), /HTTP\/1\.1 401/);
+    sock.destroy();
+  }
+  assert.equal(
+    authedConnections.length,
+    1,
+    "upstream must not be dialled when authoriser throws",
+  );
+  assert.ok(
+    authEvents2.some(
+      (e) => e.kind === "auth-error" && e.message === "db down",
+    ),
+    `expected auth-error event: ${JSON.stringify(authEvents2)}`,
+  );
+
+  detach2();
+  detach3();
+  await new Promise((res) => httpServer2.close(res));
+  await new Promise((res) => httpServer3.close(res));
+  await new Promise((res) => upstream2.close(res));
+}
+
 console.log("wsProxy ok");

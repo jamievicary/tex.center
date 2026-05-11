@@ -100,6 +100,14 @@ export interface WsProxyOptions {
   // Bounded connect timeout for the upstream dial. If `null`, no
   // timeout (don't use in prod — Fly 6PN should answer fast).
   readonly connectTimeoutMs?: number;
+  // Optional pre-flight authorisation. Resolves true to proxy
+  // the upgrade, false to reject with HTTP 401. A throw or
+  // rejection is treated as 401 — the proxy must never leak the
+  // upstream to an unauthenticated caller because the cookie
+  // store was momentarily unavailable.
+  readonly authoriseUpgrade?: (
+    req: IncomingMessage,
+  ) => boolean | Promise<boolean>;
   // Hook for tests / logs. Errors here must not throw — they're
   // best-effort observability.
   readonly onEvent?: (event: WsProxyEvent) => void;
@@ -107,6 +115,8 @@ export interface WsProxyOptions {
 
 export type WsProxyEvent =
   | { kind: "no-match"; pathname: string }
+  | { kind: "unauthorised"; projectId: string }
+  | { kind: "auth-error"; projectId: string; message: string }
   | { kind: "upstream-connect"; projectId: string; upstream: SidecarUpstream }
   | { kind: "upstream-connected"; projectId: string }
   | { kind: "upstream-error"; projectId: string; message: string }
@@ -126,6 +136,20 @@ export function attachWsProxy(
   options: WsProxyOptions,
 ): () => void {
   const timeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+  const writeStatusAndClose = (
+    clientSocket: Duplex,
+    status: string,
+  ): void => {
+    try {
+      clientSocket.write(
+        `HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
+      );
+    } catch {
+      // Socket may already be dead.
+    }
+    clientSocket.destroy();
+  };
+
   const handler = (
     req: IncomingMessage,
     clientSocket: Duplex,
@@ -136,25 +160,63 @@ export function attachWsProxy(
     const projectId = matchWsProjectPath(url.pathname);
     if (projectId === null) {
       options.onEvent?.({ kind: "no-match", pathname: url.pathname });
-      // 404-style: send a minimal HTTP response then destroy. Some
-      // clients display nothing without a status line.
-      try {
-        clientSocket.write(
-          "HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
-        );
-      } catch {
-        // Socket may already be dead.
-      }
-      clientSocket.destroy();
+      writeStatusAndClose(clientSocket, "404 Not Found");
       return;
     }
 
-    options.onEvent?.({
-      kind: "upstream-connect",
-      projectId,
-      upstream: options.upstream,
-    });
+    const proceed = (): void => {
+      options.onEvent?.({
+        kind: "upstream-connect",
+        projectId,
+        upstream: options.upstream,
+      });
+      dialAndPipe(req, clientSocket, head, rawUrl, projectId);
+    };
 
+    if (options.authoriseUpgrade === undefined) {
+      proceed();
+      return;
+    }
+
+    let authResult: boolean | Promise<boolean>;
+    try {
+      authResult = options.authoriseUpgrade(req);
+    } catch (err) {
+      options.onEvent?.({
+        kind: "auth-error",
+        projectId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      writeStatusAndClose(clientSocket, "401 Unauthorized");
+      return;
+    }
+    Promise.resolve(authResult).then(
+      (ok) => {
+        if (ok) {
+          proceed();
+        } else {
+          options.onEvent?.({ kind: "unauthorised", projectId });
+          writeStatusAndClose(clientSocket, "401 Unauthorized");
+        }
+      },
+      (err: unknown) => {
+        options.onEvent?.({
+          kind: "auth-error",
+          projectId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        writeStatusAndClose(clientSocket, "401 Unauthorized");
+      },
+    );
+  };
+
+  const dialAndPipe = (
+    req: IncomingMessage,
+    clientSocket: Duplex,
+    head: Buffer,
+    rawUrl: string,
+    projectId: string,
+  ): void => {
     const upstream = net.connect(options.upstream.port, options.upstream.host);
     let settled = false;
     let connectTimer: NodeJS.Timeout | null = null;

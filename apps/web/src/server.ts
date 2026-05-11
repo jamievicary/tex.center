@@ -15,11 +15,46 @@
 import { handler } from "./handler.js";
 
 import { boot, parsePort } from "./lib/server/boot.js";
+import { getDb } from "./lib/server/db.js";
+import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
+import { makeSessionAuthoriser } from "./lib/server/wsAuth.js";
+import { getSessionWithUser } from "@tex-center/db";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = parsePort(process.env.PORT, 3000);
 
-const { server } = boot({ handler, host, port, env: process.env });
+// Build the WS-upgrade authoriser. With no signing key configured
+// the proxy refuses every upgrade — matching `hooks.server.ts`,
+// where a missing key means "anonymous everywhere" and so the
+// authenticated-only sidecar path is unreachable.
+const signingKey = (() => {
+  try {
+    return loadSessionSigningKey();
+  } catch (err) {
+    console.error("SESSION_SIGNING_KEY is malformed; WS proxy will reject all upgrades.", err);
+    return null;
+  }
+})();
+
+const authoriseUpgrade =
+  signingKey !== null
+    ? makeSessionAuthoriser({
+        signingKey,
+        sessionCookieName: "tc_session",
+        lookupSession: async (sid) => {
+          const { db } = getDb();
+          return getSessionWithUser(db, sid);
+        },
+      })
+    : async () => false;
+
+const { server } = boot({
+  handler,
+  host,
+  port,
+  env: process.env,
+  authoriseUpgrade,
+});
 
 server.on("listening", () => {
   console.log(`Listening on http://${host}:${port}`);
