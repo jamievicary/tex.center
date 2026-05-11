@@ -226,9 +226,30 @@ spawning, (D) auth + production polish.
             mode landed (see discussion 71_answer); slotted after
             M7.4 so checkpoint serialisation can ride the same
             persistent channel. Sliced:
-            - **M7.5.0** — Bump `vendor/supertex` submodule;
-              rebuild binary; verify `SupertexOnceCompiler` tests
-              still pass.
+            - [x] **M7.5.0** — Bump `vendor/supertex` submodule
+              `69317e8 → c571420` (iters 574–694 upstream;
+              `--daemon DIR` mode, `build/supertex` ELF, plus
+              ~120 internal iterations). _(iter 90.)_ `make -C
+              vendor/supertex all` builds clean locally (28
+              tools incl. `build/supertex` + `build/supertex_daemon`
+              + shim). All 79 `tests_normal` cases stay green
+              including `test_sidecar_supertex_once_compiler`
+              (which uses a fake driver, so doesn't exercise the
+              real binary, but proves the once-path TS hasn't
+              drifted). **Carry-over for M7.5.2**: bare `make -C
+              vendor/supertex -j` (no target) only builds
+              `build/baseline_snapshot` because the implicit
+              first goal lands on the `$(UTIL_TOOL_BINS): ...`
+              prerequisite-only rule. The sidecar Dockerfile's
+              `RUN make -C vendor/supertex -j` line therefore
+              builds nothing useful — and `SUPERTEX_BIN=/opt/
+              supertex/src/supertex` points at a Python entry
+              point that no longer exists post-bump (the daemon
+              ELF lives at `build/supertex`). Compilation-time
+              regression is hidden behind the trial cap; fix
+              this when M7.5.2 wires the daemon compiler — make
+              the Dockerfile RUN `make -C vendor/supertex all`
+              and update `SUPERTEX_BIN`.
             - **M7.5.1** — Pure-logic protocol parser in
               `apps/sidecar/src/compiler/daemonProtocol.ts` for
               the four stdout line types (`[N.out]`,
