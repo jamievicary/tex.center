@@ -11,6 +11,21 @@ Live at **https://tex.center**.
 
 ## MVP scope (what "launched" means)
 
+Achieving a **live, continuously-deployed service at https://tex.center**
+is the goal of this project, and **doing so end-to-end is in scope for the
+autodev engineer** — not a separate manual step the user performs after
+autodev is done. That includes running `flyctl` to create and configure the
+Fly app, Machines, Postgres, and Tigris; running `gh` to push GitHub
+Actions secrets; running the Cloudflare API to configure DNS for
+`tex.center`; provisioning the Google OAuth app's authorised redirect URIs
+where the platform allows it; and verifying the live deployment with real
+HTTPS probes. All credentials needed are supplied in `creds/` (see the
+"External services & credentials" section below). Any work that
+PLAN.md has historically labelled "out-of-tree one-shot" is, in fact,
+in-tree iteration work: pick it up, execute it against the live services
+using the credentials provided, and commit any resulting state (issued IPs,
+machine IDs, app IDs, etc.) back into the repo.
+
 A working deployment at https://tex.center where:
 
 1. **Unauthenticated visitors see a plain white page with a single "Sign in with
@@ -122,6 +137,14 @@ don't, extend supertex itself rather than wrapping its limitations from the
 outside.
 
 ## External services & credentials
+
+**The autodev engineer is authorised, and expected, to use these credentials
+to run live commands against the named services as part of ordinary
+iterations** — `flyctl <anything>` against Fly, `gh secret set` /
+`gh api ...` against GitHub, `curl` against Cloudflare's API, etc. Doing
+so is not "out-of-tree" work; it is the work. The credentials below exist
+specifically so the engineer does not need to ask the user to perform any
+step manually.
 
 The autodev engineer should look in `creds/` (gitignored) for:
 

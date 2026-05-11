@@ -300,6 +300,29 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         scheduleCompile(project);
       });
 
+      type FileOp = "create-file" | "rename-file" | "upload-file" | "delete-file";
+      function handleFileOp(
+        op: FileOp,
+        details: Record<string, unknown>,
+        promise: Promise<{ reason: string } | Record<string, unknown>>,
+      ): void {
+        void promise.then((res) => {
+          const reason = (res as { reason?: string }).reason;
+          if (reason !== undefined) {
+            app.log.warn(
+              { ...details, reason, projectId: project.id },
+              `${op} rejected`,
+            );
+            client.send(encodeControl({ type: "file-op-error", op, reason }));
+            return;
+          }
+          broadcast(
+            project,
+            encodeControl({ type: "file-list", files: project.persistence.files() }),
+          );
+        });
+      }
+
       // Compile-and-persist must fire on edits to any file's Y.Text,
       // not just `main.tex`, so we listen at the doc level. The
       // debounce in `scheduleCompile` collapses bursts.
@@ -338,94 +361,28 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
               client.viewingPage = decoded.message.page;
             } else if (decoded.message.type === "create-file") {
               const name = decoded.message.name;
-              void project.persistence.addFile(name).then((res) => {
-                if (!res.added) {
-                  app.log.warn(
-                    { name, reason: res.reason, projectId: project.id },
-                    "create-file rejected",
-                  );
-                  client.send(
-                    encodeControl({
-                      type: "file-op-error",
-                      op: "create-file",
-                      reason: res.reason,
-                    }),
-                  );
-                  return;
-                }
-                broadcast(
-                  project,
-                  encodeControl({ type: "file-list", files: project.persistence.files() }),
-                );
-              });
+              handleFileOp("create-file", { name }, project.persistence.addFile(name));
             } else if (decoded.message.type === "rename-file") {
               const { oldName, newName } = decoded.message;
-              void project.persistence
-                .renameFile(oldName, newName)
-                .then((res) => {
-                  if (!res.renamed) {
-                    app.log.warn(
-                      { oldName, newName, reason: res.reason, projectId: project.id },
-                      "rename-file rejected",
-                    );
-                    client.send(
-                      encodeControl({
-                        type: "file-op-error",
-                        op: "rename-file",
-                        reason: res.reason,
-                      }),
-                    );
-                    return;
-                  }
-                  broadcast(
-                    project,
-                    encodeControl({ type: "file-list", files: project.persistence.files() }),
-                  );
-                });
+              handleFileOp(
+                "rename-file",
+                { oldName, newName },
+                project.persistence.renameFile(oldName, newName),
+              );
             } else if (decoded.message.type === "upload-file") {
               const { name, content } = decoded.message;
-              void project.persistence.addFile(name, content).then((res) => {
-                if (!res.added) {
-                  app.log.warn(
-                    { name, reason: res.reason, projectId: project.id },
-                    "upload-file rejected",
-                  );
-                  client.send(
-                    encodeControl({
-                      type: "file-op-error",
-                      op: "upload-file",
-                      reason: res.reason,
-                    }),
-                  );
-                  return;
-                }
-                broadcast(
-                  project,
-                  encodeControl({ type: "file-list", files: project.persistence.files() }),
-                );
-              });
+              handleFileOp(
+                "upload-file",
+                { name },
+                project.persistence.addFile(name, content),
+              );
             } else if (decoded.message.type === "delete-file") {
               const name = decoded.message.name;
-              void project.persistence.deleteFile(name).then((res) => {
-                if (!res.deleted) {
-                  app.log.warn(
-                    { name, reason: res.reason, projectId: project.id },
-                    "delete-file rejected",
-                  );
-                  client.send(
-                    encodeControl({
-                      type: "file-op-error",
-                      op: "delete-file",
-                      reason: res.reason,
-                    }),
-                  );
-                  return;
-                }
-                broadcast(
-                  project,
-                  encodeControl({ type: "file-list", files: project.persistence.files() }),
-                );
-              });
+              handleFileOp(
+                "delete-file",
+                { name },
+                project.persistence.deleteFile(name),
+              );
             }
             break;
           case "awareness":
