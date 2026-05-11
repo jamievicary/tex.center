@@ -264,7 +264,7 @@ spawning, (D) auth + production polish.
                   than making `tests_gold/lib` its own workspace
                   package — keeps Docker contexts unchanged).
                   _(iter 79.)_
-            - [ ] **M8.pw.1.1** — Playwright `authedPage` fixture
+            - [~] **M8.pw.1.1** — Playwright `authedPage` fixture
                   + `tests_gold/lib/src/flyProxy.ts` launching
                   `flyctl proxy 5433:5432 -a tex-center-db` for
                   `live` target with a distinct-failure-mode
@@ -272,6 +272,29 @@ spawning, (D) auth + production polish.
                   co-location with the dev server (PGlite-server
                   or shared ephemeral Postgres); design + land
                   here.
+                  - [x] **M8.pw.1.1.a** — `flyProxy.ts` helper
+                        (iter 82): `startFlyProxy({app, localPort,
+                        remotePort, command?})` spawns `flyctl
+                        proxy LOCAL:REMOTE -a APP`, polls
+                        `127.0.0.1:LOCAL` until accepting, and
+                        returns a `{localPort, close()}` handle
+                        with idempotent SIGTERM→SIGKILL cleanup.
+                        Four distinct-failure-mode error paths
+                        (happy / child-exited-early / port-never-
+                        opens / spawn-ENOENT) each surface a
+                        recognisable message including captured
+                        stderr. Tested in
+                        `tests_gold/lib/test/flyProxy.test.mjs`
+                        using a stand-in `flyctl` binary built at
+                        test time (no real flyctl needed).
+                  - [ ] **M8.pw.1.1.b** — `authedPage` Playwright
+                        fixture wiring `mintSession` +
+                        `startFlyProxy` for the `live` target.
+                  - [ ] **M8.pw.1.1.c** — DB co-location for the
+                        `local` target. Design + land
+                        PGlite-server-or-equivalent so the dev
+                        server and the Playwright test process
+                        share a writable Postgres-wire DB.
             - [ ] **M8.pw.1.2** — First wave of tests: `/` →
                   `/projects` redirect when authed, `/editor/<id>`
                   three-panel layout DOM presence, `/projects`
@@ -295,16 +318,18 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1.1 — `authedPage` fixture
-+ `flyProxy.ts` + DB co-location for the `local` Playwright
-target. `mintSession` helper itself landed iter 79
-(`tests_gold/lib/src/mintSession.ts`); next step is wiring it
-through a Playwright fixture that `addCookies` before the test
-runs, and a strategy for the `local` target's DB-with-dev-server
-co-location (the dev server needs a Postgres-wire DB the test
-process can also write to). Queue (per discussion 77, plus iter
-79 split): pw.1.1 → pw.1.2 (first wave of authed tests) →
-M7.0.2 → pw.2 → M7.0.3.
+**Next ordinary iteration:** M8.pw.1.1.b — `authedPage`
+Playwright fixture wiring `mintSession` + `startFlyProxy` for
+the `live` target. Two primitives now exist
+(`tests_gold/lib/src/mintSession.ts` iter 79;
+`tests_gold/lib/src/flyProxy.ts` iter 82); next step is the
+fixture that boots flyctl proxy, opens a `createDb` against
+`postgresql://...@127.0.0.1:5433/...`, mints a session, and
+`addCookies` before each test. Local-target DB co-location
+(pw.1.1.c) deliberately split off — it's a separate design
+decision (PGlite-server vs ephemeral Postgres) and the `live`
+target is the higher-value path. Queue: pw.1.1.b → pw.1.1.c →
+pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
