@@ -351,15 +351,41 @@ spawning, (D) auth + production polish.
                               verifies a write through the
                               driver-side handle is visible
                               through the dev-server-side handle.
-                        - [ ] **Wiring.** Playwright `globalSetup`
-                              starts `startLocalDb`, sets
-                              `process.env.DATABASE_URL`,
+                        - [x] **Wiring.** _(iter 85.)_ Playwright
+                              `globalSetup` (`tests_gold/playwright/
+                              globalSetup.ts`) boots `startLocalDb`
+                              and exports `DATABASE_URL`,
                               `SESSION_SIGNING_KEY`,
-                              `TEXCENTER_LOCAL_USER_ID`,
-                              persists handle for `globalTeardown`.
-                              Extend `authedPage` fixture to pick
-                              `liveDb` vs `localDb` based on
-                              `testInfo.project.name`.
+                              `TEXCENTER_LOCAL_USER_ID` to
+                              `process.env` so the SvelteKit
+                              `webServer` child inherits them.
+                              Teardown is returned from globalSetup
+                              (Playwright's recommended pattern,
+                              no cross-module state needed).
+                              Skipped when
+                              `PLAYWRIGHT_SKIP_WEBSERVER=1`
+                              (live target). The `authedPage`
+                              fixture's worker-scoped `db`
+                              branches on `workerInfo.project.name`:
+                              `live` keeps the flyctl-proxy +
+                              `resolveLiveDbConfig` path; `local`
+                              reads env via new
+                              `resolveLocalDbEnv` helper and opens
+                              a `postgres-js` `DbHandle` to the
+                              PGlite-over-TCP URL. Pure helper
+                              unit-tested in
+                              `tests_gold/lib/test/authedCookie.test.mjs`.
+                              Side-fix: `startLocalDb` now requires
+                              `migrationsDir` explicitly (was an
+                              `import.meta.url`-resolved default)
+                              because Playwright transpiles
+                              globalSetup as CJS, which would
+                              syntax-error on `import.meta`. The
+                              `.mjs` gold test passes
+                              `MIGRATIONS_DIR` derived from
+                              `import.meta.url` as before;
+                              globalSetup derives the same path
+                              via `__dirname`.
             - [ ] **M8.pw.1.2** — First wave of tests: `/` →
                   `/projects` redirect when authed, `/editor/<id>`
                   three-panel layout DOM presence, `/projects`
@@ -383,16 +409,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1.1.c wiring — bolt the
-`startLocalDb` helper (landed iter 84) onto Playwright via a
-`globalSetup`/`globalTeardown` pair that exports the URL +
-signing key + seeded user id into env for the dev-server
-`webServer` to pick up, and teach the `authedPage` fixture to
-pick `liveDb` vs `localDb` from `testInfo.project.name`. The
-`apps/web` dev server already reads `DATABASE_URL` + falls
-back to anonymous if `SESSION_SIGNING_KEY` is unset, so no
-seam needed in `apps/web` itself. Queue: pw.1.1.c-wiring →
-pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
+**Next ordinary iteration:** M8.pw.1.2 — write the first wave
+of authed specs (`/` → `/projects` redirect when authed,
+`/editor/<id>` three-panel DOM, `/projects` lists projects,
+sign-out clears cookie + lands on white `/`) using the new
+`authedPage` fixture. Specs should teardown their inserted
+rows in `afterAll`. Queue: pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

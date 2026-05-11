@@ -1,91 +1,127 @@
 // Playwright fixture: `authedPage` — a `Page` with a valid
-// `tc_session` cookie attached, ready to hit `live`-target
-// authenticated routes.
+// `tc_session` cookie attached, ready to hit authenticated
+// routes on either the `local` or `live` target.
 //
-// Composition: the worker-scoped `liveDb` fixture starts a
-// `flyctl proxy` to `tex-center-db` and opens a Drizzle handle
-// against it; the test-scoped `authedPage` fixture mints a
-// session row for `TEXCENTER_LIVE_USER_ID`, sets the cookie on
-// a fresh browser context, yields a page, and deletes the row
-// on teardown.
+// Composition:
+//   - The worker-scoped `db` fixture resolves the right
+//     transport for the active project:
+//       * `live` → start `flyctl proxy` to `tex-center-db`,
+//         open a Drizzle handle against `127.0.0.1:LOCAL_PORT`,
+//         read signing key + user id from env.
+//       * `local` → read `DATABASE_URL`, `SESSION_SIGNING_KEY`,
+//         and `TEXCENTER_LOCAL_USER_ID` from env (set by
+//         `globalSetup.ts` which boots an in-process PGlite-
+//         over-TCP server), open a Drizzle handle to that URL.
+//   - The test-scoped `authedPage` fixture mints a session
+//     row for the resolved user id, sets the cookie on a fresh
+//     browser context, yields a `Page`, and deletes the row on
+//     teardown.
 //
-// If any required env var is missing the fixture calls
-// `test.skip` with the list of missing keys — so the default
-// gold run (env-less) stays green and only the
-// `TEXCENTER_LIVE_TESTS=1` invocations exercise this path.
+// If a target's required env is missing the worker fixture
+// calls `test.skip` with the list of missing keys, so the
+// default gold run stays green and only the appropriate
+// invocation exercises this path.
 //
-// Required env:
-//   - `TEXCENTER_LIVE_DB_PASSWORD` — `postgres` password on
-//     `tex-center-db`.
-//   - `SESSION_SIGNING_KEY` — same base64url HMAC key the live
-//     web tier verifies cookies with.
-//   - `TEXCENTER_LIVE_USER_ID` — `users.id` of an existing row
-//     to mint the session for.
+// Required env (`live` target):
+//   - `TEXCENTER_LIVE_DB_PASSWORD`, `SESSION_SIGNING_KEY`,
+//     `TEXCENTER_LIVE_USER_ID`. Optional overrides per
+//     `resolveLiveDbConfig` in `authedCookie.ts`.
 //
-// Optional overrides: `TEXCENTER_LIVE_DB_APP` (default
-// `tex-center-db`), `TEXCENTER_LIVE_DB_USER` (`postgres`),
-// `TEXCENTER_LIVE_DB_NAME` (`postgres`), `TEXCENTER_LIVE_DB_LOCAL_PORT`
-// (`5433`), `TEXCENTER_LIVE_DB_REMOTE_PORT` (`5432`).
+// Required env (`local` target): set by `globalSetup.ts`
+// automatically; absent only if `globalSetup` was skipped.
 
 import { test as base, type Page } from "@playwright/test";
 
-import { createDb, closeDb, deleteSession, type DbHandle } from "@tex-center/db";
+import {
+  createDb,
+  closeDb,
+  deleteSession,
+  type DbHandle,
+} from "@tex-center/db";
 
 import { mintSession } from "../../lib/src/mintSession.js";
 import {
   buildLiveDbUrl,
   buildSessionCookieSpec,
   resolveLiveDbConfig,
-  type LiveDbConfig,
+  resolveLocalDbEnv,
 } from "../../lib/src/authedCookie.js";
 import {
   startFlyProxy,
   type FlyProxyHandle,
 } from "../../lib/src/flyProxy.js";
 
-export interface LiveDbFixture {
-  readonly config: LiveDbConfig;
+export interface DbFixture {
   readonly db: DbHandle;
-  readonly proxy: FlyProxyHandle;
+  readonly signingKey: Uint8Array;
+  readonly userId: string;
+  readonly proxy?: FlyProxyHandle;
 }
 
 interface Fixtures {
-  liveDb: LiveDbFixture;
+  db: DbFixture;
   authedPage: Page;
 }
 
 export const test = base.extend<Fixtures, Record<string, never>>({
-  liveDb: [
-    async ({}, use) => {
-      const resolved = resolveLiveDbConfig(process.env);
-      if (!resolved.ok) {
-        test.skip(
-          true,
-          `authedPage: missing required env: ${resolved.missing.join(", ")}`,
-        );
-        return;
-      }
-      const proxy = await startFlyProxy({
-        app: resolved.config.app,
-        localPort: resolved.config.localPort,
-        remotePort: resolved.config.remotePort,
-      });
-      const db = createDb(buildLiveDbUrl(resolved.config));
-      try {
-        await use({ config: resolved.config, db, proxy });
-      } finally {
-        await closeDb(db).catch(() => {});
-        await proxy.close();
+  db: [
+    async ({}, use, workerInfo) => {
+      const projectName = workerInfo.project.name;
+      if (projectName === "live") {
+        const resolved = resolveLiveDbConfig(process.env);
+        if (!resolved.ok) {
+          test.skip(
+            true,
+            `authedPage: missing required env for live: ${resolved.missing.join(", ")}`,
+          );
+          return;
+        }
+        const proxy = await startFlyProxy({
+          app: resolved.config.app,
+          localPort: resolved.config.localPort,
+          remotePort: resolved.config.remotePort,
+        });
+        const db = createDb(buildLiveDbUrl(resolved.config));
+        try {
+          await use({
+            db,
+            signingKey: resolved.config.signingKey,
+            userId: resolved.config.userId,
+            proxy,
+          });
+        } finally {
+          await closeDb(db).catch(() => {});
+          await proxy.close();
+        }
+      } else {
+        const resolved = resolveLocalDbEnv(process.env);
+        if (!resolved.ok) {
+          test.skip(
+            true,
+            `authedPage: missing required env for local: ${resolved.missing.join(", ")} (globalSetup may have been skipped)`,
+          );
+          return;
+        }
+        const db = createDb(resolved.config.url, { onnotice: () => {} });
+        try {
+          await use({
+            db,
+            signingKey: resolved.config.signingKey,
+            userId: resolved.config.userId,
+          });
+        } finally {
+          await closeDb(db).catch(() => {});
+        }
       }
     },
     { scope: "worker" },
   ],
 
-  authedPage: async ({ browser, liveDb }, use, testInfo) => {
+  authedPage: async ({ browser, db }, use, testInfo) => {
     const minted = await mintSession({
-      db: liveDb.db.db,
-      signingKey: liveDb.config.signingKey,
-      userId: liveDb.config.userId,
+      db: db.db.db,
+      signingKey: db.signingKey,
+      userId: db.userId,
     });
     const context = await browser.newContext();
     const host = hostFromBaseURL(testInfo.project.use.baseURL);
@@ -102,7 +138,7 @@ export const test = base.extend<Fixtures, Record<string, never>>({
       await use(page);
     } finally {
       await context.close().catch(() => {});
-      await deleteSession(liveDb.db.db, minted.sid).catch(() => {});
+      await deleteSession(db.db.db, minted.sid).catch(() => {});
     }
   },
 });

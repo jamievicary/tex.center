@@ -27,8 +27,6 @@
 // Returns `{ url, port, db, signingKey, userId, close() }`.
 // `close()` is idempotent (multiple calls fold into one).
 
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
@@ -59,10 +57,13 @@ export interface StartLocalDbInput {
   /** `google_sub` to seed the user row with. Default: a stable test string. */
   readonly seedGoogleSub?: string;
   /**
-   * Override the directory the migrations are loaded from. Test
-   * seam only — defaults to `packages/db/src/migrations`.
+   * Directory the SQL migrations are loaded from — usually
+   * `packages/db/src/migrations`. Required so this module
+   * parses cleanly in both ESM and CJS contexts (we don't pin
+   * a default via `import.meta.url`, which would syntax-error
+   * Playwright's CJS transpile of `globalSetup.ts`).
    */
-  readonly migrationsDir?: string;
+  readonly migrationsDir: string;
 }
 
 export interface LocalDb {
@@ -81,13 +82,12 @@ export interface LocalDb {
 }
 
 export async function startLocalDb(
-  input: StartLocalDbInput = {},
+  input: StartLocalDbInput,
 ): Promise<LocalDb> {
   const signingKey = input.signingKey ?? randomBytes(32);
   const seedEmail = input.seedEmail ?? DEFAULT_SEED_EMAIL;
   const seedGoogleSub = input.seedGoogleSub ?? DEFAULT_SEED_GOOGLE_SUB;
-  const migrationsDir =
-    input.migrationsDir ?? defaultMigrationsDir();
+  const migrationsDir = input.migrationsDir;
 
   const pg = await PGlite.create();
   await pg.waitReady;
@@ -139,11 +139,6 @@ export async function startLocalDb(
     await pg.close().catch(() => {});
     throw err;
   }
-}
-
-function defaultMigrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "..", "..", "..", "packages", "db", "src", "migrations");
 }
 
 function parsePort(serverConn: string): number {

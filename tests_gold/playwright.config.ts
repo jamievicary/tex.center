@@ -15,6 +15,7 @@ const LOCAL_PORT = 3000;
 
 export default defineConfig({
   testDir: "./playwright",
+  globalSetup: "./playwright/globalSetup.ts",
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,

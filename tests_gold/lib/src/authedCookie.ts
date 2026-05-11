@@ -124,6 +124,56 @@ export interface PlaywrightCookieSpec {
   readonly sameSite: "Lax";
 }
 
+export interface LocalDbEnvConfig {
+  readonly url: string;
+  readonly signingKey: Uint8Array;
+  readonly userId: string;
+}
+
+export type ResolveLocalDbEnvResult =
+  | { readonly ok: true; readonly config: LocalDbEnvConfig }
+  | { readonly ok: false; readonly missing: readonly string[] };
+
+const LOCAL_REQUIRED = [
+  "DATABASE_URL",
+  "SESSION_SIGNING_KEY",
+  "TEXCENTER_LOCAL_USER_ID",
+] as const;
+
+export function resolveLocalDbEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): ResolveLocalDbEnvResult {
+  const missing: string[] = [];
+  for (const key of LOCAL_REQUIRED) {
+    const v = env[key];
+    if (v === undefined || v === "") missing.push(key);
+  }
+  if (missing.length > 0) return { ok: false, missing };
+
+  const rawKey = env.SESSION_SIGNING_KEY as string;
+  if (!/^[A-Za-z0-9_-]+$/u.test(rawKey)) {
+    throw new Error("SESSION_SIGNING_KEY is not valid base64url");
+  }
+  const signingKey = Buffer.from(rawKey, "base64url");
+  if (signingKey.byteLength < 32) {
+    throw new Error(
+      `SESSION_SIGNING_KEY decodes to ${signingKey.byteLength} bytes; needs >=32`,
+    );
+  }
+  return {
+    ok: true,
+    config: {
+      url: env.DATABASE_URL as string,
+      signingKey: new Uint8Array(
+        signingKey.buffer,
+        signingKey.byteOffset,
+        signingKey.byteLength,
+      ),
+      userId: env.TEXCENTER_LOCAL_USER_ID as string,
+    },
+  };
+}
+
 export function buildSessionCookieSpec(
   input: BuildCookieSpecInput,
 ): PlaywrightCookieSpec {

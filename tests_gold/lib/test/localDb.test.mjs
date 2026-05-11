@@ -10,10 +10,15 @@
 
 import assert from "node:assert/strict";
 import { connect } from "node:net";
+import { fileURLToPath } from "node:url";
 
 import postgres from "postgres";
 
 import { startLocalDb } from "../src/localDb.ts";
+
+const MIGRATIONS_DIR = fileURLToPath(
+  new URL("../../../packages/db/src/migrations/", import.meta.url),
+);
 
 async function canConnect(port) {
   return await new Promise((resolve) => {
@@ -30,7 +35,7 @@ async function canConnect(port) {
 }
 
 async function main() {
-  const local = await startLocalDb();
+  const local = await startLocalDb({ migrationsDir: MIGRATIONS_DIR });
   try {
     assert.ok(local.port > 0 && local.port < 65536, "port in range");
     assert.equal(typeof local.url, "string");
@@ -116,6 +121,7 @@ async function main() {
 
   // Custom seed-email path.
   const custom = await startLocalDb({
+    migrationsDir: MIGRATIONS_DIR,
     seedEmail: "alt@example.com",
     seedGoogleSub: "alt-sub",
     signingKey: new Uint8Array(32).fill(7),
