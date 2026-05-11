@@ -148,6 +148,11 @@ Smaller in-tree alternatives if blocked:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7).
+- Refactor iter 60: `ProjectPersistence.files()` now exposes the
+  sorted known-file set, so the WS handler no longer calls
+  `listProjectFiles` independently — one round-trip removed per
+  connection and the file-list emitted to the client now equals
+  the set persistence operates on.
 
 ## Live caveats
 

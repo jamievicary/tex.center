@@ -47,7 +47,6 @@ import { ProjectWorkspace } from "./workspace.js";
 import {
   createProjectPersistence,
   defaultBlobStoreFromEnv,
-  listProjectFiles,
   type ProjectPersistence,
 } from "./persistence.js";
 
@@ -282,25 +281,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         if (initialState.length > 0) {
           client.send(encodeDocUpdate(initialState));
         }
-        // File list: union of blob-store contents (if any) and the
-        // in-memory main doc, sorted. `main.tex` is always present
-        // even when the project has never been persisted.
-        const files = new Set<string>([MAIN_DOC_NAME]);
-        if (blobStore) {
-          try {
-            for (const f of await listProjectFiles(blobStore, project.id)) {
-              files.add(f);
-            }
-          } catch (e) {
-            app.log.warn(
-              { err: e instanceof Error ? e.message : String(e), projectId: project.id },
-              "listProjectFiles failed; client sees in-memory file list only",
-            );
-          }
-        }
+        // File list comes from persistence: it already ran a `list`
+        // during hydration and tracks the canonical set. Falls back
+        // to `[MAIN_DOC_NAME]` when no blob store is wired or
+        // hydration failed.
         if (socket.readyState !== socket.OPEN) return;
         client.send(
-          encodeControl({ type: "file-list", files: Array.from(files).sort() }),
+          encodeControl({ type: "file-list", files: project.persistence.files() }),
         );
         scheduleCompile(project);
       });

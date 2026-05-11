@@ -96,6 +96,14 @@ export interface ProjectPersistence {
    * provided or hydration failed.
    */
   maybePersist(): Promise<void>;
+  /**
+   * Sorted list of files this persistence layer is operating on:
+   * `MAIN_DOC_NAME` plus every blob discovered during hydration.
+   * Always includes `MAIN_DOC_NAME` so callers degrade cleanly when
+   * hydration failed or no blob store is configured. Must be called
+   * after `awaitHydrated()` for a complete view.
+   */
+  files(): string[];
 }
 
 export function createProjectPersistence(args: {
@@ -110,14 +118,15 @@ export function createProjectPersistence(args: {
     return {
       awaitHydrated: () => Promise.resolve(),
       maybePersist: () => Promise.resolve(),
+      files: () => [MAIN_DOC_NAME],
     };
   }
 
-  // Files we are willing to persist. Seeded at hydration time with
-  // `MAIN_DOC_NAME` plus every listed blob key; not extended at
-  // runtime since today there's no protocol path to create a new
-  // file.
-  const knownFiles = new Set<string>();
+  // Files we are willing to persist. Pre-seeded with `MAIN_DOC_NAME`
+  // so `files()` exposes a sensible list even if hydration fails;
+  // hydration adds every listed blob key. Not extended at runtime
+  // since today there's no protocol path to create a new file.
+  const knownFiles = new Set<string>([MAIN_DOC_NAME]);
   // Last-persisted source per file. Absence means "no blob known
   // yet" — the next `maybePersist` will create one even if the
   // current `Y.Text` is empty, preserving the historical
@@ -145,7 +154,6 @@ export function createProjectPersistence(args: {
           if (t.length === 0) t.insert(0, dec.decode(bytes));
         }
       });
-      knownFiles.add(MAIN_DOC_NAME);
       for (const { name, bytes } of loaded) {
         knownFiles.add(name);
         // An existing-but-empty blob counts as persisted-as-"".
@@ -165,6 +173,7 @@ export function createProjectPersistence(args: {
 
   return {
     awaitHydrated: () => hydrated,
+    files: () => Array.from(knownFiles).sort(),
     async maybePersist(): Promise<void> {
       if (!canPersist) return;
       const enc = new TextEncoder();
