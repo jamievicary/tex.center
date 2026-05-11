@@ -10,6 +10,10 @@ creds/
 # Node toolchain (vendored per-checkout, see tests_normal/setup_node.sh)
 .tools/
 
+# Playwright artefacts on failure (traces, screenshots, videos).
+test-results/
+playwright-report/
+
 # Node
 node_modules/
 .pnpm-store/

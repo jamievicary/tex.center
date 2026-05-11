@@ -260,20 +260,32 @@ spawning, (D) auth + production polish.
       `/healthz`+`/` probes missed the OAuth bug iter-76 caught;
       see discussion 77). The full seven-criterion acceptance
       pass remains the M8 endpoint.
-      - [ ] **M8.pw.0** — Playwright skeleton. Workspace devDep
-            `@playwright/test`; `tests_gold/setup_playwright.sh`
-            provisions Chromium under `.tools/playwright/`
-            (gitignored, idempotent, DrvFs-aware: symlink to
-            `~/.cache/tex-center-pw/<hash>/` on `/mnt/*` checkouts
-            mirroring `setup_node.sh`'s pattern);
-            `tests_gold/playwright.config.ts` with two projects
-            (`local` boots `pnpm --filter @tex-center/web dev`
-            via `webServer:`; `live` targets `https://tex.center`,
-            no webServer); one trivial test asserting `/` DOM
-            contains exactly one "Sign in with Google" button +
-            no marketing copy; `tests_gold/cases/test_playwright.py`
-            shells out to `pnpm exec playwright test
-            --project=local`.
+      - [x] **M8.pw.0** — Playwright skeleton. _(iter 78.)_
+            Workspace devDep `@playwright/test@1.49.1`;
+            `tests_gold/setup_playwright.sh` provisions Chromium
+            + chromium-headless-shell + ffmpeg under
+            `.tools/playwright/` (DrvFs-aware: symlinks to
+            `~/.cache/tex-center-pw/<hash>/` on `/mnt/*`,
+            idempotent skip-if-installed check on the chrome and
+            headless_shell binaries);
+            `tests_gold/playwright.config.ts` with `local`
+            (webServer: `pnpm --filter @tex-center/web dev --port
+            3000`, `reuseExistingServer` when not CI) and `live`
+            (`baseURL: https://tex.center`, no webServer — gated
+            by `PLAYWRIGHT_SKIP_WEBSERVER=1` from the Python
+            wrapper) projects; `tests_gold/playwright/landing.spec.ts`
+            asserts `/` returns 200, contains exactly one
+            `<a>` with `href=/auth/google/start` and text "Sign in
+            with Google", zero `<button>`s, and the trimmed
+            body innerText equals the sign-in label;
+            `tests_gold/cases/test_playwright.py` runs the
+            `local` project unconditionally and the `live`
+            project only when `TEXCENTER_LIVE_TESTS=1`
+            (otherwise `unittest.SkipTest`). Side-fix in
+            `apps/web/vite.config.ts`: extended `server.fs.allow`
+            to include `realpathSync(node_modules)` so the
+            DrvFs-symlinked-to-ext4 layout no longer trips Vite's
+            "outside of serving allow list" guard.
       - [ ] **M8.pw.1** — Session-cookie injection + authed
             surface. `tests_gold/lib/mintSession.ts` (reads
             `SESSION_SIGNING_KEY` from env; inserts a `sessions`
@@ -305,17 +317,19 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.0 — Playwright skeleton.
-Repointed from M7.0.2 per discussion 77: pw.0 + pw.1 land before
-the next control-plane redeploy (M7.0.3). M7.0.2 is internal-only
-(no public IP, no control-plane image roll) so the OAuth-class-bug
-argument doesn't apply to it; it slots between pw.1 and pw.2 in
-the queue. Concrete next-iteration scope: workspace devDep
-`@playwright/test`, `tests_gold/setup_playwright.sh` (DrvFs-aware
-Chromium provisioner mirroring `setup_node.sh`),
-`tests_gold/playwright.config.ts` with `local` (+ `webServer:`)
-and `live` projects, one trivial `/` DOM test,
-`tests_gold/cases/test_playwright.py` runner integration.
+**Next ordinary iteration:** M8.pw.1 — session-cookie injection
++ authed surface. Queue (per discussion 77): pw.1 → M7.0.2 →
+pw.2 → M7.0.3. Concrete next-iteration scope:
+`tests_gold/lib/mintSession.ts` (HMAC-sign with
+`SESSION_SIGNING_KEY` from env, insert a `sessions` row with
+`expires_at = now() + 5min` so abandoned rows self-clean via
+`deleteExpiredSessions`); Playwright `authedPage` fixture that
+calls the helper and `addCookies`; `tests_gold/lib/flyProxy.ts`
+to launch `flyctl proxy 5433:5432 -a tex-center-db` for the
+`live` target with a distinct-failure-mode health check; first
+wave of authed tests (`/` → `/projects` redirect when authed,
+`/editor/<id>` three-panel layout, `/projects` list,
+sign-out clears cookie).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive
