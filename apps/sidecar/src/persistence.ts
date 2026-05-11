@@ -35,10 +35,44 @@ export interface PersistenceLogger {
 }
 
 /**
+ * Blob-store key (no trailing slash) for the directory under which
+ * a project's source files live. `validateKey` forbids trailing
+ * slashes, so the slash is added by callers that want a strict
+ * "this segment, then any descendant" prefix.
+ */
+export function projectFilesDir(projectId: string): string {
+  return `projects/${projectId}/files`;
+}
+
+/**
  * Blob-store key for the canonical source of a project's main file.
  */
 export function mainTexKey(projectId: string): string {
-  return `projects/${projectId}/files/main.tex`;
+  return `${projectFilesDir(projectId)}/main.tex`;
+}
+
+/**
+ * List the relative paths of a project's source files. Returns
+ * project-relative paths (the `projects/<id>/files/` prefix is
+ * stripped) in lex order. A sibling key whose name merely starts
+ * with `files` (e.g. `projects/<id>/files-meta`) is excluded — the
+ * filter requires the trailing slash. Hydration of the in-memory
+ * Y.Doc still touches `main.tex` only; this primitive exists for
+ * the file-tree surface and the eventual multi-file persistence
+ * step.
+ */
+export async function listProjectFiles(
+  blobStore: BlobStore,
+  projectId: string,
+): Promise<string[]> {
+  const dirKey = projectFilesDir(projectId);
+  const dirSlash = `${dirKey}/`;
+  const keys = await blobStore.list(dirKey);
+  const out: string[] = [];
+  for (const k of keys) {
+    if (k.startsWith(dirSlash)) out.push(k.slice(dirSlash.length));
+  }
+  return out;
 }
 
 export interface ProjectPersistence {

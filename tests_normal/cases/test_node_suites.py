@@ -65,6 +65,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_workspace(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "workspace.test.mjs")
 
+    def test_sidecar_list_project_files(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "listProjectFiles.test.mjs")
+
     def test_web_pdf_buffer(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pdfBuffer.test.mjs")
 
