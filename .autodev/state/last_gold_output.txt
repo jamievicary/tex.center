@@ -3,7 +3,7 @@ test_projects (test_pglite_projects.TestPgliteProjects.test_projects) ... ok
 test_users_and_sessions (test_pglite_users_sessions.TestPgliteUsersSessions.test_users_and_sessions) ... ok
 
 ----------------------------------------------------------------------
-Ran 3 tests in 14.141s
+Ran 3 tests in 13.983s
 
 OK
 tests_gold/run_tests.sh: PASS

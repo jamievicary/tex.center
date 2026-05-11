@@ -5,23 +5,23 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -80
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 78, downloaded 0, added 0, done
 
-Done in 1.5s
+Done in 1.9s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
-packages/protocol typecheck: Done
 packages/auth typecheck: Done
+packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778521058223 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778521058230 COMPLETED 710 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778521582485 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778521582495 COMPLETED 710 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
@@ -75,6 +75,17 @@ test_web_page_tracker (test_node_suites.TestNodeSuites.test_web_page_tracker) ..
 test_web_pdf_buffer (test_node_suites.TestNodeSuites.test_web_pdf_buffer) ... ok
 test_web_route_redirect (test_node_suites.TestNodeSuites.test_web_route_redirect) ... ok
 test_web_session_hook (test_node_suites.TestNodeSuites.test_web_session_hook) ... ok
+test_builder_runs_supertex_make (test_sidecar_dockerfile.TestSidecarDockerfile.test_builder_runs_supertex_make) ... ok
+test_files_exist (test_sidecar_dockerfile.TestSidecarDockerfile.test_files_exist) ... ok
+test_install_layer_covers_every_workspace_package (test_sidecar_dockerfile.TestSidecarDockerfile.test_install_layer_covers_every_workspace_package) ... ok
+test_install_runs_frozen (test_sidecar_dockerfile.TestSidecarDockerfile.test_install_runs_frozen) ... ok
+test_multi_stage (test_sidecar_dockerfile.TestSidecarDockerfile.test_multi_stage) ... ok
+test_pnpm_version_pinned_to_root (test_sidecar_dockerfile.TestSidecarDockerfile.test_pnpm_version_pinned_to_root) ... ok
+test_runtime_has_python3 (test_sidecar_dockerfile.TestSidecarDockerfile.test_runtime_has_python3) ... ok
+test_runtime_installs_texlive_full (test_sidecar_dockerfile.TestSidecarDockerfile.test_runtime_installs_texlive_full) ... ok
+test_runtime_listens_on_all_interfaces (test_sidecar_dockerfile.TestSidecarDockerfile.test_runtime_listens_on_all_interfaces) ... ok
+test_runtime_port_matches_sidecar_default (test_sidecar_dockerfile.TestSidecarDockerfile.test_runtime_port_matches_sidecar_default) ... ok
+test_runtime_selects_supertex_compiler (test_sidecar_dockerfile.TestSidecarDockerfile.test_runtime_selects_supertex_compiler) ... ok
 test_files_exist (test_web_dockerfile.TestWebDockerfile.test_files_exist) ... ok
 test_install_layer_covers_every_workspace_package (test_web_dockerfile.TestWebDockerfile.test_install_layer_covers_every_workspace_package) ... ok
 test_install_runs_frozen (test_web_dockerfile.TestWebDockerfile.test_install_runs_frozen) ... ok
@@ -84,7 +95,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 59 tests in 73.623s
+Ran 70 tests in 81.436s
 
 OK
 tests_normal/run_tests.sh: PASS

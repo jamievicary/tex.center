@@ -155,17 +155,47 @@ spawning, (D) auth + production polish.
       milestone (not out-of-tree). Decomposed into sub-milestones;
       M7.0 is the smallest deployable cut that makes the live
       site actually compile LaTeX.
-      - [ ] **M7.0** — Single shared sidecar Machine. Build
-            `apps/sidecar/Dockerfile` carrying TeX Live (full) +
-            supertex built from `vendor/supertex`. Push to Fly's
-            registry. Deploy as a second Fly Machine alongside the
-            control plane. Wire control plane to proxy
-            `/ws/project/<id>` to the sidecar over Fly internal
-            networking (`<app>.internal` or 6PN). This is **not**
-            the final architecture (per-project Machines per
-            GOAL.md), but it is the smallest thing that compiles
-            real LaTeX on prod. Decision recorded in discussion
-            70_answer.
+      - [~] **M7.0** — Single shared sidecar Machine. Sliced
+            because the original entry bundled four
+            independently-deployable steps; the live deploy can't
+            land until the engine binary provisioning is solved.
+            Decision recorded in discussion 70_answer.
+            - [x] **M7.0.0** — `apps/sidecar/Dockerfile` +
+                  `.dockerignore` + structural test, mirroring
+                  `apps/web/Dockerfile`'s shape. Multi-stage:
+                  builder runs `pnpm install --frozen-lockfile`,
+                  typechecks the sidecar, and `make -C
+                  vendor/supertex`; runtime stage installs
+                  `texlive-full` + `python3` on top of the Node
+                  base, copies the workspace, and runs the
+                  sidecar via `pnpm --filter @tex-center/sidecar
+                  start`. Engine-binary path `/opt/engine/bin`
+                  pre-baked on `$PATH`; provisioning the binary
+                  itself is M7.0.1. _(iter 74)_
+            - [ ] **M7.0.1** — Provision the `lualatex-append` /
+                  `lualatex-incremental` engine. Two routes:
+                  (a) build from the patched luatex source supertex
+                  was authored against; (b) vendor a prebuilt
+                  ELF into the repo (likely
+                  `vendor/engine/<arch>/lualatex-incremental`)
+                  and `COPY` it into the runtime stage at
+                  `/opt/engine/bin/`. Pick (b) for the first cut
+                  unless the patched source is small enough to
+                  build in-Dockerfile without exploding image
+                  build time. The structural test will gain a
+                  `test_runtime_has_engine_binary` assertion once
+                  the choice is made.
+            - [ ] **M7.0.2** — `apps/sidecar/fly.toml` and a
+                  second Fly app `tex-center-sidecar` in `fra`.
+                  First `flyctl deploy --remote-only` against
+                  that app. No public IPs (sidecar is reached
+                  over 6PN only); internal port 3001.
+            - [ ] **M7.0.3** — Control-plane WS proxy. `apps/web`
+                  gains a server route at `/ws/project/[id]` that
+                  dials `tex-center-sidecar.internal:3001` over
+                  Fly's 6PN and pipes the WebSocket through.
+                  `routeRedirect.ts` already lets `/ws/*` past
+                  auth; this slice adds the proxy plumbing.
       - [ ] **M7.1** — Machines API client in the control plane:
             spawn, wake, idle-stop, destroy. Replace the shared
             sidecar with on-demand per-project Machines.
@@ -208,10 +238,11 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0 — single shared sidecar Machine
-carrying TeX Live + supertex, control plane proxying
-`/ws/project/<id>` over Fly internal networking. M6.3.1 landed
-iter 73 (`https://tex.center` is live; see `deploy/README.md`).
+**Next ordinary iteration:** M7.0.1 — provision the
+`lualatex-incremental` engine binary. Investigate which patched
+luatex tree supertex was authored against; pick build-in-Dockerfile
+vs. vendor-a-prebuilt-ELF. M7.0.0 (Dockerfile skeleton +
+structural test) landed iter 74.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive

@@ -1,0 +1,61 @@
+# Build context is the repo root. Exclude everything not needed by
+# apps/sidecar's image build to keep the context small and the
+# install/build layers cache-stable.
+
+# Node / build outputs
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+**/coverage
+**/.cache
+
+# Tests, autodev state, vendored toolchain
+tests_normal
+tests_gold
+.autodev
+autodev
+.tools
+.git
+.github
+
+# Credentials must never enter an image layer
+creds
+**/.env
+**/.env.*
+!**/.env.example
+**/*.token
+**/*.pem
+**/*.key
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+**/*.swp
+
+# Atomic-write temp files
+**/*.tmp
+**/*.tmp.[0-9]*
+
+# TeX/PDF artefacts (engine output, not source)
+**/*.aux
+**/*.synctex.gz
+**/*.fls
+**/*.fdb_latexmk
+**/*.toc
+**/*.pdf
+
+# Web app is not part of the sidecar image.
+apps/web/src
+apps/web/static
+apps/web/test
+apps/web/svelte.config.js
+apps/web/vite.config.ts
+apps/web/build
+apps/web/.svelte-kit
+
+# supertex submodule build artefacts (the Dockerfile rebuilds them
+# inside the builder stage).
+vendor/supertex/build
