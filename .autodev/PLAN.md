@@ -218,12 +218,59 @@ spawning, (D) auth + production polish.
                         Machines left stopped post-verification;
                         will warm on first proxy hit once M7.0.3
                         lands.
-            - [ ] **M7.0.3** — Control-plane WS proxy. `apps/web`
+            - [~] **M7.0.3** — Control-plane WS proxy. `apps/web`
                   gains a server route at `/ws/project/[id]` that
                   dials `tex-center-sidecar.internal:3001` over
                   Fly's 6PN and pipes the WebSocket through.
                   `routeRedirect.ts` already lets `/ws/*` past
                   auth; this slice adds the proxy plumbing.
+                  Sliced because adapter-node's emitted server
+                  doesn't natively handle HTTP Upgrade, so the
+                  wiring has three independent pieces:
+                  - [x] **M7.0.3.0** — Pure proxy module
+                        `apps/web/src/lib/server/wsProxy.ts`
+                        (`matchWsProjectPath`,
+                        `resolveSidecarUpstream`,
+                        `renderForwardedHeaders`, `attachWsProxy`).
+                        Byte-level forwarder: hooks `http.Server`
+                        'upgrade', validates pathname against
+                        `/^[A-Za-z0-9_-]+$/`, dials upstream TCP,
+                        writes reconstructed request line + headers
+                        (with `Host:` rewritten to upstream
+                        authority), pipes both directions. No `ws`
+                        dep. Unknown paths get a `404 Not Found`
+                        then socket destroy (adapter-node leaves
+                        Upgrade dangling otherwise). Test
+                        `apps/web/test/wsProxy.test.mjs` covers
+                        path matching, env resolution, header
+                        rewriting, end-to-end happy-path pipe via
+                        stub upstream `net.Server`, unknown-path
+                        404, invalid-projectId 404, and upstream-
+                        connect-refused → client-close. Registered
+                        in `tests_normal/cases/test_node_suites.py
+                        ::test_web_ws_proxy`. _(iter 94.)_
+                  - [ ] **M7.0.3.1** — Custom Node entry that
+                        boots adapter-node's `build/handler.js`
+                        alongside `attachWsProxy`, replacing the
+                        default `build/index.js` CMD in
+                        `apps/web/Dockerfile`. In dev, the
+                        existing Vite proxy block in
+                        `apps/web/vite.config.ts` already
+                        forwards `/ws` to `127.0.0.1:3001`, so
+                        no dev-server change is needed.
+                  - [ ] **M7.0.3.2** — Auth gating in the upgrade
+                        handler: verify `tc_session` cookie via
+                        the same path `hooks.server.ts` uses
+                        (`resolveSessionHook`); unauthenticated
+                        upgrades → 401 + close. Without this,
+                        `/ws/project/*` is the only unauth-
+                        accessible authenticated surface.
+                  - [ ] **M7.0.3.3** — Deploy + verify. Bump
+                        control-plane image, hit
+                        `wss://tex.center/ws/project/<id>` from a
+                        live-target Playwright spec (or a curl-
+                        equivalent), confirm the sidecar machine
+                        wakes on 6PN. Update `deploy/VERIFY.md`.
       - [ ] **M7.1** — Machines API client in the control plane:
             spawn, wake, idle-stop, destroy. Replace the shared
             sidecar with on-demand per-project Machines.
@@ -519,14 +566,13 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.3 — control-plane WS proxy.
-`apps/web` gains a server route at `/ws/project/[id]` that dials
-`tex-center-sidecar.internal:3001` over Fly's 6PN and pipes the
-WebSocket through. `routeRedirect.ts` already lets `/ws/*` past
-auth; this slice adds the proxy plumbing. Sidecar M7.0.2 first
-deploy verified iter 93 (see `deploy/README.md`), so the upstream
-target is reachable. Queue after: M8.pw.2 (deploy verification
-hooks) → M7.1 (Machines API client / per-project Machines).
+**Next ordinary iteration:** M7.0.3.1 — custom Node entry that
+boots adapter-node's `build/handler.js` alongside the iter-94
+`attachWsProxy`, replacing the default `build/index.js` CMD in
+`apps/web/Dockerfile`. M7.0.3.0 (pure proxy module + unit tests)
+landed iter 94. Queue after: M7.0.3.2 (auth gating in upgrade
+handler), M7.0.3.3 (deploy + verify), M8.pw.2 (deploy verification
+hooks), M7.1 (Machines API client / per-project Machines).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
