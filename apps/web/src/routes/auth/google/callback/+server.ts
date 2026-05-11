@@ -25,7 +25,7 @@ import {
 const STATE_COOKIE_NAME = "tc_oauth_state";
 const SESSION_COOKIE_NAME = "tc_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
-const SUCCESS_PATH = "/editor";
+const SUCCESS_PATH = "/projects";
 const SIGNED_OUT_PATH = "/";
 
 export const GET: RequestHandler = async ({ url, request }) => {

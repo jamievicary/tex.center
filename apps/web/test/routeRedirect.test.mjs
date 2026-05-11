@@ -36,10 +36,19 @@ assert.equal(
   SIGNED_OUT_PATH,
 );
 
-// Authed → sign-in page: redirect to `/editor`.
+// Authed → sign-in page: redirect to `/projects`.
 assert.equal(
   routeRedirect({ session: SESSION, method: "GET", pathname: "/" }),
   SIGNED_IN_HOME,
+);
+// `/projects` is itself protected: unauth bounces.
+assert.equal(
+  routeRedirect({ session: null, method: "GET", pathname: "/projects" }),
+  SIGNED_OUT_PATH,
+);
+assert.equal(
+  routeRedirect({ session: null, method: "POST", pathname: "/projects" }),
+  SIGNED_OUT_PATH,
 );
 // POST to `/` is left alone (no future form should be silently
 // redirected away from the white page).
@@ -71,8 +80,8 @@ assert.equal(
 
 // Sanity: the exported config matches what the hook used to
 // hard-code. A future change here is a deliberate policy edit.
-assert.deepEqual([...PROTECTED_PREFIXES], ["/editor"]);
-assert.equal(SIGNED_IN_HOME, "/editor");
+assert.deepEqual([...PROTECTED_PREFIXES], ["/editor", "/projects"]);
+assert.equal(SIGNED_IN_HOME, "/projects");
 assert.equal(SIGNED_OUT_PATH, "/");
 
 console.log("routeRedirect ok");

@@ -9,19 +9,15 @@
 //   - Unauthenticated request to a protected prefix → /
 //     (the white sign-in page). Method-agnostic: a stray POST
 //     to /editor from a stale form should still bounce.
-//   - Authenticated GET to a sign-in page (`/`) → /editor. The
-//     GET filter is deliberate: never redirect on POST so a
+//   - Authenticated GET to a sign-in page (`/`) → /projects.
+//     The GET filter is deliberate: never redirect on POST so a
 //     future form posting to `/` isn't silently bounced.
-//
-// The two rules are mutually exclusive on `session` so order
-// doesn't matter, but the protected-prefix case is listed first
-// because it is the security-relevant one.
 
 import type { ResolvedSession } from "./sessionHook.js";
 
 export const SIGNED_OUT_PATH = "/";
-export const SIGNED_IN_HOME = "/editor";
-export const PROTECTED_PREFIXES: readonly string[] = ["/editor"];
+export const SIGNED_IN_HOME = "/projects";
+export const PROTECTED_PREFIXES: readonly string[] = ["/editor", "/projects"];
 export const SIGN_IN_PAGE_PATHS: ReadonlySet<string> = new Set(["/"]);
 
 export interface RouteRedirectInput {

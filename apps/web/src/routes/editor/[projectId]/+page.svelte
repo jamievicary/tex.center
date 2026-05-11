@@ -34,7 +34,8 @@
 
   onMount(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${window.location.host}/ws/project/default`;
+    const projectId = data.project?.id ?? "default";
+    const url = `${proto}//${window.location.host}/ws/project/${encodeURIComponent(projectId)}`;
     client = new WsClient({
       url,
       onChange: (s) => {

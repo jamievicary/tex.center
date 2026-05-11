@@ -162,6 +162,26 @@ Smaller in-tree alternatives if blocked:
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
   button.
+- Projects dashboard slice landed iter 68: `/projects/+page.{server.ts,svelte,ts}`
+  lists `listProjectsByOwnerId(db, session.user.id)` and a POST
+  `?/create` action calls `createProject` then 303s to
+  `/editor/<id>`. Editor moved from `/editor/+page.*` to
+  `/editor/[projectId]/+page.*`; server load fetches the project
+  by id and 404s if missing or not owned by the current user.
+  Editor page uses `data.project.id` to build the WS URL
+  (`/ws/project/<encodeURIComponent(id)>`); sidecar's path
+  parameter is already plumbed end-to-end. `routeRedirect.ts`:
+  `PROTECTED_PREFIXES` += `/projects`; `SIGNED_IN_HOME` →
+  `/projects`. OAuth callback `SUCCESS_PATH` → `/projects`.
+  The sidecar `getProject(projectId)` cache still seeds the
+  per-project Y.Doc lazily, so a freshly-created project's
+  first WS connect populates the cache; persistence hydrates
+  `main.tex` from the (empty) blob set, which is the same path
+  the legacy `"default"` literal exercised. Remaining: the
+  sidecar's `getProject` fallback to `"default"` (when no
+  projectId in URL) is now unreachable from the web app and
+  should be tightened in a future iteration once gold-tests
+  exercise the new routing.
 - Project-row storage primitives landed iter 67:
   `packages/db/src/projects.ts` exports `createProject`,
   `getProjectById(db, id)` (null-on-miss), and
