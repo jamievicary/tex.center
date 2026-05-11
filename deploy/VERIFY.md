@@ -52,6 +52,31 @@ node -e 'fetch("https://tex.center/auth/google/start",{redirect:"manual"}).then(
 A failing probe is a deploy failure. Do not declare the deploy done
 until all three pass.
 
+## Playwright wrapper
+
+The probes above (plus the WS-proxy probes below) are also
+encoded as `tests_gold/playwright/verifyLive.spec.ts`, runnable
+as a single command from this repo:
+
+```sh
+PLAYWRIGHT_SKIP_WEBSERVER=1 \
+  pnpm exec playwright test \
+    --config tests_gold/playwright.config.ts \
+    --project=live --grep "live deploy verification"
+```
+
+Or via the gold-test wrapper:
+
+```sh
+TEXCENTER_LIVE_TESTS=1 bash tests_gold/run_tests.sh
+```
+
+(The wrapper additionally runs the unauth `landing.spec.ts`
+against live and the authed specs if `TEXCENTER_LIVE_DB_PASSWORD`
++ `TEXCENTER_LIVE_USER_ID` are set; otherwise those self-skip.)
+Treat green Playwright as the deploy-success signal — equivalent
+to the manual `node -e` snippets but harder to forget steps from.
+
 ## WS proxy probes (after any change to `apps/web/src/server.ts`, `wsProxy.ts`, or `wsAuth.ts`)
 
 The control plane hijacks HTTP Upgrade requests for

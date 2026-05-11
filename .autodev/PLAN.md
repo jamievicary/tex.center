@@ -615,14 +615,23 @@ spawning, (D) auth + production polish.
                   document is always 200; 404 only surfaces on
                   the client-side data fetch, needs CSR-aware
                   assertion).
-      - [ ] **M8.pw.2** — Deploy-iteration verification. Extend
-            `deploy/VERIFY.md` to require `live`-target Playwright
-            pass as the deploy-success signal. `tests_gold` case
-            for `live` is gated on `TEXCENTER_LIVE_TESTS=1`
-            (passes with a clear "skipped" log when unset so the
-            default gold run stays clean). Update deploy-touching
-            iteration template so M7.0.3 / future control-plane
-            redeploys run the `live` suite at the end.
+      - [x] **M8.pw.2** — Deploy-iteration verification. _(iter 98.)_
+            `tests_gold/playwright/verifyLive.spec.ts` encodes
+            the five `deploy/VERIFY.md` probes (healthz body
+            marker; `/` 200 HTML; `/auth/google/start` 302 to
+            accounts.google.com with `client_id` +
+            `redirect_uri=…/auth/google/callback`; WS upgrade
+            `/ws/project/smoke` → 401; WS upgrade `/ws/nope` →
+            404) as Playwright tests. `test.beforeEach`
+            self-skips the file when `testInfo.project.name !==
+            "live"`, so it imposes zero local-run cost. WS
+            probes use Node's `https.request` directly so the
+            upgrade response (rather than a Playwright-wrapped
+            socket) is what's asserted. `deploy/VERIFY.md` now
+            documents the one-liner `pnpm exec playwright test
+            --project=live --grep "live deploy verification"`
+            (or `TEXCENTER_LIVE_TESTS=1 bash tests_gold/run_tests.sh`)
+            as the canonical deploy-success signal.
       - [ ] **M8.acceptance** — Walk the seven `GOAL.md`
             acceptance criteria end-to-end on prod, fix gaps.
             Real OAuth consent-screen driving stays out of scope
@@ -632,15 +641,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.2 — Playwright deploy
-verification hooks. With the M7.0.3 slice closed (iter 97
-verified the 401-on-no-cookie probe live), the next leverage
-point is a live-target Playwright spec that runs the
-`deploy/VERIFY.md` probes (healthz, /, oauth start, WS-proxy
-401/404) automatically against `https://tex.center`. After that,
-M7.1 (Machines API client / per-project Machines) — that slice
-also wires `DATABASE_URL` on the control plane and unlocks the
-"valid cookie → sidecar wake" probe deferred from M7.0.3.3.
+**Next ordinary iteration:** M7.1 — Machines API client /
+per-project Machines in the control plane. That slice also wires
+`DATABASE_URL` on the control plane and unlocks the
+"valid cookie → sidecar wake" probe deferred from M7.0.3.3
+(at which point `verifyLive.spec.ts` from iter 98 can grow a
+sixth probe asserting the happy-path upgrade succeeds).
+Iter 98 closed M8.pw.2 (live-target Playwright spec encoding
+the `deploy/VERIFY.md` probes).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
