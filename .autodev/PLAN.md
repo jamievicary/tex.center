@@ -26,9 +26,9 @@ spawning, (D) auth + production polish.
       `WsClient` + `PdfBuffer`; `y-codemirror.next` binds CM6.
 - [~] **M3 — supertex compile path.** Today's real engine path is
       `SupertexOnceCompiler` (M3.2): per-edit spawn of `supertex
-      --once --output-directory`. The streaming variant waits on
-      the upstream `--daemon DIR` mode (see "Candidate supertex
-      work" below).
+      --once --output-directory`. The streaming variant is now
+      unblocked — upstream `--daemon DIR` landed (discussion 71);
+      sidecar adoption tracked as M7.5.
       - [x] **M3.0** — Compiler interface + `targetPage` plumbing.
             _(iter 8)_
       - [x] **M3.1** — `ProjectWorkspace`: atomic `writeMain`,
@@ -38,9 +38,11 @@ spawning, (D) auth + production polish.
       - [~] **M3.6** — `awaitPdfStable` watcher exists (iter 41)
             but is **not yet wired into `runCompile`** — the
             once-path returns after the engine exits, so calling
-            it would only add latency. Wires in when a streaming
-            compiler (`--daemon DIR` consumer) returns before the
-            PDF settles.
+            it would only add latency. **Subsumed by M7.5**: the
+            daemon-mode protocol's `[round-done]` *is* the
+            stability signal, so the watcher stays gated on
+            compiler kind (only the once-path needs it), and
+            wiring work happens inside M7.5 rather than here.
 
       **Retired (iter 41).** `SupertexWatchCompiler` (old M3.3),
       `ShipoutSegmenter` (M3.4), and the `--help` feature detector
@@ -162,6 +164,31 @@ spawning, (D) auth + production polish.
       - [ ] **M7.4** — Checkpoint blob protocol on the compiler
             interface; persist on idle-stop, rehydrate on wake.
             Closes the M4.3.2 tail.
+      - [ ] **M7.5** — Supertex `--daemon DIR` adoption. Upstream
+            mode landed (see discussion 71_answer); slotted after
+            M7.4 so checkpoint serialisation can ride the same
+            persistent channel. Sliced:
+            - **M7.5.0** — Bump `vendor/supertex` submodule;
+              rebuild binary; verify `SupertexOnceCompiler` tests
+              still pass.
+            - **M7.5.1** — Pure-logic protocol parser in
+              `apps/sidecar/src/compiler/daemonProtocol.ts` for
+              the four stdout line types (`[N.out]`,
+              `[rollback K]`, `[error <reason>]`, `[round-done]`);
+              unknown lines = protocol violation.
+            - **M7.5.2** — `SupertexDaemonCompiler` next to
+              `SupertexOnceCompiler`: one persistent process per
+              project, lazy spawn, lifecycle via `Compiler.close()`
+              (close stdin → wait → SIGTERM → SIGKILL).
+            - **M7.5.3** — `[error <reason>]` → new
+              `compile-status:error` wire frame in
+              `packages/protocol`; surface in editor UI.
+            - **M7.5.4** — Gate `PdfStabilityWatcher` on compiler
+              kind (once-path keeps it; daemon uses `[round-done]`).
+            - **M7.5.5** — Integration tests (initial compile,
+              recompile, rollback, error-recovery, clean shutdown
+              on EOF); flip `SIDECAR_COMPILER` default to
+              `supertex-daemon` only after this suite is green.
 
 - [ ] **M8 — Acceptance pass.** Walk the seven `GOAL.md` acceptance
       criteria end-to-end on prod, fix gaps. Playwright lives here.
@@ -283,7 +310,8 @@ Smaller alternatives if M6.3.1 hits an unresolvable live error
 ## Live caveats
 
 - `SIDECAR_COMPILER=supertex` (the once-compiler) is the only real
-  engine path today; streaming waits on upstream `--daemon DIR`.
+  engine path today; daemon-mode adoption (M7.5) is unblocked
+  upstream but deferred behind M6.3.1 and M7.0.
 - `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
   Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
   the future S3 adapter must implement it.
@@ -328,16 +356,14 @@ walk the realpath correctly.
 
 PRs against `github.com/jamievicary/supertex`.
 
-1. **`--daemon DIR` mode.** Single long-running supertex process
-   per project: stdin command channel (`recompile,N\n`), chunked
-   PDF output (`1.out`, `2.out`, …), stdout control protocol
-   (`[N.out]` / `[rollback K]` / `[round-done]`). Replaces the
-   per-edit spawn cost of the current once-path and removes the
-   need for any in-sidecar PDF-stability heuristic. Once landed,
-   a new streaming compiler in `apps/sidecar/src/compiler/`
-   consumes it; `awaitPdfStable` either retires or moves to a
-   pre-`[round-done]` settle inside that compiler.
-2. **Checkpoint serialise/restore to a single blob.** (M7)
+1. ~~**`--daemon DIR` mode.**~~ **Landed upstream** (see
+   discussion 71). Sidecar adoption tracked as M7.5 above. Stdout
+   protocol is four line types — `[N.out]`, `[rollback K]`,
+   `[error <reason>]`, `[round-done]` — and EOF on stdin is the
+   clean-shutdown signal. The `[error <reason>]` line is additive
+   vs. the original sketch and needs a new `compile-status:error`
+   wire frame (M7.5.3).
+2. **Checkpoint serialise/restore to a single blob.** (M7.4)
 
 (History: a previous two-flag plan — `--ready-marker` and
 `--target-page=N` — was superseded by (1); the sidecar code built
