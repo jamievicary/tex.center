@@ -1,20 +1,24 @@
-// Load the Google OAuth config + cookie signing key from env / disk.
+// Load the Google OAuth config + cookie signing key.
+//
+// Production reads from env vars only — the deployed image must not
+// contain `creds/` (gitignored, dockerignored), so any file-fallback
+// here would mask the real misconfiguration with a confusing
+// ENOENT (caused incident, discussion 76).
+//
+// Local dev keeps a convenience fallback to `creds/google-oauth.json`
+// for `client_id`/`client_secret` when those env vars are absent and
+// we are not in production. `SESSION_SIGNING_KEY` and
+// `GOOGLE_OAUTH_REDIRECT_URI` are env-only on every path — those are
+// trivial to set in `apps/web/.env.local` for dev.
 //
 // Throws on first access with a one-line message naming the
-// missing env var or file. The route handler catches it and
-// returns 500 with that message rather than letting SvelteKit's
-// error page leak — silent fallback would emit a redirect Google
-// can't honour (no client_id) or an unverifiable cookie (no key).
+// missing env var. The route handler catches it and returns 500
+// with that message rather than letting SvelteKit's error page
+// leak — silent fallback would emit a redirect Google can't honour
+// (no client_id) or an unverifiable cookie (no key).
 //
-// `client_id` is sourced from `creds/google-oauth.json` per
-// GOAL.md (the canonical location). `GOOGLE_OAUTH_CLIENT_ID` env
-// overrides if set, mainly for tests.
-//
-// `SESSION_SIGNING_KEY` is the HMAC key, base64url-encoded, ≥32
-// bytes. Same key signs the state cookie and (M5.1.2 onward) the
-// session cookie — they're independent payloads with different
-// shapes, so a stolen state cookie can't be replayed as a session.
-
+// Env var names use the `GOOGLE_OAUTH_` prefix to disambiguate from
+// any future Google API usage in this codebase.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -27,40 +31,51 @@ export interface OAuthConfig {
 
 let cached: OAuthConfig | null = null;
 
-export function loadOAuthConfig(): OAuthConfig {
-  if (cached) return cached;
-
+function readDevCredsFile(): { client_id?: unknown; client_secret?: unknown } | null {
+  if (process.env.NODE_ENV === "production") return null;
   const credsPath = resolve(
     process.cwd(),
     process.env.GOOGLE_OAUTH_CREDS_PATH ?? "creds/google-oauth.json",
   );
-
-  let credsJson: { client_id?: unknown; client_secret?: unknown };
   try {
-    credsJson = JSON.parse(readFileSync(credsPath, "utf8"));
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `Cannot read Google OAuth credentials from ${credsPath}: ${reason}. ` +
-        `Create the file with {"client_id": "...", "client_secret": "..."}.`,
-    );
+    return JSON.parse(readFileSync(credsPath, "utf8"));
+  } catch {
+    return null;
   }
+}
 
-  const clientId =
-    process.env.GOOGLE_OAUTH_CLIENT_ID ??
-    (typeof credsJson.client_id === "string" ? credsJson.client_id : "");
+export function loadOAuthConfig(): OAuthConfig {
+  if (cached) return cached;
+
+  let devCreds: { client_id?: unknown; client_secret?: unknown } | null = null;
+  const needDevCreds = () => {
+    if (devCreds === null) devCreds = readDevCredsFile() ?? {};
+    return devCreds;
+  };
+
+  let clientId = process.env.GOOGLE_OAUTH_CLIENT_ID ?? "";
+  if (!clientId) {
+    const f = needDevCreds();
+    if (typeof f.client_id === "string") clientId = f.client_id;
+  }
   if (!clientId) {
     throw new Error(
-      `Missing client_id in ${credsPath} (and no GOOGLE_OAUTH_CLIENT_ID env override).`,
+      "Missing GOOGLE_OAUTH_CLIENT_ID env var (set via `flyctl secrets set` " +
+        "in production; for local dev, place creds/google-oauth.json with a " +
+        '`client_id` field).',
     );
   }
 
-  const clientSecret =
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
-    (typeof credsJson.client_secret === "string" ? credsJson.client_secret : "");
+  let clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "";
+  if (!clientSecret) {
+    const f = needDevCreds();
+    if (typeof f.client_secret === "string") clientSecret = f.client_secret;
+  }
   if (!clientSecret) {
     throw new Error(
-      `Missing client_secret in ${credsPath} (and no GOOGLE_OAUTH_CLIENT_SECRET env override).`,
+      "Missing GOOGLE_OAUTH_CLIENT_SECRET env var (set via `flyctl secrets " +
+        "set` in production; for local dev, place creds/google-oauth.json " +
+        'with a `client_secret` field).',
     );
   }
 

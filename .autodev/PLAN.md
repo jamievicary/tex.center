@@ -128,7 +128,18 @@ spawning, (D) auth + production polish.
                   TLS-ALPN-01 within ~30s (no ACME TXT needed).
                   `https://tex.center/healthz` → 200 JSON,
                   `https://tex.center/` → 200 HTML. State captured
-                  in `deploy/README.md`.
+                  in `deploy/README.md`. Iter 76 closed the OAuth
+                  verification gap: refactored `oauthConfig.ts` to
+                  env-first (dev-only file fallback gated on
+                  `NODE_ENV !== "production"`), pushed Fly secrets
+                  (`GOOGLE_OAUTH_CLIENT_ID/SECRET`,
+                  `GOOGLE_OAUTH_REDIRECT_URI`, fresh
+                  `SESSION_SIGNING_KEY`, `NODE_ENV=production`),
+                  redeployed, and probed
+                  `/auth/google/start` → 302 to accounts.google.com.
+                  `deploy/VERIFY.md` documents the three post-deploy
+                  probes; manual prerequisite is adding the callback
+                  URI to the OAuth client in Google Cloud Console.
                   Eight steps (per discussion 70):
                   1. `FLY_API_TOKEN=$(cat creds/fly.token) flyctl
                      apps create tex-center` (region `fra`).
