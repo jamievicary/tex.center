@@ -148,6 +148,15 @@ export class WsClient {
   }
 
   /**
+   * Ask the sidecar to delete a project file. The server rejects
+   * `MAIN_DOC_NAME` and unknown names; on success it broadcasts a
+   * refreshed `file-list`.
+   */
+  deleteFile(name: string): void {
+    this.send(encodeControl({ type: "delete-file", name }));
+  }
+
+  /**
    * Returns the `Y.Text` for a given filename on the project doc.
    * Each persisted file is hydrated by the server into
    * `doc.getText(<relative-path>)`; calling this with an unknown

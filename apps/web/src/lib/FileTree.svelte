@@ -1,12 +1,16 @@
 <script lang="ts">
+  import { MAIN_DOC_NAME } from "@tex-center/protocol";
+
   let {
     files,
     selected = $bindable<string>(""),
     onCreateFile,
+    onDeleteFile,
   }: {
     files: string[];
     selected: string;
     onCreateFile?: (name: string) => void;
+    onDeleteFile?: (name: string) => void;
   } = $props();
 
   let newName = $state("");
@@ -30,6 +34,14 @@
       >
         {f}
       </button>
+      {#if onDeleteFile && f !== MAIN_DOC_NAME}
+        <button
+          type="button"
+          class="del"
+          aria-label={`delete ${f}`}
+          onclick={() => onDeleteFile(f)}
+        >×</button>
+      {/if}
     </li>
   {/each}
 </ul>
@@ -54,16 +66,27 @@
   }
   li {
     margin: 0;
+    display: flex;
+    align-items: stretch;
   }
   ul button {
-    display: block;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: 0.4rem 0.75rem;
     border: 0;
     background: transparent;
     text-align: left;
     font: inherit;
     cursor: pointer;
+  }
+  ul button.del {
+    flex: 0 0 auto;
+    padding: 0 0.5rem;
+    color: #9ca3af;
+  }
+  ul button.del:hover {
+    color: #b91c1c;
+    background: transparent;
   }
   ul button:hover {
     background: #f3f4f6;

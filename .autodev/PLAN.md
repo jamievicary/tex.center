@@ -156,7 +156,12 @@ Smaller in-tree alternatives if blocked:
 - File-tree create landed iter 61: `create-file` protocol verb,
   `ProjectPersistence.addFile(name)` (PUTs an empty blob when
   `canPersist`), `WsClient.createFile`, FileTree new-file input.
-  Rename / delete still queued in `FUTURE_IDEAS.md`.
+- File-tree delete landed iter 62: `delete-file` protocol verb,
+  `ProjectPersistence.deleteFile(name)` (rejects `main.tex` and
+  unknown names; clears the file's `Y.Text`, removes from
+  `knownFiles`/`persistedByName`, deletes the blob when
+  `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
+  button. Rename still queued in `FUTURE_IDEAS.md`.
 
 ## Live caveats
 

@@ -79,6 +79,10 @@
       files={snapshot.files}
       bind:selected
       onCreateFile={(name) => client?.createFile(name)}
+      onDeleteFile={(name) => {
+        if (selected === name) selected = MAIN_DOC_NAME;
+        client?.deleteFile(name);
+      }}
     />
   </aside>
   <section class="editor">

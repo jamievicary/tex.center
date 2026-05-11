@@ -34,7 +34,8 @@ export type ControlMessage =
   | { type: "view"; page: number }
   | { type: "compile-status"; state: "idle" | "running" | "error"; detail?: string }
   | { type: "file-list"; files: string[] }
-  | { type: "create-file"; name: string };
+  | { type: "create-file"; name: string }
+  | { type: "delete-file"; name: string };
 
 export interface PdfSegment {
   totalLength: number;

@@ -116,6 +116,20 @@ export interface ProjectPersistence {
    * The in-memory `knownFiles` set is only mutated on success.
    */
   addFile(name: string): Promise<{ added: true } | { added: false; reason: string }>;
+  /**
+   * Delete a project file. Rejects `MAIN_DOC_NAME` (never removable;
+   * the project always has a main entry) and any name not currently
+   * in `files()`. Clears the file's `Y.Text` contents in-place
+   * (Y.Doc has no remove-type primitive), removes it from
+   * `knownFiles` so `maybePersist` no longer touches the key, and —
+   * when the blob store is wired and hydration succeeded — deletes
+   * the blob.
+   *
+   * Returns `{ deleted: true }` on success, otherwise
+   * `{ deleted: false, reason }`. The in-memory state is only
+   * mutated on success.
+   */
+  deleteFile(name: string): Promise<{ deleted: true } | { deleted: false; reason: string }>;
 }
 
 const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -156,6 +170,14 @@ export function createProjectPersistence(args: {
         if (memFiles.has(name)) return { added: false, reason: "already exists" };
         memFiles.add(name);
         return { added: true };
+      },
+      async deleteFile(name) {
+        if (name === MAIN_DOC_NAME) return { deleted: false, reason: "cannot delete main" };
+        if (!memFiles.has(name)) return { deleted: false, reason: "no such file" };
+        const t = doc.getText(name);
+        if (t.length > 0) t.delete(0, t.length);
+        memFiles.delete(name);
+        return { deleted: true };
       },
     };
   }
@@ -230,6 +252,26 @@ export function createProjectPersistence(args: {
       }
       knownFiles.add(name);
       return { added: true };
+    },
+    async deleteFile(name): Promise<{ deleted: true } | { deleted: false; reason: string }> {
+      if (name === MAIN_DOC_NAME) return { deleted: false, reason: "cannot delete main" };
+      if (!knownFiles.has(name)) return { deleted: false, reason: "no such file" };
+      if (canPersist) {
+        try {
+          await blobStore.delete(`${projectFilesDir(projectId)}/${name}`);
+        } catch (e) {
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            `blob delete failed for ${name}`,
+          );
+          return { deleted: false, reason: "blob delete failed" };
+        }
+      }
+      const t = doc.getText(name);
+      if (t.length > 0) t.delete(0, t.length);
+      knownFiles.delete(name);
+      persistedByName.delete(name);
+      return { deleted: true };
     },
     async maybePersist(): Promise<void> {
       if (!canPersist) return;

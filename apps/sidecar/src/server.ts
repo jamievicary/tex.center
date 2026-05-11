@@ -343,6 +343,21 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                   encodeControl({ type: "file-list", files: project.persistence.files() }),
                 );
               });
+            } else if (decoded.message.type === "delete-file") {
+              const name = decoded.message.name;
+              void project.persistence.deleteFile(name).then((res) => {
+                if (!res.deleted) {
+                  app.log.warn(
+                    { name, reason: res.reason, projectId: project.id },
+                    "delete-file rejected",
+                  );
+                  return;
+                }
+                broadcast(
+                  project,
+                  encodeControl({ type: "file-list", files: project.persistence.files() }),
+                );
+              });
             }
             break;
           case "awareness":

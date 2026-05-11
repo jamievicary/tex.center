@@ -50,6 +50,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_create_file(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverCreateFile.test.mjs")
 
+    def test_sidecar_server_delete_file(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverDeleteFile.test.mjs")
+
     def test_sidecar_server_db(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverDb.test.mjs")
 
