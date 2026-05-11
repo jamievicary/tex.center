@@ -26,6 +26,7 @@ export interface WsClientSnapshot {
   pdfBytes: Uint8Array | null;
   lastError: string | null;
   compileState: "idle" | "running" | "error" | "unknown";
+  files: string[];
 }
 
 export interface WsClientOptions {
@@ -44,6 +45,7 @@ export class WsClient {
   private _pdfBytes: Uint8Array | null = null;
   private _lastError: string | null = null;
   private _compileState: WsClientSnapshot["compileState"] = "unknown";
+  private _files: string[] = [MAIN_DOC_NAME];
   private readonly onDocUpdate: (update: Uint8Array, origin: unknown) => void;
 
   constructor(opts: WsClientOptions) {
@@ -115,6 +117,9 @@ export class WsClient {
             this._lastError = decoded.message.detail ?? "compile error";
           }
           this.emit();
+        } else if (decoded.message.type === "file-list") {
+          this._files = decoded.message.files;
+          this.emit();
         }
         break;
       case "awareness":
@@ -138,6 +143,7 @@ export class WsClient {
       pdfBytes: this._pdfBytes,
       lastError: this._lastError,
       compileState: this._compileState,
+      files: this._files,
     };
   }
 

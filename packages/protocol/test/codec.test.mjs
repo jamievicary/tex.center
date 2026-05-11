@@ -37,6 +37,15 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
   assert.deepEqual(decoded.message, { type: "view", page: 7 });
 }
 
+// file-list control message round-trip
+{
+  const frame = encodeControl({ type: "file-list", files: ["main.tex", "refs.bib"] });
+  assert.equal(frame[0], TAG_CONTROL);
+  const decoded = decodeFrame(frame);
+  assert.equal(decoded.kind, "control");
+  assert.deepEqual(decoded.message, { type: "file-list", files: ["main.tex", "refs.bib"] });
+}
+
 // pdf-segment round-trip
 {
   const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"

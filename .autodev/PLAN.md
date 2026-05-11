@@ -137,8 +137,10 @@ spawning, (D) auth + production polish.
 Smaller in-tree alternatives if blocked:
 - Multi-file-project slice on the sidecar (today hydration is
   `main.tex`-only). Listing primitive `listProjectFiles` landed
-  iter 55; next coherent slice is a new protocol control message
-  shipping the file list to the client + FileTree wiring.
+  iter 55; protocol `file-list` control + FileTree wiring landed
+  iter 56. Next coherent slice: per-file `Y.Text` hydration so
+  selecting a non-`main.tex` file shows its contents in the
+  editor (needs per-file doc names in the wire format).
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7).

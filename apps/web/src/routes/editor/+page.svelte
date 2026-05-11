@@ -11,7 +11,6 @@
 
   let { data } = $props();
 
-  let files = $state<string[]>([MAIN_DOC_NAME]);
   let selected = $state<string>(MAIN_DOC_NAME);
 
   // Until the WS connects we display nothing in the editor + viewer.
@@ -27,6 +26,7 @@
     pdfBytes: null,
     lastError: null,
     compileState: "unknown",
+    files: [MAIN_DOC_NAME],
   });
 
   let client: WsClient | null = null;
@@ -68,7 +68,7 @@
     {/if}
   </header>
   <aside class="tree">
-    <FileTree {files} bind:selected />
+    <FileTree files={snapshot.files} bind:selected />
   </aside>
   <section class="editor">
     {#key text}

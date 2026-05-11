@@ -32,7 +32,8 @@ export const TAG_PDF_SEGMENT = 0x20;
 export type ControlMessage =
   | { type: "hello"; protocol: number }
   | { type: "view"; page: number }
-  | { type: "compile-status"; state: "idle" | "running" | "error"; detail?: string };
+  | { type: "compile-status"; state: "idle" | "running" | "error"; detail?: string }
+  | { type: "file-list"; files: string[] };
 
 export interface PdfSegment {
   totalLength: number;

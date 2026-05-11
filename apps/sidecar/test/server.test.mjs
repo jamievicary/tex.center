@@ -66,6 +66,13 @@ await waitForCondition(() => {
   return hasHello && hasPdf && hasIdle;
 }, "initial compile cycle");
 
+// Default (no blobStore) file-list contains just main.tex.
+const fileListFrame = frames.find(
+  (f) => f.kind === "control" && f.message.type === "file-list",
+);
+assert.ok(fileListFrame, "expected file-list control frame");
+assert.deepEqual(fileListFrame.message.files, ["main.tex"]);
+
 const pdfFrame = frames.find((f) => f.kind === "pdf-segment");
 assert.ok(pdfFrame.segment.totalLength > 0);
 assert.equal(pdfFrame.segment.offset, 0);

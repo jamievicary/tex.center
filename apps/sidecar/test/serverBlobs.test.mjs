@@ -24,6 +24,8 @@ const blobStore = new LocalFsBlobStore({ rootDir: blobRoot });
 const projectId = "alpha";
 const initial = "\\documentclass{article}\\begin{document}hello\\end{document}";
 await blobStore.put(`projects/${projectId}/files/main.tex`, new TextEncoder().encode(initial));
+// Sibling file to exercise multi-file `file-list`.
+await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().encode("@book{x,...}"));
 
 async function waitFor(check, label, frames) {
   const deadline = Date.now() + 5000;
@@ -58,6 +60,24 @@ async function bootClient(app) {
 
   const { ws, frames, text } = await bootClient(app);
   await waitFor(() => text.toString() === initial, "hydrated initial", frames);
+
+  // The blob store has `main.tex` plus a sibling `refs.bib`; the
+  // file-list control message must reflect both, sorted.
+  await waitFor(
+    () =>
+      frames.some(
+        (f) =>
+          f.kind === "control" &&
+          f.message.type === "file-list" &&
+          f.message.files.length === 2,
+      ),
+    "file-list with two files",
+    frames,
+  );
+  const fileListFrame = frames.find(
+    (f) => f.kind === "control" && f.message.type === "file-list",
+  );
+  assert.deepEqual(fileListFrame.message.files, ["main.tex", "refs.bib"]);
 
   // Drive an edit through the same Yjs doc the test client holds —
   // produce a delta against current state and ship it. The server
