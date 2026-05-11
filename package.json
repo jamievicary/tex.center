@@ -14,7 +14,8 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.2.17",
+    "@electric-sql/pglite": "^0.3.16",
+    "@electric-sql/pglite-socket": "^0.0.22",
     "@playwright/test": "1.49.1",
     "@tex-center/auth": "workspace:*",
     "@tex-center/db": "workspace:*",

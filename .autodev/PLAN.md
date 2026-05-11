@@ -308,11 +308,58 @@ spawning, (D) auth + production polish.
                         spec uses it yet (pw.1.2 does), but a
                         module-load smoke test catches top-level
                         breakage.
-                  - [ ] **M8.pw.1.1.c** — DB co-location for the
-                        `local` target. Design + land
-                        PGlite-server-or-equivalent so the dev
-                        server and the Playwright test process
-                        share a writable Postgres-wire DB.
+                  - [~] **M8.pw.1.1.c** — DB co-location for the
+                        `local` target.
+                        - [x] **Design + helper.** _(iter 84.)_
+                              Option (a) chosen: PGlite-over-TCP
+                              via `@electric-sql/pglite-socket`.
+                              Option (c) (shared in-process
+                              PGlite via a swappable `getDb()`)
+                              ruled out because the SvelteKit dev
+                              server runs as a child of
+                              Playwright's `webServer` — sharing
+                              state cross-process needs a real
+                              transport, not module-graph
+                              sharing. Option (b) (ephemeral
+                              system Postgres) needs a binary on
+                              every dev/CI box; rejected. Cost:
+                              `@electric-sql/pglite` bump
+                              0.2.17 → 0.3.16 (in-tree pglite
+                              tests still pass) + new devDep
+                              `@electric-sql/pglite-socket@^0.0.22`.
+                              Gotcha discovered: pglite-socket's
+                              `maxConnections` default is 1 (not
+                              100 as JSDoc claims) — second
+                              client gets ECONNRESET; helper
+                              sets `maxConnections: 16` explicitly.
+                              Helper: `tests_gold/lib/src/localDb.ts`
+                              `startLocalDb({signingKey?, seedEmail?,
+                              seedGoogleSub?})` → `{url, port, db,
+                              signingKey, userId, close()}`. Boots
+                              PGlite, applies migrations from
+                              `packages/db/src/migrations`, seeds
+                              one user (default
+                              `jamievicary@gmail.com`), wraps in
+                              `PGLiteSocketServer` on
+                              `127.0.0.1:0`, returns a
+                              `postgres-js` DbHandle for the
+                              test driver. `close()` is
+                              idempotent. End-to-end gold test
+                              opens a second `postgres-js`
+                              client over the same URL (modelling
+                              the dev server's `getDb()`) and
+                              verifies a write through the
+                              driver-side handle is visible
+                              through the dev-server-side handle.
+                        - [ ] **Wiring.** Playwright `globalSetup`
+                              starts `startLocalDb`, sets
+                              `process.env.DATABASE_URL`,
+                              `SESSION_SIGNING_KEY`,
+                              `TEXCENTER_LOCAL_USER_ID`,
+                              persists handle for `globalTeardown`.
+                              Extend `authedPage` fixture to pick
+                              `liveDb` vs `localDb` based on
+                              `testInfo.project.name`.
             - [ ] **M8.pw.1.2** — First wave of tests: `/` →
                   `/projects` redirect when authed, `/editor/<id>`
                   three-panel layout DOM presence, `/projects`
@@ -336,18 +383,16 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1.1.c — local-target DB
-co-location. Design call between (a) PGlite-server TCP variant
-(`@electric-sql/pglite-socket`) and (b) ephemeral real Postgres
-(spawn per-worker, similar to flyProxy spinup pattern) or
-(c) shared in-process PGlite that the dev server reads from via
-a runtime-swappable `getDb()`. Most appealing today is (c)
-because no extra binaries/servers/processes, but it requires
-the dev server to import the same module the test driver
-inserts rows through — needs a small dev-only seam in
-`apps/web/src/lib/server/db.ts`. Land the design + the fixture
-in one iteration. Queue: pw.1.1.c → pw.1.2 → M7.0.2 → pw.2 →
-M7.0.3.
+**Next ordinary iteration:** M8.pw.1.1.c wiring — bolt the
+`startLocalDb` helper (landed iter 84) onto Playwright via a
+`globalSetup`/`globalTeardown` pair that exports the URL +
+signing key + seeded user id into env for the dev-server
+`webServer` to pick up, and teach the `authedPage` fixture to
+pick `liveDb` vs `localDb` from `testInfo.project.name`. The
+`apps/web` dev server already reads `DATABASE_URL` + falls
+back to anonymous if `SESSION_SIGNING_KEY` is unset, so no
+seam needed in `apps/web` itself. Queue: pw.1.1.c-wiring →
+pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
