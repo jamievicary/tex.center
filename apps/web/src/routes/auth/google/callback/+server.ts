@@ -15,6 +15,7 @@ import type { RequestHandler } from "@sveltejs/kit";
 
 import { loadOAuthConfig } from "$lib/server/oauthConfig.js";
 import { resolveGoogleCallback } from "$lib/server/oauthCallback.js";
+import { readCookie } from "$lib/server/cookies.js";
 import { getDb } from "$lib/server/db.js";
 import {
   makeExchangeCodeForTokens,
@@ -102,16 +103,3 @@ function toResponse(
   return new Response(r.body, { status: r.status, headers });
 }
 
-/** Parse a single cookie by name from a `Cookie` header value. */
-function readCookie(header: string | null, name: string): string | null {
-  if (header === null) return null;
-  for (const part of header.split(";")) {
-    const trimmed = part.trim();
-    if (trimmed === "") continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const k = trimmed.slice(0, eq);
-    if (k === name) return trimmed.slice(eq + 1);
-  }
-  return null;
-}

@@ -30,6 +30,8 @@ import {
   type StateVerifyFailure,
 } from "@tex-center/auth";
 
+import { formatClearCookie, formatSetCookie } from "./cookies.js";
+
 /** Already-verified ID token claims surfaced by `verifyIdToken`. */
 export interface VerifiedIdToken {
   readonly sub: string;
@@ -123,7 +125,11 @@ const STATE_RE = /^[A-Za-z0-9_-]+$/u;
 export async function resolveGoogleCallback(
   input: ResolveGoogleCallbackInput,
 ): Promise<GoogleCallbackResolution> {
-  const clearState = clearCookie(input.stateCookieName, "/auth", input.secureCookie);
+  const clearState = formatClearCookie({
+    name: input.stateCookieName,
+    path: "/auth",
+    secure: input.secureCookie,
+  });
 
   if (input.queryError !== null && input.queryError !== "") {
     // `access_denied` is the OAuth 2.0 spec code for "user cancelled
@@ -216,12 +222,13 @@ export async function resolveGoogleCallback(
   }
   const exp = input.nowSeconds + input.sessionTtlSeconds;
   const sessionToken = signSessionToken({ sid, exp }, input.signingKey);
-  const sessionCookie = formatSessionCookie(
-    input.sessionCookieName,
-    sessionToken,
-    input.sessionTtlSeconds,
-    input.secureCookie,
-  );
+  const sessionCookie = formatSetCookie({
+    name: input.sessionCookieName,
+    value: sessionToken,
+    path: "/",
+    maxAgeSeconds: input.sessionTtlSeconds,
+    secure: input.secureCookie,
+  });
 
   return {
     kind: "redirect",
@@ -236,29 +243,6 @@ function errorWith(
   setCookies: readonly string[],
 ): GoogleCallbackResolution {
   return { kind: "error", status, body, setCookies };
-}
-
-function clearCookie(name: string, path: string, secure: boolean): string {
-  const attrs = [`${name}=`, `Path=${path}`, "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (secure) attrs.push("Secure");
-  return attrs.join("; ");
-}
-
-function formatSessionCookie(
-  name: string,
-  value: string,
-  ttlSeconds: number,
-  secure: boolean,
-): string {
-  const attrs = [
-    `${name}=${value}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${ttlSeconds}`,
-  ];
-  if (secure) attrs.push("Secure");
-  return attrs.join("; ");
 }
 
 function errorMessage(err: unknown): string {

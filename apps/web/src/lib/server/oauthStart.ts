@@ -12,6 +12,8 @@
 
 import { signStateCookie, type PkcePair } from "@tex-center/auth";
 
+import { formatSetCookie } from "./cookies.js";
+
 export interface GoogleAuthorizeRedirectInput {
   /** OAuth client_id from creds/google-oauth.json. */
   readonly clientId: string;
@@ -61,17 +63,14 @@ export function buildGoogleAuthorizeRedirect(
     access_type: "online",
   });
 
-  const attrs = [
-    `${input.cookieName}=${token}`,
-    "Path=/auth",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${input.stateTtlSeconds}`,
-  ];
-  if (input.secureCookie) attrs.push("Secure");
-
   return {
     location: `${AUTHORIZE_URL}?${params.toString()}`,
-    stateCookie: attrs.join("; "),
+    stateCookie: formatSetCookie({
+      name: input.cookieName,
+      value: token,
+      path: "/auth",
+      maxAgeSeconds: input.stateTtlSeconds,
+      secure: input.secureCookie,
+    }),
   };
 }

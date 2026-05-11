@@ -17,6 +17,8 @@
 // reserved (a future link-driven flow can route through a CSRF-
 // safe POST shim); the route file maps anything else to 405.
 
+import { formatClearCookie } from "./cookies.js";
+
 export interface ResolveLogoutInput {
   /** Verified session id from `event.locals.session`, or `null`. */
   readonly sessionId: string | null;
@@ -46,14 +48,12 @@ export async function resolveLogout(
   return {
     location: input.signedOutPath,
     setCookies: [
-      clearSessionCookie(input.sessionCookieName, input.secureCookie),
+      formatClearCookie({
+        name: input.sessionCookieName,
+        path: "/",
+        secure: input.secureCookie,
+      }),
     ],
     reason,
   };
-}
-
-function clearSessionCookie(name: string, secure: boolean): string {
-  const attrs = [`${name}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (secure) attrs.push("Secure");
-  return attrs.join("; ");
 }

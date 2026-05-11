@@ -16,6 +16,8 @@ import {
   type VerifyFailure,
 } from "@tex-center/auth";
 
+import { formatClearCookie, readCookie } from "./cookies.js";
+
 export interface ResolvedSessionUser {
   readonly id: string;
   readonly email: string;
@@ -91,10 +93,11 @@ export async function resolveSessionHook(
   if (!verified.ok) {
     return {
       session: null,
-      clearCookie: clearSessionCookie(
-        input.sessionCookieName,
-        input.secureCookie,
-      ),
+      clearCookie: formatClearCookie({
+        name: input.sessionCookieName,
+        path: "/",
+        secure: input.secureCookie,
+      }),
       reason: tokenFailureReason(verified.reason),
     };
   }
@@ -103,10 +106,11 @@ export async function resolveSessionHook(
   if (!UUID_RE.test(sid)) {
     return {
       session: null,
-      clearCookie: clearSessionCookie(
-        input.sessionCookieName,
-        input.secureCookie,
-      ),
+      clearCookie: formatClearCookie({
+        name: input.sessionCookieName,
+        path: "/",
+        secure: input.secureCookie,
+      }),
       reason: "bad-sid",
     };
   }
@@ -122,10 +126,11 @@ export async function resolveSessionHook(
   if (row === null) {
     return {
       session: null,
-      clearCookie: clearSessionCookie(
-        input.sessionCookieName,
-        input.secureCookie,
-      ),
+      clearCookie: formatClearCookie({
+        name: input.sessionCookieName,
+        path: "/",
+        secure: input.secureCookie,
+      }),
       reason: "no-row",
     };
   }
@@ -133,10 +138,11 @@ export async function resolveSessionHook(
   if (row.session.expiresAt.getTime() <= input.nowSeconds * 1000) {
     return {
       session: null,
-      clearCookie: clearSessionCookie(
-        input.sessionCookieName,
-        input.secureCookie,
-      ),
+      clearCookie: formatClearCookie({
+        name: input.sessionCookieName,
+        path: "/",
+        secure: input.secureCookie,
+      }),
       reason: "expired-row",
     };
   }
@@ -158,22 +164,3 @@ function tokenFailureReason(
   return reason === "expired" ? "expired-token" : "bad-token";
 }
 
-function clearSessionCookie(name: string, secure: boolean): string {
-  const attrs = [`${name}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (secure) attrs.push("Secure");
-  return attrs.join("; ");
-}
-
-/** Parse a single cookie by name from a `Cookie` header value. */
-function readCookie(header: string | null, name: string): string | null {
-  if (header === null) return null;
-  for (const part of header.split(";")) {
-    const trimmed = part.trim();
-    if (trimmed === "") continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const k = trimmed.slice(0, eq);
-    if (k === name) return trimmed.slice(eq + 1);
-  }
-  return null;
-}
