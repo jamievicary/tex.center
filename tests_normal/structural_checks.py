@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import glob
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -165,6 +167,22 @@ def main() -> int:
                             f"{(pkg_dir / 'package.json').relative_to(ROOT)}: "
                             f"workspace dep {dep_name!r} not present in workspace"
                         )
+
+    # No tracked atomic-write temp files. The root `.gitignore`
+    # excludes `*.tmp` and `*.tmp.<pid>.<ms>` patterns, but a file
+    # added before the rule existed (or via `git add -f`) would slip
+    # through. Iter 10 committed two such files; iter 52 removed
+    # them and added this guard.
+    tmp_re = re.compile(r"\.tmp(\.[0-9]+(\.[0-9]+)*)?$")
+    try:
+        tracked = subprocess.check_output(
+            ["git", "ls-files", "-z"], cwd=ROOT
+        ).decode().split("\0")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        tracked = []
+    for path in tracked:
+        if path and tmp_re.search(path):
+            err(f"tracked atomic-write temp file: {path}")
 
     # Required workspace packages for the MVP architecture.
     expected = {"@tex-center/web", "@tex-center/sidecar", "@tex-center/protocol"}
