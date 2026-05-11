@@ -249,15 +249,40 @@ spawning, (D) auth + production polish.
                         connect-refused → client-close. Registered
                         in `tests_normal/cases/test_node_suites.py
                         ::test_web_ws_proxy`. _(iter 94.)_
-                  - [ ] **M7.0.3.1** — Custom Node entry that
-                        boots adapter-node's `build/handler.js`
-                        alongside `attachWsProxy`, replacing the
-                        default `build/index.js` CMD in
-                        `apps/web/Dockerfile`. In dev, the
-                        existing Vite proxy block in
-                        `apps/web/vite.config.ts` already
-                        forwards `/ws` to `127.0.0.1:3001`, so
-                        no dev-server change is needed.
+                  - [x] **M7.0.3.1** — Custom Node entry. _(iter 95.)_
+                        `apps/web/src/server.ts` imports
+                        adapter-node's `./handler.js`, creates an
+                        `http.Server` with it, calls
+                        `boot()` from
+                        `apps/web/src/lib/server/boot.ts` to
+                        attach the iter-94 `attachWsProxy`, and
+                        listens on `PORT`/`HOST`. `boot()` is
+                        extracted as a pure function so it can be
+                        unit-tested without running the
+                        SIGTERM/process.exit wiring; the entry
+                        installs SIGTERM+SIGINT handlers that
+                        call `server.close` with a 10s hard-stop.
+                        Bundled into `build/server.js` by
+                        `apps/web/scripts/build-server-entry.mjs`
+                        (esbuild via vite transitive), with
+                        `./handler.js` marked external so the
+                        bundle resolves to the sibling
+                        adapter-node output at runtime. The
+                        web `build` npm script runs `vite build &&
+                        node scripts/build-server-entry.mjs`;
+                        Dockerfile `CMD` swapped to `["node",
+                        "build/server.js"]`. Tests: new
+                        `apps/web/test/boot.test.mjs` (fake
+                        handler + stub upstream — HTTP, valid
+                        upgrade proxy, unknown-path 404, plus
+                        `parsePort` edge cases); structural
+                        `test_web_dockerfile.py::
+                        test_runtime_entrypoint` updated for the
+                        new CMD. In dev, the existing Vite proxy
+                        block in `apps/web/vite.config.ts`
+                        already forwards `/ws` to
+                        `127.0.0.1:3001`, so no dev-server
+                        change is needed.
                   - [ ] **M7.0.3.2** — Auth gating in the upgrade
                         handler: verify `tc_session` cookie via
                         the same path `hooks.server.ts` uses
@@ -566,13 +591,18 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.3.1 — custom Node entry that
-boots adapter-node's `build/handler.js` alongside the iter-94
-`attachWsProxy`, replacing the default `build/index.js` CMD in
-`apps/web/Dockerfile`. M7.0.3.0 (pure proxy module + unit tests)
-landed iter 94. Queue after: M7.0.3.2 (auth gating in upgrade
-handler), M7.0.3.3 (deploy + verify), M8.pw.2 (deploy verification
-hooks), M7.1 (Machines API client / per-project Machines).
+**Next ordinary iteration:** M7.0.3.2 — auth gating in the upgrade
+handler: parse `Cookie:` from `req.headers.cookie` in the
+`attachWsProxy` upgrade callback (or as a wrapper around it),
+verify `tc_session` via `loadSessionSigningKey` +
+`resolveSessionHook` (same path `hooks.server.ts` uses) before
+`net.connect`-ing the upstream; unauthenticated upgrades → 401 +
+close. Without this, `/ws/project/*` is the only unauth-accessible
+authenticated surface. Iter 94 landed pure proxy module; iter 95
+landed the custom Node entry (`build/server.js`) + Dockerfile CMD
+swap. Queue after: M7.0.3.3 (deploy + verify), M8.pw.2 (deploy
+verification hooks), M7.1 (Machines API client / per-project
+Machines).
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

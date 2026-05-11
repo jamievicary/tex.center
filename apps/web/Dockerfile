@@ -54,4 +54,4 @@ COPY --from=builder /repo/apps/web/build ./build
 # package.json declares `"type": "module"`. Stub one in /app.
 RUN echo '{"type":"module"}' > package.json
 EXPOSE 3000
-CMD ["node", "build/index.js"]
+CMD ["node", "build/server.js"]

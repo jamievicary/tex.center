@@ -107,6 +107,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_ws_proxy(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "wsProxy.test.mjs")
 
+    def test_web_boot(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "boot.test.mjs")
+
     def test_web_logout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "logout.test.mjs")
 

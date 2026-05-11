@@ -7,21 +7,21 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 2s
+Done in 1.8s
 Scope: 6 of 7 workspace projects
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778541217569 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778541217575 COMPLETED 711 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778541857847 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778541857853 COMPLETED 713 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
@@ -68,6 +68,7 @@ test_sidecar_server_rename_file (test_node_suites.TestNodeSuites.test_sidecar_se
 test_sidecar_server_upload_file (test_node_suites.TestNodeSuites.test_sidecar_server_upload_file) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
+test_web_boot (test_node_suites.TestNodeSuites.test_web_boot) ... ok
 test_web_google_tokens (test_node_suites.TestNodeSuites.test_web_google_tokens) ... ok
 test_web_logout (test_node_suites.TestNodeSuites.test_web_logout) ... ok
 test_web_oauth_callback (test_node_suites.TestNodeSuites.test_web_oauth_callback) ... ok
@@ -106,7 +107,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 81 tests in 83.699s
+Ran 82 tests in 41.252s
 
 OK
 tests_normal/run_tests.sh: PASS

@@ -35,8 +35,11 @@ class TestWebDockerfile(unittest.TestCase):
         self.assertRegex(self.text, r"(?m)^FROM\s+\S+\s+AS\s+runtime")
 
     def test_runtime_entrypoint(self) -> None:
-        # adapter-node emits build/index.js — the CMD must point at it.
-        self.assertIn('CMD ["node", "build/index.js"]', self.text)
+        # Custom Node entry `build/server.js` boots adapter-node's
+        # `handler.js` alongside the WS proxy (M7.0.3.1). The default
+        # `build/index.js` doesn't hook HTTP Upgrade, so leaving it as
+        # CMD would silently drop /ws/project/<id> connections.
+        self.assertIn('CMD ["node", "build/server.js"]', self.text)
 
     def test_runtime_listens_on_all_interfaces(self) -> None:
         # Fly's HTTP service health checks come from inside the
