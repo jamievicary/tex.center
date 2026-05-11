@@ -113,54 +113,12 @@ spawning, (D) auth + production polish.
                   `--zone --ipv4 --ipv6 [--acme-name --acme-value]
                   [--dry-run]`). _(iter 46.)_
             - [x] **M6.3.1** — Live deploy of the control plane.
-                  Landed iter 73: `tex-center` Fly app created in
-                  `fra`, `FLY_API_TOKEN` GH secret set,
-                  `flyctl deploy --remote-only` succeeded after
-                  fixing an ESM runtime bug (added
-                  `{"type":"module"}` stub in `apps/web/Dockerfile`
-                  runtime stage — adapter-node emits ESM but the
-                  bare `/app/build/` had no sibling package.json).
-                  Dedicated IPv4 blocked on trial org (shared v4
-                  `66.241.125.118` works for custom apex via SNI);
-                  dedicated IPv6 `2a09:8280:1::114:4adc:0` issued.
-                  Cloudflare apex A/AAAA reconciled by
-                  `scripts/cloudflare-dns.mjs`; Fly cert issued via
-                  TLS-ALPN-01 within ~30s (no ACME TXT needed).
-                  `https://tex.center/healthz` → 200 JSON,
-                  `https://tex.center/` → 200 HTML. State captured
-                  in `deploy/README.md`. Iter 76 closed the OAuth
-                  verification gap: refactored `oauthConfig.ts` to
-                  env-first (dev-only file fallback gated on
-                  `NODE_ENV !== "production"`), pushed Fly secrets
-                  (`GOOGLE_OAUTH_CLIENT_ID/SECRET`,
-                  `GOOGLE_OAUTH_REDIRECT_URI`, fresh
-                  `SESSION_SIGNING_KEY`, `NODE_ENV=production`),
-                  redeployed, and probed
-                  `/auth/google/start` → 302 to accounts.google.com.
-                  `deploy/VERIFY.md` documents the three post-deploy
-                  probes; manual prerequisite is adding the callback
-                  URI to the OAuth client in Google Cloud Console.
-                  Eight steps (per discussion 70):
-                  1. `FLY_API_TOKEN=$(cat creds/fly.token) flyctl
-                     apps create tex-center` (region `fra`).
-                  2. `GH_TOKEN=$(cat creds/github.token) gh secret
-                     set FLY_API_TOKEN < creds/fly.token` on
-                     `github.com/jamievicary/tex.center`.
-                  3. First deploy — push a no-op commit to `main`
-                     or `flyctl deploy --remote-only` directly.
-                  4. `flyctl ips allocate-v4` + `allocate-v6`;
-                     capture addresses.
-                  5. `flyctl certs create tex.center`; capture
-                     ACME DNS-01 challenge name + value.
-                  6. Run `scripts/cloudflare-dns.mjs` with the
-                     captured IPs and ACME challenge to upsert
-                     apex `A`/`AAAA` and `_acme-challenge` TXT.
-                     Poll `flyctl certs show tex.center` until
-                     `Ready`.
-                  7. Probe `https://tex.center/healthz` → 200;
-                     probe `https://tex.center/` → white sign-in.
-                  8. Commit captured state (IPs, app metadata)
-                     into a `deploy/` doc; never commit tokens.
+                  _(iter 73, 76.)_ `tex-center` Fly app in `fra`,
+                  shared IPv4 + dedicated IPv6, Cloudflare apex
+                  reconciled, Fly cert via TLS-ALPN-01, OAuth
+                  secrets pushed via env-first `oauthConfig.ts`.
+                  State + procedure captured in `deploy/README.md`;
+                  post-deploy probes in `deploy/VERIFY.md`.
 
 - [~] **M7 — Sidecar + per-project Machines.** Ordinary in-tree
       milestone (not out-of-tree). Decomposed into sub-milestones;
@@ -349,116 +307,23 @@ process can also write to). Queue (per discussion 77, plus iter
 M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
-- Multi-file-project slice on the sidecar. Listing primitive
-  `listProjectFiles` landed iter 55; protocol `file-list` control +
-  FileTree wiring landed iter 56; per-file `Y.Text` hydration
-  landed iter 58; multi-file persistence landed iter 59
-  (`maybePersist` walks `knownFiles` and PUTs each changed file;
-  `editor/+page.svelte` dropped the readOnly guard; compile
-  schedule moved off `text.observe` to `doc.on("update")` so edits
-  to any file fire compile-and-persist). Remaining file-tree
-  affordances (create / rename / delete) need new protocol verbs
-  and are deferred to FUTURE_IDEAS.
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7).
-- Refactor iter 60: `ProjectPersistence.files()` now exposes the
-  sorted known-file set, so the WS handler no longer calls
-  `listProjectFiles` independently — one round-trip removed per
-  connection and the file-list emitted to the client now equals
-  the set persistence operates on.
-- File-tree create landed iter 61: `create-file` protocol verb,
-  `ProjectPersistence.addFile(name)` (PUTs an empty blob when
-  `canPersist`), `WsClient.createFile`, FileTree new-file input.
-- File-tree delete landed iter 62: `delete-file` protocol verb,
-  `ProjectPersistence.deleteFile(name)` (rejects `main.tex` and
-  unknown names; clears the file's `Y.Text`, removes from
-  `knownFiles`/`persistedByName`, deletes the blob when
-  `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
-  button.
-- Projects dashboard slice landed iter 68: `/projects/+page.{server.ts,svelte,ts}`
-  lists `listProjectsByOwnerId(db, session.user.id)` and a POST
-  `?/create` action calls `createProject` then 303s to
-  `/editor/<id>`. Editor moved from `/editor/+page.*` to
-  `/editor/[projectId]/+page.*`; server load fetches the project
-  by id and 404s if missing or not owned by the current user.
-  Editor page uses `data.project.id` to build the WS URL
-  (`/ws/project/<encodeURIComponent(id)>`); sidecar's path
-  parameter is already plumbed end-to-end. `routeRedirect.ts`:
-  `PROTECTED_PREFIXES` += `/projects`; `SIGNED_IN_HOME` →
-  `/projects`. OAuth callback `SUCCESS_PATH` → `/projects`.
-  The sidecar `getProject(projectId)` cache still seeds the
-  per-project Y.Doc lazily, so a freshly-created project's
-  first WS connect populates the cache; persistence hydrates
-  `main.tex` from the (empty) blob set, which is the same path
-  the legacy `"default"` literal exercised.
-- Sidecar `/ws/project/:projectId` validation tightened iter 69:
-  the `?? "default"` fallback is gone; ids must match
-  `/^[A-Za-z0-9_-]+$/` (same shape `ProjectWorkspace` already
-  enforced) or the WS is closed with code `1008 invalid projectId`
-  before `getProject` runs. New `serverProjectIdValidation.test.mjs`
-  exercises `bad.id`, `has space`, `trailing!` rejection and the
-  positive `good-id_123` open path.
-- Project-row storage primitives landed iter 67:
-  `packages/db/src/projects.ts` exports `createProject`,
-  `getProjectById(db, id)` (null-on-miss), and
-  `listProjectsByOwnerId(db, ownerId)` (sorted by `created_at`
-  then `id` for deterministic test ordering). Re-exported from
-  `packages/db/src/index.ts`. PGlite gold case
-  `tests_gold/cases/test_pglite_projects.py` exercises
-  insert/fetch round-trip, list-by-owner across two owners with
-  empty-list edge case, miss-by-id, and FK enforcement on
-  `ownerId`. No web/sidecar wiring yet — every runtime codepath
-  still uses the hardcoded literal `"default"` for the project
-  id; the dashboard + per-project routing slice lifts that.
-- File-tree upload landed iter 66: `upload-file` protocol verb
-  carrying `{ name, content }` (UTF-8 text); `ProjectPersistence.
-  addFile(name, content?)` extended with an optional content
-  param — the PUT carries the encoded bytes and the file's
-  `Y.Text` is populated inside a `doc.transact` so observers see
-  one coherent update; create-file's empty-blob path is
-  unchanged. `WsClient.uploadFile`, `FileTree.svelte` hidden
-  file-input + "↑" button (rejects names via the existing local
-  validator before sending), editor-page wiring, and a new
-  serverUploadFile test (upload → file-list + Y.Text + blob;
-  duplicate + invalid rejected with `file-op-error op:
-  upload-file`; cold restart preserves content). Binary asset
-  uploads remain future work — `Y.Text` is text-only and a
-  separate binary-blob channel is the next design step there.
-- Wire-level `file-op-error` landed iter 65: protocol variant
-  `{ op: create-file|delete-file|rename-file, reason }`; sidecar
-  unicasts to the originator on each rejection branch (no
-  broadcast — other viewers didn't request the op);
-  `WsClientSnapshot.fileOpError` populated on receipt and cleared
-  on the next `file-list`; `FileTree.svelte`'s create-form area
-  shows the server reason (the local validator still wins when
-  the user is mid-typo). Closes the iter-64 "race rejection is
-  log-only" gap and gives any future file-tree verb (upload, etc.)
-  a ready feedback channel.
-- Client-side file-name validation landed iter 64:
-  `validateProjectFileName` lifted into `@tex-center/protocol` so
-  the web client mirrors the sidecar's name-rejection rules.
-  `FileTree.svelte` shows an inline error on the create input
-  (invalid characters, reserved `main.tex`, duplicate) and
-  `alert(reason)` on the rename prompt — the server is still
-  authoritative, but the user no longer sees silent swallowing.
-  Sidecar `persistence.ts` re-exports `validateProjectFileName`
-  from protocol so existing imports continue to work.
-- File-tree rename landed iter 63: `rename-file` protocol verb,
-  `ProjectPersistence.renameFile(old, new)` (rejects `main.tex` on
-  either side, unknown source, duplicate target, invalid name; on
-  accept, blob-store path PUTs new key then DELETEs old — DELETE
-  failure orphans the old blob rather than rolling back; in-memory
-  contents copied via a single `doc.transact`),
-  `WsClient.renameFile`, FileTree per-row "✎" button using
-  `window.prompt` for the new name. Editor page swaps `selected`
-  to the new name when the renamed file was active.
+
+Closed in-tree slices (consult `git log` / `.autodev/logs/` for
+detail): multi-file project (iter 55–60), file-tree
+create/delete/rename/upload (iter 61–66), `file-op-error`
+protocol + client validation (iter 64–65), project-row storage
+primitives (iter 67), `/projects` dashboard + per-project
+`/editor/[projectId]` routing (iter 68), strict sidecar
+`projectId` validation (iter 69).
 
 ## Live caveats
 
 - `SIDECAR_COMPILER=supertex` (the once-compiler) is the only real
   engine path today; daemon-mode adoption (M7.5) is unblocked
-  upstream but deferred behind M6.3.1 and M7.0.
+  upstream but deferred behind M7.0.
 - `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
   Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
   the future S3 adapter must implement it.
