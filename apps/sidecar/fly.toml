@@ -1,0 +1,33 @@
+# Fly.io app config for the shared sidecar tier (M7.0).
+#
+# This is the per-project supertex/Fastify+ws workload. For now
+# (M7.0) we run a single shared sidecar Machine; per-project
+# Machines arrive in M7.1+. The Machine is reachable only on Fly's
+# 6PN private network at `tex-center-sidecar.internal:3001`; no
+# public IPs are allocated, no public listener is configured. The
+# control plane (`tex-center`) proxies the editor WebSocket
+# through to this app's internal address (M7.0.3).
+#
+# Build context: repo root. Image is built by Fly's remote builder
+# from apps/sidecar/Dockerfile. Image is large (~5GB — full
+# TeX Live) by design; see GOAL.md.
+#
+# Auto-stop is intentionally not configured at this layer: per-
+# project idle stop is M7.3 and lives on the per-project Machines
+# spawned via the Machines API, not on the shared sidecar.
+
+app = "tex-center-sidecar"
+primary_region = "fra"
+
+# dockerfile path is resolved relative to this fly.toml's
+# directory. Build context (`flyctl deploy` working dir) is the
+# repo root so the Dockerfile can COPY from vendor/, packages/,
+# etc. — see deploy/README.md for the exact deploy command.
+[build]
+  dockerfile = "Dockerfile"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

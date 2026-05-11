@@ -141,8 +141,20 @@ spawning, (D) auth + production polish.
                   start`. Engine-binary path `/opt/engine/bin`
                   pre-baked on `$PATH`; provisioning the binary
                   itself is M7.0.1. _(iter 74)_
-            - [x] **M7.0.1** — Provision the patched lualatex
-                  engine. Route (b) taken (iter 75): the prebuilt
+            - [~] **M7.0.1** — Provision the patched lualatex
+                  engine. **Reopened iter 87**: structural test
+                  never exercised an actual image build, so the
+                  runtime stage's `lualatex.fmt` dump silently
+                  regressed — at deploy time kpathsea on the
+                  patched binary (TL 2027/dev, compiled-in prefix
+                  `/opt/engine/...`) can't locate the
+                  apt-installed TL 2022 `texmf.cnf` and aborts
+                  with `! I can't find file 'lualatex.ini'`.
+                  Fix: prepend the right `TEXMFCNF`/`TEXMF*`
+                  envs to the fmt-dump RUN layer, and add a
+                  structural-test guard so this can't drift
+                  again. Diagnosis evidence in iter 87 log.
+                  Route (b) taken (iter 75): the prebuilt
                   stripped ELF is vendored at
                   `vendor/engine/x86_64-linux/lualatex-incremental`
                   (7.3MB, glibc ≤ 2.34, runs on bookworm).
@@ -162,11 +174,29 @@ spawning, (D) auth + production polish.
                   FUTURE_IDEAS: push the dirty changes upstream
                   and switch to a source-built engine for full
                   reproducibility.
-            - [ ] **M7.0.2** — `apps/sidecar/fly.toml` and a
+            - [~] **M7.0.2** — `apps/sidecar/fly.toml` and a
                   second Fly app `tex-center-sidecar` in `fra`.
                   First `flyctl deploy --remote-only` against
                   that app. No public IPs (sidecar is reached
                   over 6PN only); internal port 3001.
+                  - [x] **Manifest + app-create.** _(iter 87.)_
+                        `apps/sidecar/fly.toml` (6PN-only: no
+                        `[http_service]`/`[[services]]`, single
+                        `[[vm]]` `shared-cpu-1x`/`1gb`,
+                        `dockerfile = "Dockerfile"` relative to
+                        the fly.toml dir). Structural test
+                        `tests_normal/cases/test_sidecar_fly_toml.py`.
+                        `flyctl apps create tex-center-sidecar
+                        -o personal` ran cleanly.
+                  - [ ] **First deploy.** Gated on M7.0.1
+                        Dockerfile fix (kpathsea env). Canonical
+                        command: `flyctl deploy --remote-only
+                        --no-public-ips -a tex-center-sidecar
+                        --config apps/sidecar/fly.toml .` (run
+                        from repo root; **always** pass both
+                        `-a` and `--config` — iter 87 hit a
+                        misfire where omitting them redeployed
+                        the control plane).
             - [ ] **M7.0.3** — Control-plane WS proxy. `apps/web`
                   gains a server route at `/ws/project/[id]` that
                   dials `tex-center-sidecar.internal:3001` over
@@ -429,10 +459,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.2 — second Fly app
-`tex-center-sidecar` in `fra`, `apps/sidecar/fly.toml`, first
-`flyctl deploy --remote-only`. No public IPs (6PN-only),
-internal port 3001. Queue: M7.0.2 → pw.2 → M7.0.3.
+**Next ordinary iteration:** Fix the M7.0.1 kpathsea regression
+in `apps/sidecar/Dockerfile` (fmt-dump RUN needs `TEXMFCNF`
+pointing at the apt-installed TL 2022 tree), add a guard to
+`test_sidecar_dockerfile.py`, then retry the M7.0.2 first
+deploy. Queue after: M7.0.2 first-deploy → pw.2 → M7.0.3.
+Manifest + app-create halves of M7.0.2 already landed in iter 87.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
