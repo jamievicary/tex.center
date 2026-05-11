@@ -130,6 +130,24 @@ export interface ProjectPersistence {
    * mutated on success.
    */
   deleteFile(name: string): Promise<{ deleted: true } | { deleted: false; reason: string }>;
+  /**
+   * Rename a project file. Rejects renaming `MAIN_DOC_NAME` (out)
+   * and renaming any file to `MAIN_DOC_NAME` (in), any `oldName`
+   * not in `files()`, any `newName` already in `files()`, and any
+   * `newName` failing `validateProjectFileName`. On accept,
+   * inside a single `doc.transact`: copies `oldText` contents into
+   * `newText` and clears `oldText`; updates `knownFiles` /
+   * `persistedByName`; and — when the blob store is wired and
+   * hydration succeeded — PUTs the new key and DELETEs the old.
+   * A PUT failure aborts with the old state intact; a DELETE
+   * failure after a successful PUT leaves the old blob orphaned
+   * (logged, but the rename still succeeds — the in-memory truth
+   * has moved on).
+   */
+  renameFile(
+    oldName: string,
+    newName: string,
+  ): Promise<{ renamed: true } | { renamed: false; reason: string }>;
 }
 
 const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -178,6 +196,24 @@ export function createProjectPersistence(args: {
         if (t.length > 0) t.delete(0, t.length);
         memFiles.delete(name);
         return { deleted: true };
+      },
+      async renameFile(oldName, newName) {
+        if (oldName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot rename main" };
+        if (newName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot overwrite main" };
+        if (!memFiles.has(oldName)) return { renamed: false, reason: "no such file" };
+        const reason = validateProjectFileName(newName);
+        if (reason) return { renamed: false, reason };
+        if (memFiles.has(newName)) return { renamed: false, reason: "already exists" };
+        const oldText = doc.getText(oldName);
+        const contents = oldText.toString();
+        doc.transact(() => {
+          const newText = doc.getText(newName);
+          if (newText.length === 0 && contents.length > 0) newText.insert(0, contents);
+          if (oldText.length > 0) oldText.delete(0, oldText.length);
+        });
+        memFiles.delete(oldName);
+        memFiles.add(newName);
+        return { renamed: true };
       },
     };
   }
@@ -272,6 +308,50 @@ export function createProjectPersistence(args: {
       knownFiles.delete(name);
       persistedByName.delete(name);
       return { deleted: true };
+    },
+    async renameFile(oldName, newName): Promise<{ renamed: true } | { renamed: false; reason: string }> {
+      if (oldName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot rename main" };
+      if (newName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot overwrite main" };
+      if (!knownFiles.has(oldName)) return { renamed: false, reason: "no such file" };
+      const reason = validateProjectFileName(newName);
+      if (reason) return { renamed: false, reason };
+      if (knownFiles.has(newName)) return { renamed: false, reason: "already exists" };
+      const oldText = doc.getText(oldName);
+      const contents = oldText.toString();
+      const dir = projectFilesDir(projectId);
+      if (canPersist) {
+        try {
+          await blobStore.put(`${dir}/${newName}`, new TextEncoder().encode(contents));
+        } catch (e) {
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            `blob rename PUT failed for ${newName}`,
+          );
+          return { renamed: false, reason: "blob create failed" };
+        }
+        try {
+          await blobStore.delete(`${dir}/${oldName}`);
+        } catch (e) {
+          // New key is already written and in-memory truth will
+          // move to it; orphan the old blob rather than rolling
+          // back (a rollback could fail too and leave both keys
+          // populated, which is worse).
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            `blob rename DELETE failed for ${oldName} (orphaned)`,
+          );
+        }
+        persistedByName.set(newName, contents);
+        persistedByName.delete(oldName);
+      }
+      doc.transact(() => {
+        const newText = doc.getText(newName);
+        if (newText.length === 0 && contents.length > 0) newText.insert(0, contents);
+        if (oldText.length > 0) oldText.delete(0, oldText.length);
+      });
+      knownFiles.delete(oldName);
+      knownFiles.add(newName);
+      return { renamed: true };
     },
     async maybePersist(): Promise<void> {
       if (!canPersist) return;

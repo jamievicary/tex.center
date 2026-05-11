@@ -83,6 +83,10 @@
         if (selected === name) selected = MAIN_DOC_NAME;
         client?.deleteFile(name);
       }}
+      onRenameFile={(oldName, newName) => {
+        if (selected === oldName) selected = newName;
+        client?.renameFile(oldName, newName);
+      }}
     />
   </aside>
   <section class="editor">

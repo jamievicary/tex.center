@@ -6,11 +6,13 @@
     selected = $bindable<string>(""),
     onCreateFile,
     onDeleteFile,
+    onRenameFile,
   }: {
     files: string[];
     selected: string;
     onCreateFile?: (name: string) => void;
     onDeleteFile?: (name: string) => void;
+    onRenameFile?: (oldName: string, newName: string) => void;
   } = $props();
 
   let newName = $state("");
@@ -34,6 +36,18 @@
       >
         {f}
       </button>
+      {#if onRenameFile && f !== MAIN_DOC_NAME}
+        <button
+          type="button"
+          class="ren"
+          aria-label={`rename ${f}`}
+          onclick={() => {
+            const next = window.prompt(`Rename ${f} to:`, f);
+            const trimmed = next?.trim();
+            if (trimmed && trimmed !== f) onRenameFile(f, trimmed);
+          }}
+        >✎</button>
+      {/if}
       {#if onDeleteFile && f !== MAIN_DOC_NAME}
         <button
           type="button"
@@ -79,13 +93,18 @@
     font: inherit;
     cursor: pointer;
   }
-  ul button.del {
+  ul button.del,
+  ul button.ren {
     flex: 0 0 auto;
     padding: 0 0.5rem;
     color: #9ca3af;
   }
   ul button.del:hover {
     color: #b91c1c;
+    background: transparent;
+  }
+  ul button.ren:hover {
+    color: #1d4ed8;
     background: transparent;
   }
   ul button:hover {

@@ -343,6 +343,23 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                   encodeControl({ type: "file-list", files: project.persistence.files() }),
                 );
               });
+            } else if (decoded.message.type === "rename-file") {
+              const { oldName, newName } = decoded.message;
+              void project.persistence
+                .renameFile(oldName, newName)
+                .then((res) => {
+                  if (!res.renamed) {
+                    app.log.warn(
+                      { oldName, newName, reason: res.reason, projectId: project.id },
+                      "rename-file rejected",
+                    );
+                    return;
+                  }
+                  broadcast(
+                    project,
+                    encodeControl({ type: "file-list", files: project.persistence.files() }),
+                  );
+                });
             } else if (decoded.message.type === "delete-file") {
               const name = decoded.message.name;
               void project.persistence.deleteFile(name).then((res) => {

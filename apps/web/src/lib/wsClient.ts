@@ -157,6 +157,16 @@ export class WsClient {
   }
 
   /**
+   * Ask the sidecar to rename a project file. The server rejects
+   * `MAIN_DOC_NAME` on either side, unknown names, invalid new
+   * names, and duplicates; on success it broadcasts a refreshed
+   * `file-list`.
+   */
+  renameFile(oldName: string, newName: string): void {
+    this.send(encodeControl({ type: "rename-file", oldName, newName }));
+  }
+
+  /**
    * Returns the `Y.Text` for a given filename on the project doc.
    * Each persisted file is hydrated by the server into
    * `doc.getText(<relative-path>)`; calling this with an unknown

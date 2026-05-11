@@ -7,11 +7,8 @@
 - **`GET /auth/logout` link affordance.** Today only `POST` works;
   for an email-link or status-page link, a CSRF-protected GET→POST
   shim would be needed.
-- **File-tree CRUD verbs.** Create (iter 61) and delete (iter 62)
-  landed. Rename still needs a protocol message + a careful path:
-  Y.Text has no rename primitive, so the natural shape is
-  `create new + copy contents + delete old` inside a single
-  transaction; the blob layer needs the same two-step.
+- **File-tree CRUD verbs.** Create (iter 61), delete (iter 62) and
+  rename (iter 63) landed.
 - **docker-compose bring-up for Postgres + MinIO.** M4.2.1 is
   covered by PGlite for DDL-level checks, but the file-blob side
   of M4.3 (Tigris object store, sidecar hydration round-trip)

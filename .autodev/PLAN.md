@@ -161,7 +161,16 @@ Smaller in-tree alternatives if blocked:
   unknown names; clears the file's `Y.Text`, removes from
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
-  button. Rename still queued in `FUTURE_IDEAS.md`.
+  button.
+- File-tree rename landed iter 63: `rename-file` protocol verb,
+  `ProjectPersistence.renameFile(old, new)` (rejects `main.tex` on
+  either side, unknown source, duplicate target, invalid name; on
+  accept, blob-store path PUTs new key then DELETEs old — DELETE
+  failure orphans the old blob rather than rolling back; in-memory
+  contents copied via a single `doc.transact`),
+  `WsClient.renameFile`, FileTree per-row "✎" button using
+  `window.prompt` for the new name. Editor page swaps `selected`
+  to the new name when the renamed file was active.
 
 ## Live caveats
 
