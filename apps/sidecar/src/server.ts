@@ -207,7 +207,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // Persist source before invoking the compiler. A failed compile
     // must not lose the user's edits — once the source is on the
     // workspace disk it is also durable in the blob store.
-    await p.persistence.maybePersist(source);
+    await p.persistence.maybePersist();
     const result = await p.compiler.compile({
       source,
       targetPage: maxViewingPage(p),
@@ -305,8 +305,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         scheduleCompile(project);
       });
 
+      // Compile-and-persist must fire on edits to any file's Y.Text,
+      // not just `main.tex`, so we listen at the doc level. The
+      // debounce in `scheduleCompile` collapses bursts.
       const onTextChange = (): void => scheduleCompile(project);
-      project.text.observe(onTextChange);
+      project.doc.on("update", onTextChange);
 
       const onDocUpdate = (update: Uint8Array, origin: unknown): void => {
         if (origin === client) return; // don't echo to sender
@@ -351,7 +354,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
       socket.on("close", () => {
         project.viewers.delete(client);
-        project.text.unobserve(onTextChange);
+        project.doc.off("update", onTextChange);
         project.doc.off("update", onDocUpdate);
         if (project.viewers.size === 0 && project.compileTimer) {
           clearTimeout(project.compileTimer);

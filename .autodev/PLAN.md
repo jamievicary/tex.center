@@ -138,13 +138,13 @@ Smaller in-tree alternatives if blocked:
 - Multi-file-project slice on the sidecar. Listing primitive
   `listProjectFiles` landed iter 55; protocol `file-list` control +
   FileTree wiring landed iter 56; per-file `Y.Text` hydration
-  landed iter 58 (server loads every listed file into
-  `doc.getText(<name>)` in one transaction; client rebinds the
-  editor via `WsClient.getText(selected)`; non-`main.tex` files are
-  editor-readOnly until persistence covers them). Next coherent
-  slice: multi-file persistence — `maybePersist` tracking per-file
-  source so editing `refs.bib` survives reconnect, then drop the
-  readOnly guard.
+  landed iter 58; multi-file persistence landed iter 59
+  (`maybePersist` walks `knownFiles` and PUTs each changed file;
+  `editor/+page.svelte` dropped the readOnly guard; compile
+  schedule moved off `text.observe` to `doc.on("update")` so edits
+  to any file fire compile-and-persist). Remaining file-tree
+  affordances (create / rename / delete) need new protocol verbs
+  and are deferred to FUTURE_IDEAS.
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7).

@@ -46,15 +46,11 @@
   });
 
   // Switching the selected file rebinds the editor to that file's
-  // Y.Text. Non-`main.tex` files are read-only until multi-file
-  // persistence lands (today only `main.tex` is persisted back to
-  // the blob store; allowing edits elsewhere would silently lose
-  // them on reconnect).
+  // Y.Text. Every file in the tree is editable; the sidecar
+  // persists changes to each file's blob on the next compile.
   $effect(() => {
     if (client) text = client.getText(selected);
   });
-
-  let editorReadOnly = $derived(selected !== MAIN_DOC_NAME);
 
   function handlePageChange(page: number): void {
     client?.setViewingPage(page);
@@ -83,7 +79,7 @@
   </aside>
   <section class="editor">
     {#key text}
-      <Editor {text} readOnly={editorReadOnly} />
+      <Editor {text} />
     {/key}
   </section>
   <section class="preview">

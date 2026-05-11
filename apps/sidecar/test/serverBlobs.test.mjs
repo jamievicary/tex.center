@@ -95,17 +95,27 @@ async function bootClient(app) {
   // applies but doesn't echo back to the originator, so we only
   // assert against the blob.
   const target = `${initial}\n% extra line`;
+  const refsBibTarget = `${refsBibContents}\n@article{y,...}`;
+  const refsBibText = clientDoc.getText("refs.bib");
   const before = Y.encodeStateVector(text.doc);
   text.doc.transact(() => {
     text.delete(0, text.length);
     text.insert(0, target);
+    refsBibText.delete(0, refsBibText.length);
+    refsBibText.insert(0, refsBibTarget);
   });
   ws.send(encodeDocUpdate(Y.encodeStateAsUpdate(text.doc, before)));
 
   await waitFor(async () => {
     const persisted = await blobStore.get(`projects/${projectId}/files/main.tex`);
     return persisted && new TextDecoder().decode(persisted) === target;
-  }, "blob updated", frames);
+  }, "main.tex blob updated", frames);
+  // Multi-file persistence: the sibling file's blob is also pushed
+  // on the same compile.
+  await waitFor(async () => {
+    const persisted = await blobStore.get(`projects/${projectId}/files/refs.bib`);
+    return persisted && new TextDecoder().decode(persisted) === refsBibTarget;
+  }, "refs.bib blob updated", frames);
 
   ws.close();
   await new Promise((r) => ws.once("close", r));
@@ -239,9 +249,15 @@ async function bootClient(app) {
   const app = await buildServer({ logger: false, blobStore });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  const { ws, frames, text } = await bootClient(app);
+  const { ws, frames, clientDoc, text } = await bootClient(app);
   const expected = `${initial}\n% extra line\n% even though compile fails`;
   await waitFor(() => text.toString() === expected, "rehydrated edit", frames);
+  const expectedRefsBib = `${refsBibContents}\n@article{y,...}`;
+  await waitFor(
+    () => clientDoc.getText("refs.bib").toString() === expectedRefsBib,
+    "rehydrated refs.bib edit",
+    frames,
+  );
 
   ws.close();
   await new Promise((r) => ws.once("close", r));

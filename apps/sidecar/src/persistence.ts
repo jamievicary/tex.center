@@ -24,11 +24,16 @@
 // Hydration loads every persisted file under `projects/<id>/files/`
 // into its own `Y.Text` on the project's single `Y.Doc`, keyed by
 // the relative path (so `main.tex`, `refs.bib`, etc. each live on
-// `doc.getText(<name>)`). Only `main.tex` is *persisted* back today
-// — non-main files are read-only at the editor layer until a
-// multi-file persistence step lands. The Y.Doc-level update wire
-// format already carries every type, so no protocol change is
-// needed for the read side.
+// `doc.getText(<name>)`). The Y.Doc-level update wire format
+// already carries every type, so no protocol change is needed for
+// the read side.
+//
+// Persistence is per-file. `maybePersist()` walks every file in
+// `knownFiles` (the set seeded at hydration time: `MAIN_DOC_NAME`
+// plus every listed key) and PUTs each whose current `Y.Text`
+// contents differ from the last-persisted snapshot. A per-file PUT
+// failure is logged and does not abort the rest — one transient
+// outage on `refs.bib` must not lose a `main.tex` edit.
 
 import * as Y from "yjs";
 
@@ -86,10 +91,11 @@ export interface ProjectPersistence {
   /** Resolves once initial hydration has settled (success or failure). */
   awaitHydrated(): Promise<void>;
   /**
-   * Persist `source` if hydration succeeded AND `source` differs from
-   * the last persisted value. No-op when `blobStore` was not provided.
+   * Persist every known file whose current `Y.Text` contents differ
+   * from the last persisted value. No-op when `blobStore` was not
+   * provided or hydration failed.
    */
-  maybePersist(source: string): Promise<void>;
+  maybePersist(): Promise<void>;
 }
 
 export function createProjectPersistence(args: {
@@ -107,7 +113,16 @@ export function createProjectPersistence(args: {
     };
   }
 
-  let persistedSource: string | null = null;
+  // Files we are willing to persist. Seeded at hydration time with
+  // `MAIN_DOC_NAME` plus every listed blob key; not extended at
+  // runtime since today there's no protocol path to create a new
+  // file.
+  const knownFiles = new Set<string>();
+  // Last-persisted source per file. Absence means "no blob known
+  // yet" — the next `maybePersist` will create one even if the
+  // current `Y.Text` is empty, preserving the historical
+  // "first-compile establishes main.tex" semantics.
+  const persistedByName = new Map<string, string>();
   let canPersist = false;
 
   const hydrated: Promise<void> = (async () => {
@@ -130,9 +145,14 @@ export function createProjectPersistence(args: {
           if (t.length === 0) t.insert(0, dec.decode(bytes));
         }
       });
-      const mainEntry = loaded.find((l) => l.name === MAIN_DOC_NAME);
-      if (mainEntry?.bytes) {
-        persistedSource = dec.decode(mainEntry.bytes);
+      knownFiles.add(MAIN_DOC_NAME);
+      for (const { name, bytes } of loaded) {
+        knownFiles.add(name);
+        // An existing-but-empty blob counts as persisted-as-"".
+        // A `get` returning `null` (unlikely from `list` output, but
+        // tolerated) leaves the entry unset so the next compile
+        // re-establishes it.
+        if (bytes) persistedByName.set(name, dec.decode(bytes));
       }
       canPersist = true;
     } catch (e) {
@@ -145,17 +165,22 @@ export function createProjectPersistence(args: {
 
   return {
     awaitHydrated: () => hydrated,
-    async maybePersist(source: string): Promise<void> {
+    async maybePersist(): Promise<void> {
       if (!canPersist) return;
-      if (source === persistedSource) return;
-      try {
-        await blobStore.put(mainTexKey(projectId), new TextEncoder().encode(source));
-        persistedSource = source;
-      } catch (e) {
-        log.warn(
-          { err: e instanceof Error ? e.message : String(e), projectId },
-          "blob persist failed",
-        );
+      const enc = new TextEncoder();
+      const dir = projectFilesDir(projectId);
+      for (const name of knownFiles) {
+        const source = doc.getText(name).toString();
+        if (persistedByName.get(name) === source) continue;
+        try {
+          await blobStore.put(`${dir}/${name}`, enc.encode(source));
+          persistedByName.set(name, source);
+        } catch (e) {
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            `blob persist failed for ${name}`,
+          );
+        }
       }
     },
   };
