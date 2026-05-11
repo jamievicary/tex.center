@@ -1,7 +1,9 @@
 # Future ideas
 
-- **Session sweeper.** `DELETE FROM sessions WHERE expires_at <
-  now()`; ride on any periodic task once one exists.
+- **Session sweeper scheduling.** Storage primitive
+  `deleteExpiredSessions(db, now)` landed iter 54; wire it to a
+  periodic caller (cron, on-boot pass, or admin route) when one
+  exists.
 - **`GET /auth/logout` link affordance.** Today only `POST` works;
   for an email-link or status-page link, a CSRF-protected GET→POST
   shim would be needed.

@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { eq } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 
 import { sessions, users } from './drizzle.js';
 import type { SessionRow, UserRow } from './schema.js';
@@ -77,4 +77,26 @@ export async function deleteSession(
     .where(eq(sessions.id, sid))
     .returning({ id: sessions.id });
   return rows.length > 0;
+}
+
+/**
+ * Delete all session rows whose `expires_at` is strictly before
+ * `now`. Returns the number of rows removed. Safe to call
+ * concurrently with `getSessionWithUser` — `hooks.server.ts`
+ * already treats an expired-row hit as "no session" and clears
+ * the cookie, so a swept row mid-request is observationally
+ * identical to one that lingered briefly post-expiry.
+ *
+ * No periodic caller exists yet; this is the storage primitive a
+ * future sweeper (cron, on-boot pass, admin tool) will use.
+ */
+export async function deleteExpiredSessions(
+  db: DrizzleDb,
+  now: Date,
+): Promise<number> {
+  const rows = await db
+    .delete(sessions)
+    .where(lt(sessions.expiresAt, now))
+    .returning({ id: sessions.id });
+  return rows.length;
 }

@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   applyMigrations,
+  deleteExpiredSessions,
   deleteSession,
   findOrCreateUserByGoogleSub,
   getSessionWithUser,
@@ -160,6 +161,37 @@ try {
   // --- deleteSession: second call on the same sid → false --------
   const repeated = await deleteSession(db, session.id);
   assert.equal(repeated, false);
+
+  // --- deleteExpiredSessions ------------------------------------
+  // Three sessions with distinct expiries: in the past, equal to
+  // the sweep cutoff, and in the future.
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+  const future = new Date(Date.now() + 60 * 60 * 1000);
+  const sPast = await insertSession(db, { userId: created.id, expiresAt: past });
+  const sEdge = await insertSession(db, { userId: created.id, expiresAt: cutoff });
+  const sFuture = await insertSession(db, { userId: created.id, expiresAt: future });
+
+  // Sweep at `cutoff`: strictly-before semantics — `sPast` goes,
+  // `sEdge` (equal to cutoff) stays, `sFuture` stays.
+  const removedCount = await deleteExpiredSessions(db, cutoff);
+  assert.equal(removedCount, 1, 'exactly one session was strictly before cutoff');
+  assert.equal(await getSessionWithUser(db, sPast.id), null);
+  assert.ok(await getSessionWithUser(db, sEdge.id));
+  assert.ok(await getSessionWithUser(db, sFuture.id));
+
+  // Sweep again at the same instant: no-op.
+  assert.equal(await deleteExpiredSessions(db, cutoff), 0);
+
+  // Sweep at a much later instant: both remaining rows go.
+  const later = new Date(future.getTime() + 60 * 60 * 1000);
+  assert.equal(await deleteExpiredSessions(db, later), 2);
+  assert.equal(await getSessionWithUser(db, sEdge.id), null);
+  assert.equal(await getSessionWithUser(db, sFuture.id), null);
+
+  // Users untouched by session sweep.
+  const usersAfter = await db.select().from(users);
+  assert.equal(usersAfter.length, 2);
 
   console.log('users + sessions PGlite test: OK');
 } finally {

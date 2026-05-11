@@ -85,8 +85,9 @@ spawning, (D) auth + production polish.
       `clockTolerance` (iter 47). OAuth `access_denied` (user
       cancel) redirects to `/` rather than 400 (iter 49).
 
-      M5 tail items deferred to FUTURE_IDEAS: session sweeper for
-      expired rows, GET-via-shim for logout-from-link.
+      M5 tail items deferred to FUTURE_IDEAS: GET-via-shim for
+      logout-from-link. (Session sweeper storage primitive
+      `deleteExpiredSessions` landed iter 54; scheduling deferred.)
 
 - [~] **M6 — Fly deploy: control plane.**
       - [x] **M6.0** — `apps/web/Dockerfile` multi-stage +
