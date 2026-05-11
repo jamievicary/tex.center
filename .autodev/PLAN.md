@@ -13,356 +13,140 @@ https://tex.center.
 
 ## Milestones
 
-Roughly: (A) a vertical slice runnable locally end-to-end, (B)
+Roughly: (A) vertical slice runnable locally end-to-end, (B)
 supertex daemon-isation, (C) Fly deployment + per-project Machine
 spawning, (D) auth + production polish.
 
-- [x] **M0 — Repo scaffolding** _(iter 2–3)_ — pnpm workspace
-      (`apps/web`, `apps/sidecar`, `packages/protocol`), Node 20
-      auto-provisioned into `.tools/`, `vendor/supertex` submodule.
-- [x] **M1 — Static frontend shell** _(iter 4)_ — SvelteKit
-      (`adapter-static`, runes, no SSR). `/` white sign-in page;
-      `/editor` three-panel grid (tree stub / CM6 / PDF.js).
+- [x] **M0 — Repo scaffolding** _(iter 2–3)_
+- [x] **M1 — Static frontend shell** _(iter 4)_ — SvelteKit, runes,
+      `/` white sign-in page, `/editor` three-panel grid.
 - [x] **M2 — Sidecar service skeleton** _(iter 5–6)_ — Fastify +
       `ws`, in-memory Yjs, "viewing page N" channel, fixture
-      compile loop. `packages/protocol` defines wire format
-      (Yjs frames, compile-status, pdf-segment). Browser
+      compile loop; `packages/protocol` wire format; browser
       `WsClient` + `PdfBuffer`; `y-codemirror.next` binds CM6.
-- [~] **M3 — supertex compile path.** Sidecar drives
-      `vendor/supertex` per compile request. The persistent /
-      streaming variant waits on an upstream `--daemon DIR` mode
-      (see "Candidate supertex work" below); until then,
-      `SupertexOnceCompiler` is the real path, with a sidecar-side
-      PDF-stability debouncer covering the post-engine settle
-      window.
-      - [x] **M3.0** — Compiler interface + `targetPage` plumbing
-            (`apps/sidecar/src/compiler/types.ts`). _(iter 8)_
+- [~] **M3 — supertex compile path.** Today's real engine path is
+      `SupertexOnceCompiler` (M3.2): per-edit spawn of `supertex
+      --once --output-directory`. The streaming variant waits on
+      the upstream `--daemon DIR` mode (see "Candidate supertex
+      work" below).
+      - [x] **M3.0** — Compiler interface + `targetPage` plumbing.
+            _(iter 8)_
       - [x] **M3.1** — `ProjectWorkspace`: atomic `writeMain`,
             strict id regex, scratch-dir lifecycle. _(iter 9)_
-      - [x] **M3.2** — `SupertexOnceCompiler`: `--once
-            --output-directory`, 60s wallclock, ENOENT/non-zero/
-            missing-PDF paths. _(iter 12; simplified iter 41 —
-            `--live-shipouts` and `--target-page=N` emission
-            removed alongside their consumers.)_
-      - [~] **M3.6** — `awaitPdfStable` watcher
-            (`apps/sidecar/src/pdfStabilityWatcher.ts`) lands iter
-            41 with fake-clock tests. Not yet wired into
-            `runCompile` — the once-path returns after the engine
-            exits, so calling it would only add latency. Wires in
-            when a streaming compiler (`--daemon DIR` consumer)
-            returns before the PDF settles.
+      - [x] **M3.2** — `SupertexOnceCompiler`. _(iter 12;
+            simplified iter 41.)_
+      - [~] **M3.6** — `awaitPdfStable` watcher exists (iter 41)
+            but is **not yet wired into `runCompile`** — the
+            once-path returns after the engine exits, so calling
+            it would only add latency. Wires in when a streaming
+            compiler (`--daemon DIR` consumer) returns before the
+            PDF settles.
 
-      **Retired (iter 41).** `SupertexWatchCompiler` (M3.3),
+      **Retired (iter 41).** `SupertexWatchCompiler` (old M3.3),
       `ShipoutSegmenter` (M3.4), and the `--help` feature detector
-      (M3.5) were ripped out: they were built against a two-flag
-      upstream contract (`--ready-marker`, `--target-page=N`) that
-      has been superseded by the unified `--daemon DIR` ask. Old
-      logs 13–15 retain the historical detail.
+      (M3.5) were ripped out: built against the superseded
+      two-flag upstream contract.
 
-      Cutover: `SIDECAR_COMPILER` env-var stays for now —
-      `fixture` (default for dev/unit) vs `supertex` (production,
-      once the deploy image carries the binary).
+      Cutover: `SIDECAR_COMPILER` env-var stays — `fixture`
+      (default for dev/unit) vs `supertex` (production).
 
-- [~] **M4 — Persistence.** Postgres (Drizzle) for entities; Tigris
-      for blobs (project files, checkpoints, PDF segments).
-      - [x] **M4.0** — `packages/db` data model + initial SQL
-            migration; spec/SQL drift caught by `schema.test.mjs`.
-            _(iter 16)_
-      - [x] **M4.1** — Drizzle `pgTable`s matching the migration;
-            cross-check test `drizzle.test.mjs`. _(iter 17)_
-      - [x] **M4.2.0** — `postgres@^3.4.5` driver + `createDb`/
-            `closeDb`; `Migration` loader (sha256 + lex sort);
-            `applyMigrations` (idempotent, per-migration
-            transaction); CLI `pnpm --filter @tex-center/db
-            db:migrate`. _(iter 18)_
-      - [x] **M4.2.1** — PGlite-backed migration integration test
-            (no docker required). `MigrationsDriver` interface;
-            `postgresJsDriver(sql)` for prod. Gold case
-            `tests_gold/cases/test_pglite_migrations.py`. _(iter
-            23)_
-      - [x] **M4.2.2** — Sidecar wires `@tex-center/db`;
-            `app.db: DbHandle | null` decorated from
-            `DATABASE_URL` (or test injection). _(iter 19)_
+- [~] **M4 — Persistence.** Postgres (Drizzle) for entities;
+      Tigris (S3) for blobs.
+      - [x] **M4.0–M4.2.2** — Schema, Drizzle tables, migration
+            loader + driver, PGlite-backed gold test, sidecar
+            wiring via `app.db`. _(iter 16–19, 23.)_
       - [~] **M4.3 — Project hydration.**
             - [x] **M4.3.0** — `packages/blobs`: `BlobStore`
                   interface + `LocalFsBlobStore` (atomic write-
                   rename, strict `validateKey`). _(iter 24)_
-            - [ ] **M4.3.1** — `S3BlobStore` against AWS SDK
-                  behind same interface; gold-test against MinIO
-                  once the docker-compose stack lands (see
-                  `FUTURE_IDEAS.md`). `health()` should be a
-                  `HeadBucket`-class call.
+            - [ ] **M4.3.1** — `S3BlobStore` against AWS SDK behind
+                  same interface; gold-test against MinIO once
+                  docker-compose lands (see `FUTURE_IDEAS.md`).
+                  `health()` should be a `HeadBucket`-class call.
             - [~] **M4.3.2** — Sidecar wiring. **Source-file half
-                  done.** `buildServer` accepts `blobStore?` (env
-                  selector: `BLOB_STORE=local|s3|none`). On first
-                  `getProject(id)`, `main.tex` at
-                  `projects/<id>/files/main.tex` hydrates into
-                  `Y.Text` before initial state ships. After every
-                  `writeMain` (decoupled from compile success per
-                  iter 28), the source is `put` if it differs from
-                  the last persisted copy, gated by a `canPersist`
-                  flag set only on hydration success (iter 29 —
-                  prevents clobbering remote with empty Y.Text on
-                  hydration outage). Iter 30 extracted
-                  `apps/sidecar/src/persistence.ts` to own this
-                  policy. **Outstanding:** checkpoint persistence
-                  on `Compiler.close()` waits for M3.5/M7 — no
-                  checkpoint-blob protocol on the compiler
-                  interface yet, and supertex doesn't serialise
-                  them either.
+                  done** (iter 28–30): `buildServer` accepts
+                  `blobStore?`; first `getProject(id)` hydrates
+                  `main.tex` into `Y.Text`; `writeMain` persists
+                  via `apps/sidecar/src/persistence.ts` gated by
+                  `canPersist` (set only on hydration success, to
+                  prevent clobbering remote with empty Y.Text on
+                  outage). **Outstanding:** checkpoint persistence
+                  waits for M7 — no checkpoint-blob protocol on
+                  the compiler interface yet, and supertex doesn't
+                  serialise them either.
 
-- [~] **M5 — Auth.** Google OAuth (Authorization Code), server-side
-      sessions, allowlist `jamievicary@gmail.com`. Replaces M1 mock.
-      - [x] **M5.0** — `packages/auth`: pure-logic leaf with email
-            allowlist (`isAllowedEmail`, case-insensitive, trimmed)
-            and HMAC-SHA256-signed session tokens
-            (`signSessionToken` / `verifySessionToken`, base64url,
-            constant-time compare, caller-supplied `nowSeconds`).
-            No I/O, no module state. _(iter 32)_  PKCE primitives
-            (`generatePkce` / `computeChallenge` / `isValidVerifier`,
-            S256 only, RFC 7636 Appendix B vector covered) added in
-            iter 33; shared `b64u.ts` extracted from `session.ts`.
-      - [~] **M5.1** — Google OAuth callback wiring (PKCE, JWKS
-            verify of the ID token, mint a session row + cookie
-            via `packages/auth`).
-            - [x] **M5.1.0** — `apps/web` swapped from
-                  `@sveltejs/adapter-static` to `adapter-node`
-                  (iter 34). Architecture decision: one origin,
-                  SvelteKit `+server.ts` routes are the control
-                  plane's HTTP surface. The "Fastify" call in
-                  GOAL is already satisfied by `apps/sidecar`
-                  (the per-project tier); a separate control-
-                  plane Fastify app would just duplicate routing
-                  + static-asset serving that SvelteKit's Node
-                  server already does. Pages keep `prerender =
-                  true; ssr = false` so the white sign-in page
-                  and editor shell still ship as static
-                  artefacts; only `+server.ts` endpoints render
-                  dynamically. Build output goes to
-                  `apps/web/build/` (already gitignored), run
-                  with `node apps/web/build/index.js`.
-            - [x] **M5.1.1** — `/auth/google/start` `+server.ts`
-                  (iter 35). `packages/auth` factored a generic
-                  `signed.ts` (HMAC-SHA256 over opaque
-                  payload-strings); `session.ts` rewritten on top,
-                  new `state.ts` adds
-                  `signStateCookie`/`verifyStateCookie` for
-                  `{state, verifier, exp}`. The route reads config
-                  via `loadOAuthConfig()` (env +
-                  `creds/google-oauth.json`), generates PKCE +
-                  random state, calls the pure
-                  `buildGoogleAuthorizeRedirect` builder
-                  (`apps/web/src/lib/server/oauthStart.ts`), and
-                  302-redirects to Google with `Set-Cookie:
-                  tc_oauth_state=…; Path=/auth; HttpOnly;
-                  SameSite=Lax; Secure (https only); Max-Age=600`.
-                  `Cache-Control: no-store`. `secureCookie` keys
-                  off `url.protocol === "https:"` so dev over
-                  localhost still works.
-            - [~] **M5.1.2** — `/auth/google/callback`
-                  `+server.ts`.
-                  - [x] **M5.1.2a** — OAuth round-trip lands
-                        (iter 36). Pure `resolveGoogleCallback`
-                        (`apps/web/src/lib/server/oauthCallback.ts`)
-                        orchestrates state-cookie verify → state
-                        compare → token exchange → JWKS verify →
-                        allowlist check → mint signed session
-                        cookie. All I/O injected; unit test stubs
-                        every branch. Concrete I/O in
-                        `googleTokens.ts` (`fetch` for the token
-                        endpoint, `jose.createRemoteJWKSet` +
-                        `jwtVerify` for the ID token). `jose` added
-                        to `apps/web` deps. Route file at
-                        `apps/web/src/routes/auth/google/callback/+server.ts`.
-                        Cookie names: `tc_oauth_state` cleared on
-                        every termination; `tc_session` minted on
-                        success (Path=/, HttpOnly, SameSite=Lax,
-                        Secure on https, Max-Age=30 days).
-                  - [x] **M5.1.2b** — Session-row persistence (iter 37).
-                        `packages/db/src/users.ts` adds
-                        `findOrCreateUserByGoogleSub` (Drizzle
-                        `insert ... onConflictDoUpdate(target:
-                        google_sub)` returning the upserted row);
-                        `sessions.ts` adds
-                        `insertSession({userId, expiresAt})`.
-                        Helpers typed against `PostgresJsDatabase
-                        <Schema>`; PGlite tests cast through. New
-                        gold case `test_pglite_users_sessions.py`
-                        applies real migrations to PGlite and
-                        exercises upsert-stability, FK rejection,
-                        and `updated_at` monotonicity.
-                        `apps/web/src/lib/server/db.ts` adds a
-                        process-lifetime `getDb()` singleton that
-                        lazily reads `DATABASE_URL` and registers a
-                        SIGTERM/SIGINT close hook. The route's
-                        orchestrator injection point widened from
-                        `mintSid: () => string` to
-                        `createSession(claims) => Promise<string>`;
-                        the route binding upserts the user, inserts
-                        the session, and returns the new sid. A new
-                        500 branch in `resolveGoogleCallback` surfs
-                        DB outages.
-            - [x] **M5.1.4** — Editor UI consumption + logout (iter
-                  39). `apps/web/src/routes/editor/+page.server.ts`
-                  surfaces `{user: {email, displayName}}` from
-                  `event.locals.session`. `+page.svelte` adds a
-                  topbar with the user's name + a `POST /auth/logout`
-                  form. `packages/db/src/sessions.ts` gains
-                  `deleteSession(db, sid) → boolean`. Pure
-                  orchestrator `apps/web/src/lib/server/logout.ts`
-                  (`resolveLogout`) deletes-if-present and always
-                  emits clear-cookie + 303 to `/`. Route file at
-                  `apps/web/src/routes/auth/logout/+server.ts`;
-                  POST-only, CSRF posture = SameSite=Lax + same-
-                  origin form. Unit test `logout.test.mjs` + PGlite
-                  gold-test extension for `deleteSession` (unknown
-                  sid → false, known sid → true + user kept, repeat
-                  → false).
-            - [x] **M5.1.3** — `hooks.server.ts` (iter 38).
-                  `packages/db/src/sessions.ts` adds
-                  `getSessionWithUser(db, sid)` (`sessions ⋈
-                  users` lookup, `null` on miss). Pure orchestrator
-                  `apps/web/src/lib/server/sessionHook.ts`
-                  (`resolveSessionHook`): cookie parse → token
-                  verify → uuid format check → injected lookup →
-                  server-side expiry. Returns
-                  `{session, clearCookie, reason}` covering every
-                  branch (no-cookie / bad-token / expired-token /
-                  bad-sid / no-row / lookup-error / expired-row /
-                  ok). DB outage keeps the cookie (transient);
-                  every other invalid state clears it.
-                  `sessionConfig.ts` adds `loadSessionSigningKey()`
-                  (subset of OAuth config, returns `null` when
-                  unset). `hooks.server.ts` wires it; protected
-                  prefix `/editor` redirects to `/` on no-session.
-                  `app.d.ts` declares `App.Locals.session`.
-                  `routes/editor/+page.ts` sets `prerender = false;
-                  ssr = false` so the hook actually runs. Unit test
-                  `apps/web/test/sessionHook.test.mjs` covers every
-                  `reason`; PGlite gold test extended for
-                  `getSessionWithUser`.
-- [~] **M6 — Fly deploy: control plane.** Dockerfile for `apps/web`,
-      `fly.toml`, GitHub Actions on push to `main`, custom domain
-      `tex.center` via Cloudflare. Scales to zero.
-      - [x] **M6.0** — `apps/web/Dockerfile` (multi-stage) +
-            `apps/web/.dockerignore` (iter 42). Builder stage
-            installs the pnpm workspace from copied manifests
-            (`--frozen-lockfile`) and runs `pnpm --filter
-            @tex-center/web build`; runtime stage carries only
-            `apps/web/build/` (adapter-node bundles all deps),
-            `HOST=0.0.0.0`, `PORT=3000`, `CMD ["node",
-            "build/index.js"]`. Pinned `PNPM_VERSION` mirrors root
-            `packageManager`. Static structural test
-            `tests_normal/cases/test_web_dockerfile.py` enforces
-            multi-stage + entrypoint + that every workspace
-            package has a manifest COPY before the install layer
-            (drift would only surface inside Docker otherwise).
-            Image not built in CI: no docker in tests_normal, and
-            the actual build will run on Fly's builder.
-      - [x] **M6.1** — `fly.toml` at repo root (iter 43).
-            `app = "tex-center"`, `primary_region = "fra"`,
-            `[build] dockerfile = "apps/web/Dockerfile"`,
-            `[http_service]` with `internal_port = 3000`,
-            `force_https = true`, `auto_stop_machines = "stop"`,
-            `auto_start_machines = true`, `min_machines_running =
-            0`, single `[[vm]] shared-cpu-1x / 512mb`. No
-            `[checks]` block yet — `apps/web` exposes no
-            `/healthz`, so adding one would gate deploys on a
-            route that always 404s. Structural test
-            `tests_normal/cases/test_fly_toml.py` parses the TOML
-            and asserts: app name, primary region present,
-            dockerfile path, scale-to-zero triple, port matches
-            Dockerfile `EXPOSE`/`PORT=3000`, force_https on.
-      - [x] **M6.2.1** — `/healthz` liveness route on `apps/web`
-            (iter 45). `apps/web/src/routes/healthz/+server.ts`
-            exports `GET` returning `{ok: true, protocol:
-            "tex-center-web-v1"}` with `Cache-Control: no-store`
-            and `prerender = false` (so the route runs server-side,
-            not as a static asset). No DB touch: Fly readiness on a
-            transient Postgres outage would scale every Machine
-            out and serve nothing. `fly.toml` adds a single
-            `[[http_service.checks]]` block (`/healthz`, GET, 30s
-            interval, 10s grace, 5s timeout). Structural test
-            `test_healthz_route.py` (5 cases) asserts the route
-            shape; `test_fly_toml.py` gains a case asserting the
-            check's `path` matches an existing route file.
-      - [x] **M6.2** — GitHub Actions workflow on push to `main`
-            (iter 44). `.github/workflows/deploy.yml`: single
-            `deploy` job, `actions/checkout@v4` →
-            `superfly/flyctl-actions/setup-flyctl@master` →
-            `flyctl deploy --remote-only --config fly.toml
-            --dockerfile apps/web/Dockerfile`, with
-            `FLY_API_TOKEN` from secrets. `concurrency: fly-deploy
-            cancel-in-progress: false` so rapid pushes queue
-            rather than abandoning a half-rolled-out Machine.
-            20-minute job timeout. Structural test
-            `tests_normal/cases/test_deploy_workflow.py` parses
-            the YAML and asserts: trigger is `push` on `main`,
-            checkout + setup-flyctl steps present, exactly one
-            `flyctl deploy` step with `--remote-only` and
-            `FLY_API_TOKEN` env, any `--dockerfile` path resolves.
-            **One-shot manual steps before first push:** `flyctl
-            apps create tex-center`; `gh secret set FLY_API_TOKEN
-            < creds/fly.token`.
+- [x] **M5 — Auth.** Google OAuth (Authorization Code) with PKCE,
+      JWKS verify of ID token, server-side sessions, allowlist
+      `jamievicary@gmail.com`. _(iter 32–39, 47–49.)_ Pure-logic
+      `packages/auth` (HMAC-signed session/state tokens, PKCE
+      primitives); `apps/web` server routes for start/callback/
+      logout; `hooks.server.ts` injects `event.locals.session`;
+      `/editor` redirects unauth to `/`. JWKS has 60s default
+      `clockTolerance` (iter 47). OAuth `access_denied` (user
+      cancel) redirects to `/` rather than 400 (iter 49).
+
+      M5 tail items deferred to FUTURE_IDEAS: session sweeper for
+      expired rows, GET-via-shim for logout-from-link.
+
+- [~] **M6 — Fly deploy: control plane.**
+      - [x] **M6.0** — `apps/web/Dockerfile` multi-stage +
+            `.dockerignore`; pnpm workspace install, adapter-node
+            runtime; structural test enforces multi-stage shape +
+            workspace-manifest COPY ordering. _(iter 42.)_
+      - [x] **M6.1** — `fly.toml`: `tex-center` / `fra`,
+            scale-to-zero, single shared-cpu-1x/512mb. _(iter 43.)_
+      - [x] **M6.2** — `.github/workflows/deploy.yml`: single
+            `deploy` job, `flyctl deploy --remote-only`,
+            `FLY_API_TOKEN` secret, 20-min timeout,
+            `concurrency: fly-deploy cancel-in-progress: false`.
+            _(iter 44.)_
+      - [x] **M6.2.1** — `/healthz` liveness route (no DB touch,
+            so transient Postgres outage doesn't scale to zero) +
+            Fly check block in `fly.toml`. _(iter 45.)_
       - [~] **M6.3** — Custom domain `tex.center` via Cloudflare.
-            - [x] **M6.3.0** — `scripts/cloudflare-dns.mjs` one-shot
-                  reconciler (iter 46). Pure `reconcileRecords`
-                  (match by `(type, name)`; updates on
-                  content/ttl/proxied drift; collapses duplicates;
-                  never touches unmanaged records). I/O wrappers
-                  (`fetchZoneId`, `listRecords`,
-                  `create|update|deleteRecord`) take an injectable
-                  `fetch` so tests stay offline. CLI: `--zone
-                  --ipv4 --ipv6 [--acme-name --acme-value]
-                  [--dry-run] [--token-file]`. Test
-                  `scripts/test/cloudflareDns.test.mjs` covers
-                  reconcile branches + every wrapper against a stub
-                  fetch. Token at `creds/cloudflare.token`.
-            - [ ] **M6.3.1** — `flyctl certs create tex.center`
-                  against the live app (requires the deploy
-                  workflow to have run once and produced a Machine
-                  with anycast IPs). Capture the IPs from `flyctl
-                  ips list -a tex-center --json` and feed them to
-                  the script; capture the ACME challenge Fly emits
-                  and re-run with `--acme-name --acme-value`. This
-                  step is one-shot and out-of-tree; M8 will verify
-                  end-to-end.
+            - [x] **M6.3.0** — `scripts/cloudflare-dns.mjs`
+                  reconciler (`reconcileRecords` pure core +
+                  injectable-`fetch` I/O wrappers; CLI flags
+                  `--zone --ipv4 --ipv6 [--acme-name --acme-value]
+                  [--dry-run]`). _(iter 46.)_
+            - [ ] **M6.3.1** — Out-of-tree one-shot: `flyctl apps
+                  create tex-center`; first deploy via workflow;
+                  `flyctl certs create tex.center`; capture
+                  anycast IPs (`flyctl ips list -a tex-center
+                  --json`) and ACME challenge; run the iter-46
+                  script with them. M8 verifies end-to-end.
+                  **One-shot manual steps before first push:**
+                  `flyctl apps create tex-center`; `gh secret set
+                  FLY_API_TOKEN < creds/fly.token`.
+
 - [ ] **M7 — Per-project Machines.** Control plane spawns/wakes a
       Machine per project; routes WS to it; ~10 min idle auto-stop;
       state persisted to Tigris on stop, rehydrated on start. Image
       carries full TeX Live + supertex. Introduces the checkpoint-
       blob protocol on the compiler interface (closes M4.3.2 tail).
+
 - [ ] **M8 — Acceptance pass.** Walk the seven `GOAL.md` acceptance
       criteria end-to-end on prod, fix gaps. Playwright lives here.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.3.1 — out-of-tree one-shot:
-`flyctl apps create tex-center` (if not done), first deploy via the
-workflow, `flyctl certs create tex.center`, then run the iter-46
-Cloudflare script against the issued IPs + ACME challenge. M6.0
-(Dockerfile) landed iter 42; M6.1 (`fly.toml`) iter 43; M6.2
-(Actions workflow) iter 44; M6.2.1 (`/healthz` + Fly check) iter
-45; M6.3.0 (Cloudflare reconcile script) iter 46.
-Smaller alternatives if blocked:
-a multi-file-project slice on the sidecar; wiring `awaitPdfStable`
-once a streaming compile path exists. M4.3.1 (S3 adapter) still
-waits for docker-compose; M4.3.2 checkpoint half waits for the
-upstream `--daemon DIR` mode / M7.
+**Next ordinary iteration:** M6.3.1 — out-of-tree one-shot
+(requires live Fly + Cloudflare tokens, runs outside autodev).
 
-M5 tail items deferred to FUTURE_IDEAS: session sweeper for
-expired rows, GET-via-shim for logout-from-link. (JWKS clock-skew
-tolerance landed iter 47 — `makeVerifyGoogleIdToken` builder with
-60s default `clockTolerance`; injectable `keyInput` for tests.)
+Smaller in-tree alternatives if blocked:
+- Multi-file-project slice on the sidecar (today hydration is
+  `main.tex`-only).
+- Wiring `awaitPdfStable` once a streaming compile path exists.
+- Anything that doesn't require docker (S3 adapter M4.3.1 still
+  blocked on docker-compose; checkpoint persistence on M7).
 
 ## Live caveats
 
-- `SIDECAR_COMPILER=supertex` (the once-compiler) is the only
-  real engine path today; the streaming variant waits on the
-  upstream `--daemon DIR` mode.
-- `app.db` only powers `/healthz` today (`SELECT 1`, reports
-  `db: { state }`). Same endpoint reports `blobs: { state }` via
-  `BlobStore.health()`; the future S3 adapter must implement it.
+- `SIDECAR_COMPILER=supertex` (the once-compiler) is the only real
+  engine path today; streaming waits on upstream `--daemon DIR`.
+- `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
+  Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
+  the future S3 adapter must implement it.
 - Persistence is one-shot per session: a permanent blob outage
   means edits this process are never persisted. Acceptable in the
   per-project Machine model where Machines cycle frequently.
@@ -398,7 +182,7 @@ walk the realpath correctly.
 - **Test strategy.** `tests_normal/` = fast unit + type checks
   per iteration; `tests_gold/` = end-to-end (Playwright in M8)
   and real-supertex compile tests. Gold needs a way to run
-  headlessly without Fly — Docker Compose (see `FUTURE_IDEAS`).
+  headlessly without Fly — docker-compose (see `FUTURE_IDEAS`).
 
 ## Candidate supertex (upstream) work
 
@@ -415,7 +199,6 @@ PRs against `github.com/jamievicary/supertex`.
    pre-`[round-done]` settle inside that compiler.
 2. **Checkpoint serialise/restore to a single blob.** (M7)
 
-(History: the previous two-flag plan — `--ready-marker` and
-`--target-page=N` — was superseded by (1); the sidecar code
-built against it (`SupertexWatchCompiler`, `ShipoutSegmenter`,
-`featureDetect`) was removed in iter 41.)
+(History: a previous two-flag plan — `--ready-marker` and
+`--target-page=N` — was superseded by (1); the sidecar code built
+against it was removed in iter 41.)
