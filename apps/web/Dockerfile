@@ -50,5 +50,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 WORKDIR /app
 COPY --from=builder /repo/apps/web/build ./build
+# adapter-node emits ESM; Node treats files as CJS unless a sibling
+# package.json declares `"type": "module"`. Stub one in /app.
+RUN echo '{"type":"module"}' > package.json
 EXPOSE 3000
 CMD ["node", "build/index.js"]

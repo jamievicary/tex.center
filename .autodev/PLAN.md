@@ -112,10 +112,23 @@ spawning, (D) auth + production polish.
                   injectable-`fetch` I/O wrappers; CLI flags
                   `--zone --ipv4 --ipv6 [--acme-name --acme-value]
                   [--dry-run]`). _(iter 46.)_
-            - [ ] **M6.3.1** — Live deploy of the control plane.
-                  Ordinary in-tree iteration; runs `flyctl`, `gh`,
-                  and the Cloudflare API against live services
-                  using `creds/{fly,github,cloudflare}.token`.
+            - [x] **M6.3.1** — Live deploy of the control plane.
+                  Landed iter 73: `tex-center` Fly app created in
+                  `fra`, `FLY_API_TOKEN` GH secret set,
+                  `flyctl deploy --remote-only` succeeded after
+                  fixing an ESM runtime bug (added
+                  `{"type":"module"}` stub in `apps/web/Dockerfile`
+                  runtime stage — adapter-node emits ESM but the
+                  bare `/app/build/` had no sibling package.json).
+                  Dedicated IPv4 blocked on trial org (shared v4
+                  `66.241.125.118` works for custom apex via SNI);
+                  dedicated IPv6 `2a09:8280:1::114:4adc:0` issued.
+                  Cloudflare apex A/AAAA reconciled by
+                  `scripts/cloudflare-dns.mjs`; Fly cert issued via
+                  TLS-ALPN-01 within ~30s (no ACME TXT needed).
+                  `https://tex.center/healthz` → 200 JSON,
+                  `https://tex.center/` → 200 HTML. State captured
+                  in `deploy/README.md`.
                   Eight steps (per discussion 70):
                   1. `FLY_API_TOKEN=$(cat creds/fly.token) flyctl
                      apps create tex-center` (region `fra`).
@@ -195,13 +208,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M6.3.1 — live deploy of the control
-plane to `https://tex.center`. Eight-step sequence in M6.3.1 above
-runs against live Fly + Cloudflare + GitHub using the credentials
-in `creds/`. After it lands, M7.0 (shared sidecar Machine) is next.
+**Next ordinary iteration:** M7.0 — single shared sidecar Machine
+carrying TeX Live + supertex, control plane proxying
+`/ws/project/<id>` over Fly internal networking. M6.3.1 landed
+iter 73 (`https://tex.center` is live; see `deploy/README.md`).
 
-Smaller alternatives if M6.3.1 hits an unresolvable live error
-(surface the exact command + response in the iteration log first):
+Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive
   `listProjectFiles` landed iter 55; protocol `file-list` control +
   FileTree wiring landed iter 56; per-file `Y.Text` hydration
