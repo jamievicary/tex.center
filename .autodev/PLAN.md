@@ -312,12 +312,31 @@ spawning, (D) auth + production polish.
                         copy alongside `handler.js`'s. Acceptable
                         for MVP; revisit if the image gets
                         bloated.
-                  - [ ] **M7.0.3.3** — Deploy + verify. Bump
-                        control-plane image, hit
-                        `wss://tex.center/ws/project/<id>` from a
-                        live-target Playwright spec (or a curl-
-                        equivalent), confirm the sidecar machine
-                        wakes on 6PN. Update `deploy/VERIFY.md`.
+                  - [x] **M7.0.3.3** — Deploy + verify. _(iter 97.)_
+                        Control plane redeployed via GitHub Actions on
+                        the iter-96 push (release v26,
+                        image `tex-center:deployment-01KRCP9D92Y36DSBQWZPRXSKGV`).
+                        Live probes from this machine:
+                        `GET /healthz` → 200,
+                        upgrade `/ws/project/smoke` (no cookie) → 401,
+                        upgrade `/ws/nope` → 404. The 401 probe is the
+                        load-bearing acceptance check (auth fail-closed,
+                        no sidecar dial). `deploy/VERIFY.md` extended
+                        with a WS-proxy probe block.
+
+                        **Happy-path (valid cookie → sidecar wake)
+                        not yet verified.** `DATABASE_URL` is not set
+                        on the control-plane app, so even a properly
+                        signed `tc_session` cookie produces 401
+                        (`getDb()` throws inside the authoriser's
+                        `lookupSession`, fail-closed). Wiring
+                        `DATABASE_URL` + minting a live session is its
+                        own slice — folded into M7.1 (Machines API
+                        client) so the DB wiring lands alongside the
+                        per-project Machine routing that actually
+                        needs it. Until then `wss://tex.center` works
+                        for "reject everything" but cannot reach the
+                        sidecar.
       - [ ] **M7.1** — Machines API client in the control plane:
             spawn, wake, idle-stop, destroy. Replace the shared
             sidecar with on-demand per-project Machines.
@@ -613,16 +632,15 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.0.3.3 — deploy + verify. Build
-`apps/web` with iter-95 server-entry + iter-96 auth gating, push
-the control-plane image, hit `wss://tex.center/ws/project/<id>`
-unauthenticated (expect 401) and with a minted session cookie
-(expect the upgrade to reach the sidecar — first hit will also
-wake the stopped sidecar machine). Document in `deploy/VERIFY.md`.
-Iter 94 landed pure proxy module; iter 95 landed the custom Node
-entry (`build/server.js`) + Dockerfile CMD swap; iter 96 landed
-auth gating. Queue after: M8.pw.2 (deploy verification hooks),
-M7.1 (Machines API client / per-project Machines).
+**Next ordinary iteration:** M8.pw.2 — Playwright deploy
+verification hooks. With the M7.0.3 slice closed (iter 97
+verified the 401-on-no-cookie probe live), the next leverage
+point is a live-target Playwright spec that runs the
+`deploy/VERIFY.md` probes (healthz, /, oauth start, WS-proxy
+401/404) automatically against `https://tex.center`. After that,
+M7.1 (Machines API client / per-project Machines) — that slice
+also wires `DATABASE_URL` on the control plane and unlocks the
+"valid cookie → sidecar wake" probe deferred from M7.0.3.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

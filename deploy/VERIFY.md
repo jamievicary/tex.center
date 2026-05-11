@@ -52,6 +52,50 @@ node -e 'fetch("https://tex.center/auth/google/start",{redirect:"manual"}).then(
 A failing probe is a deploy failure. Do not declare the deploy done
 until all three pass.
 
+## WS proxy probes (after any change to `apps/web/src/server.ts`, `wsProxy.ts`, or `wsAuth.ts`)
+
+The control plane hijacks HTTP Upgrade requests for
+`/ws/project/<id>` and proxies them to
+`tex-center-sidecar.internal:3001` over Fly 6PN. Other upgrade
+paths get `404 Not Found`. Without a valid `tc_session` cookie the
+proxy short-circuits to `401 Unauthorized` and does **not** dial
+the sidecar.
+
+```sh
+node -e '
+const http = require("https");
+function probe(path) {
+  return new Promise((resolve) => {
+    const req = http.request({
+      host: "tex.center", port: 443, method: "GET", path,
+      headers: {
+        "Connection": "Upgrade", "Upgrade": "websocket",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+        "Host": "tex.center",
+      },
+    });
+    req.on("upgrade", (res, sock) => { sock.destroy(); resolve("upgrade "+res.statusCode); });
+    req.on("response", res => resolve("response "+res.statusCode));
+    req.on("error", e => resolve("ERR "+e.message));
+    req.end();
+  });
+}
+(async () => {
+  const a = await probe("/ws/project/smoke");
+  const b = await probe("/ws/nope");
+  if (a !== "response 401") throw new Error("ws /ws/project/smoke: " + a);
+  if (b !== "response 404") throw new Error("ws /ws/nope: " + b);
+  console.log("ws proxy ok:", a, "/", b);
+})();'
+```
+
+Verifying the happy-path (valid cookie → upgrade succeeds, sidecar
+machine wakes) requires `DATABASE_URL` on the control plane to be
+populated and the bootstrap admin user's session minted via
+`tests_gold/lib/src/mintSession.ts`. That probe is deferred to the
+M7.1 slice that adds DB wiring to the control plane.
+
 ## Manual prerequisite (one-shot, not automatable)
 
 The Google Cloud Console OAuth client must list
