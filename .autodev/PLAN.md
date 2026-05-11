@@ -162,6 +162,16 @@ Smaller in-tree alternatives if blocked:
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
   button.
+- Wire-level `file-op-error` landed iter 65: protocol variant
+  `{ op: create-file|delete-file|rename-file, reason }`; sidecar
+  unicasts to the originator on each rejection branch (no
+  broadcast — other viewers didn't request the op);
+  `WsClientSnapshot.fileOpError` populated on receipt and cleared
+  on the next `file-list`; `FileTree.svelte`'s create-form area
+  shows the server reason (the local validator still wins when
+  the user is mid-typo). Closes the iter-64 "race rejection is
+  log-only" gap and gives any future file-tree verb (upload, etc.)
+  a ready feedback channel.
 - Client-side file-name validation landed iter 64:
   `validateProjectFileName` lifted into `@tex-center/protocol` so
   the web client mirrors the sidecar's name-rejection rules.

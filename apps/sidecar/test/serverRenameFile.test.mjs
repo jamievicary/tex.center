@@ -89,7 +89,14 @@ async function bootClient(app) {
   ws.send(encodeControl({ type: "rename-file", oldName: "refs.bib", newName: MAIN_DOC_NAME }));
   ws.send(encodeControl({ type: "rename-file", oldName: "ghost.tex", newName: "y.tex" }));
   ws.send(encodeControl({ type: "rename-file", oldName: "refs.bib", newName: "bad/name" }));
-  await new Promise((r) => setTimeout(r, 100));
+  await waitFor(
+    () =>
+      frames.filter(
+        (f) => f.kind === "control" && f.message.type === "file-op-error",
+      ).length >= 4,
+    "four file-op-error frames for the four rejected renames",
+    frames,
+  );
   const fileListsAfterRejects = frames.filter(
     (f) => f.kind === "control" && f.message.type === "file-list",
   ).length;
@@ -98,6 +105,14 @@ async function bootClient(app) {
     fileListsBefore,
     "rejected renames must not broadcast a new file-list",
   );
+  const opErrors = frames
+    .filter((f) => f.kind === "control" && f.message.type === "file-op-error")
+    .map((f) => f.message);
+  for (const e of opErrors) {
+    assert.equal(e.op, "rename-file");
+    assert.equal(typeof e.reason, "string");
+    assert.ok(e.reason.length > 0, `non-empty reason; got ${JSON.stringify(e)}`);
+  }
 
   // Accept: rename.
   ws.send(

@@ -27,6 +27,12 @@ export interface WsClientSnapshot {
   lastError: string | null;
   compileState: "idle" | "running" | "error" | "unknown";
   files: string[];
+  /**
+   * Last server-side rejection of a file-tree op (create / delete /
+   * rename) initiated by this client. Cleared on the next
+   * `file-list` (which only arrives after a successful op).
+   */
+  fileOpError: string | null;
 }
 
 export interface WsClientOptions {
@@ -46,6 +52,7 @@ export class WsClient {
   private _lastError: string | null = null;
   private _compileState: WsClientSnapshot["compileState"] = "unknown";
   private _files: string[] = [MAIN_DOC_NAME];
+  private _fileOpError: string | null = null;
   private readonly onDocUpdate: (update: Uint8Array, origin: unknown) => void;
 
   constructor(opts: WsClientOptions) {
@@ -119,6 +126,10 @@ export class WsClient {
           this.emit();
         } else if (decoded.message.type === "file-list") {
           this._files = decoded.message.files;
+          this._fileOpError = null;
+          this.emit();
+        } else if (decoded.message.type === "file-op-error") {
+          this._fileOpError = decoded.message.reason;
           this.emit();
         }
         break;
@@ -184,6 +195,7 @@ export class WsClient {
       lastError: this._lastError,
       compileState: this._compileState,
       files: this._files,
+      fileOpError: this._fileOpError,
     };
   }
 

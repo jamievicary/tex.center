@@ -7,12 +7,19 @@
     onCreateFile,
     onDeleteFile,
     onRenameFile,
+    serverError = null,
   }: {
     files: string[];
     selected: string;
     onCreateFile?: (name: string) => void;
     onDeleteFile?: (name: string) => void;
     onRenameFile?: (oldName: string, newName: string) => void;
+    /**
+     * Last server-side rejection of a file-tree op (race-rejected
+     * create / delete / rename), surfaced inline. Clears when the
+     * client receives the next `file-list` (= some op succeeded).
+     */
+    serverError?: string | null;
   } = $props();
 
   let newName = $state("");
@@ -99,6 +106,8 @@
   </form>
   {#if createError}
     <p class="err" role="alert">{createError}</p>
+  {:else if serverError}
+    <p class="err" role="alert">server: {serverError}</p>
   {/if}
 {/if}
 

@@ -58,7 +58,12 @@ export type ControlMessage =
   | { type: "file-list"; files: string[] }
   | { type: "create-file"; name: string }
   | { type: "delete-file"; name: string }
-  | { type: "rename-file"; oldName: string; newName: string };
+  | { type: "rename-file"; oldName: string; newName: string }
+  | {
+      type: "file-op-error";
+      op: "create-file" | "delete-file" | "rename-file";
+      reason: string;
+    };
 
 export interface PdfSegment {
   totalLength: number;

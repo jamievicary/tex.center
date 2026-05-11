@@ -27,6 +27,7 @@
     lastError: null,
     compileState: "unknown",
     files: [MAIN_DOC_NAME],
+    fileOpError: null,
   });
 
   let client: WsClient | null = null;
@@ -77,6 +78,7 @@
   <aside class="tree">
     <FileTree
       files={snapshot.files}
+      serverError={snapshot.fileOpError}
       bind:selected
       onCreateFile={(name) => client?.createFile(name)}
       onDeleteFile={(name) => {

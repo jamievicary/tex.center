@@ -92,4 +92,18 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
   assert.equal(validateProjectFileName("a".repeat(129)), "name too long");
 }
 
+// file-op-error control message round-trip
+{
+  for (const op of ["create-file", "delete-file", "rename-file"]) {
+    const frame = encodeControl({ type: "file-op-error", op, reason: "already exists" });
+    const decoded = decodeFrame(frame);
+    assert.equal(decoded.kind, "control");
+    assert.deepEqual(decoded.message, {
+      type: "file-op-error",
+      op,
+      reason: "already exists",
+    });
+  }
+}
+
 console.log("protocol codec tests: OK");

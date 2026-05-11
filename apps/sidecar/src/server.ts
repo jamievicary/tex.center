@@ -336,6 +336,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                     { name, reason: res.reason, projectId: project.id },
                     "create-file rejected",
                   );
+                  client.send(
+                    encodeControl({
+                      type: "file-op-error",
+                      op: "create-file",
+                      reason: res.reason,
+                    }),
+                  );
                   return;
                 }
                 broadcast(
@@ -353,6 +360,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                       { oldName, newName, reason: res.reason, projectId: project.id },
                       "rename-file rejected",
                     );
+                    client.send(
+                      encodeControl({
+                        type: "file-op-error",
+                        op: "rename-file",
+                        reason: res.reason,
+                      }),
+                    );
                     return;
                   }
                   broadcast(
@@ -367,6 +381,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
                   app.log.warn(
                     { name, reason: res.reason, projectId: project.id },
                     "delete-file rejected",
+                  );
+                  client.send(
+                    encodeControl({
+                      type: "file-op-error",
+                      op: "delete-file",
+                      reason: res.reason,
+                    }),
                   );
                   return;
                 }
