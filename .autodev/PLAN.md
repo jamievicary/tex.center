@@ -287,9 +287,27 @@ spawning, (D) auth + production polish.
                         `tests_gold/lib/test/flyProxy.test.mjs`
                         using a stand-in `flyctl` binary built at
                         test time (no real flyctl needed).
-                  - [ ] **M8.pw.1.1.b** — `authedPage` Playwright
+                  - [x] **M8.pw.1.1.b** — `authedPage` Playwright
                         fixture wiring `mintSession` +
                         `startFlyProxy` for the `live` target.
+                        _(iter 83.)_ Worker-scoped `liveDb`
+                        starts flyctl proxy + opens `createDb`;
+                        test-scoped `authedPage` mints a row,
+                        sets the `tc_session` cookie on a fresh
+                        context, deletes the row in teardown.
+                        Pure helpers `resolveLiveDbConfig` +
+                        `buildSessionCookieSpec` +
+                        `buildLiveDbUrl` in
+                        `tests_gold/lib/src/authedCookie.ts`
+                        (unit-tested in
+                        `tests_gold/lib/test/authedCookie.test.mjs`).
+                        Required env: `TEXCENTER_LIVE_DB_PASSWORD`,
+                        `SESSION_SIGNING_KEY`, `TEXCENTER_LIVE_USER_ID`;
+                        missing → `test.skip` with the list of
+                        missing keys. Fixture is scaffolding: no
+                        spec uses it yet (pw.1.2 does), but a
+                        module-load smoke test catches top-level
+                        breakage.
                   - [ ] **M8.pw.1.1.c** — DB co-location for the
                         `local` target. Design + land
                         PGlite-server-or-equivalent so the dev
@@ -318,18 +336,18 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1.1.b — `authedPage`
-Playwright fixture wiring `mintSession` + `startFlyProxy` for
-the `live` target. Two primitives now exist
-(`tests_gold/lib/src/mintSession.ts` iter 79;
-`tests_gold/lib/src/flyProxy.ts` iter 82); next step is the
-fixture that boots flyctl proxy, opens a `createDb` against
-`postgresql://...@127.0.0.1:5433/...`, mints a session, and
-`addCookies` before each test. Local-target DB co-location
-(pw.1.1.c) deliberately split off — it's a separate design
-decision (PGlite-server vs ephemeral Postgres) and the `live`
-target is the higher-value path. Queue: pw.1.1.b → pw.1.1.c →
-pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
+**Next ordinary iteration:** M8.pw.1.1.c — local-target DB
+co-location. Design call between (a) PGlite-server TCP variant
+(`@electric-sql/pglite-socket`) and (b) ephemeral real Postgres
+(spawn per-worker, similar to flyProxy spinup pattern) or
+(c) shared in-process PGlite that the dev server reads from via
+a runtime-swappable `getDb()`. Most appealing today is (c)
+because no extra binaries/servers/processes, but it requires
+the dev server to import the same module the test driver
+inserts rows through — needs a small dev-only seam in
+`apps/web/src/lib/server/db.ts`. Land the design + the fixture
+in one iteration. Queue: pw.1.1.c → pw.1.2 → M7.0.2 → pw.2 →
+M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
