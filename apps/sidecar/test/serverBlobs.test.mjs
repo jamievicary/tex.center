@@ -17,6 +17,7 @@ import * as Y from "yjs";
 import { LocalFsBlobStore } from "../../../packages/blobs/src/index.ts";
 import { MAIN_DOC_NAME, decodeFrame, encodeDocUpdate } from "../../../packages/protocol/src/index.ts";
 import { buildServer } from "../src/server.ts";
+import { bootClient, waitFor } from "./lib.mjs";
 
 const blobRoot = mkdtempSync(join(tmpdir(), "sidecar-blob-test-"));
 const blobStore = new LocalFsBlobStore({ rootDir: blobRoot });
@@ -28,38 +29,12 @@ await blobStore.put(`projects/${projectId}/files/main.tex`, new TextEncoder().en
 // Sibling file to exercise multi-file `file-list` + hydration.
 await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().encode(refsBibContents));
 
-async function waitFor(check, label, frames) {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    if (await check()) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`timeout: ${label}; frames=${JSON.stringify(frames.map((f) => f.kind))}`);
-}
-
-async function bootClient(app) {
-  const address = app.server.address();
-  const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws/project/${projectId}`);
-  ws.binaryType = "arraybuffer";
-  const frames = [];
-  const clientDoc = new Y.Doc();
-  const text = clientDoc.getText(MAIN_DOC_NAME);
-  ws.on("message", (data) => {
-    const buf = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
-    const f = decodeFrame(buf);
-    frames.push(f);
-    if (f.kind === "doc-update") Y.applyUpdate(clientDoc, f.update);
-  });
-  await new Promise((res, rej) => { ws.once("open", res); ws.once("error", rej); });
-  return { ws, frames, clientDoc, text };
-}
-
 // --- Run 1: hydrate, edit, persist ---------------------------------
 {
   const app = await buildServer({ logger: false, blobStore });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  const { ws, frames, clientDoc, text } = await bootClient(app);
+  const { ws, frames, clientDoc, text } = await bootClient(app, projectId);
   await waitFor(() => text.toString() === initial, "hydrated initial", frames);
 
   // Multi-file hydration: refs.bib must be present on the same
@@ -139,7 +114,7 @@ async function bootClient(app) {
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  const { ws, frames, text } = await bootClient(app);
+  const { ws, frames, text } = await bootClient(app, projectId);
   const startBlob = await blobStore.get(`projects/${projectId}/files/main.tex`);
   const startText = new TextDecoder().decode(startBlob);
   await waitFor(() => text.toString() === startText, "hydrated for failing-compile run", frames);
@@ -249,7 +224,7 @@ async function bootClient(app) {
   const app = await buildServer({ logger: false, blobStore });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  const { ws, frames, clientDoc, text } = await bootClient(app);
+  const { ws, frames, clientDoc, text } = await bootClient(app, projectId);
   const expected = `${initial}\n% extra line\n% even though compile fails`;
   await waitFor(() => text.toString() === expected, "rehydrated edit", frames);
   const expectedRefsBib = `${refsBibContents}\n@article{y,...}`;
