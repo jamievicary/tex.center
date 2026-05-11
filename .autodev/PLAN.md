@@ -162,6 +162,18 @@ Smaller in-tree alternatives if blocked:
   `knownFiles`/`persistedByName`, deletes the blob when
   `canPersist`), `WsClient.deleteFile`, per-row FileTree "×"
   button.
+- Project-row storage primitives landed iter 67:
+  `packages/db/src/projects.ts` exports `createProject`,
+  `getProjectById(db, id)` (null-on-miss), and
+  `listProjectsByOwnerId(db, ownerId)` (sorted by `created_at`
+  then `id` for deterministic test ordering). Re-exported from
+  `packages/db/src/index.ts`. PGlite gold case
+  `tests_gold/cases/test_pglite_projects.py` exercises
+  insert/fetch round-trip, list-by-owner across two owners with
+  empty-list edge case, miss-by-id, and FK enforcement on
+  `ownerId`. No web/sidecar wiring yet — every runtime codepath
+  still uses the hardcoded literal `"default"` for the project
+  id; the dashboard + per-project routing slice lifts that.
 - File-tree upload landed iter 66: `upload-file` protocol verb
   carrying `{ name, content }` (UTF-8 text); `ProjectPersistence.
   addFile(name, content?)` extended with an optional content

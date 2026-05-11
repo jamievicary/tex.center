@@ -4,3 +4,4 @@ export * from './migrations.js';
 export * from './db.js';
 export * from './users.js';
 export * from './sessions.js';
+export * from './projects.js';
