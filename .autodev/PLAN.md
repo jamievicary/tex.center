@@ -337,9 +337,47 @@ spawning, (D) auth + production polish.
                         needs it. Until then `wss://tex.center` works
                         for "reject everything" but cannot reach the
                         sidecar.
-      - [ ] **M7.1** — Machines API client in the control plane:
+      - [~] **M7.1** — Machines API client in the control plane:
             spawn, wake, idle-stop, destroy. Replace the shared
-            sidecar with on-demand per-project Machines.
+            sidecar with on-demand per-project Machines. Sliced:
+            - [x] **M7.1.0** — Pure-logic Fly Machines API client.
+                  _(iter 99.)_ `apps/web/src/lib/server/flyMachines.ts`
+                  exposes `MachinesClient({token, appName, baseUrl?,
+                  fetch?})` with `createMachine`, `getMachine`,
+                  `startMachine`, `stopMachine`, `destroyMachine`,
+                  `waitForState`, plus a typed `MachineState`
+                  union and `FlyApiError` carrying status + body.
+                  Pure helpers `buildMachinesUrl`,
+                  `buildAuthHeaders`, `internalAddress`,
+                  `parseMachineState` exported for direct unit
+                  testing. Internal-6PN derivation follows Fly's
+                  `<id>.vm.<app>.internal` form so the next slice
+                  can plug a per-project machine straight into
+                  `wsProxy.ts`'s upstream slot. Default base URL
+                  `https://api.machines.dev/v1`; injectable
+                  `fetch` keeps the surface unit-testable.
+                  `apps/web/test/flyMachines.test.mjs` covers
+                  pure helpers, happy-path JSON parsing,
+                  unknown-state rejection, non-ok →
+                  `FlyApiError` (both JSON and HTML bodies),
+                  force-destroy query string, `waitForState`
+                  URL shape, empty 200 body tolerance, and
+                  constructor validation.
+            - [ ] **M7.1.1** — DB schema for project↔machine
+                  mapping (`machine_id`, `app_name`, state-cache
+                  columns on `projects` or a sibling table).
+            - [ ] **M7.1.2** — Per-project upstream resolver
+                  wired into `wsProxy.ts`. Hook in `boot.ts`
+                  replaces the static `resolveSidecarUpstream`
+                  with a function `(projectId) → Promise<SidecarUpstream>`
+                  that consults the DB and the `MachinesClient`
+                  (creates/starts the Machine if missing/stopped).
+            - [ ] **M7.1.3** — `DATABASE_URL` + `FLY_API_TOKEN`
+                  secrets on the control plane; deploy; extend
+                  `verifyLive.spec.ts` with a happy-path
+                  authed-upgrade probe.
+            - [ ] **M7.1.4** — Idle-stop wiring on the per-project
+                  Machine side; M7.3 closes when this lands.
       - [ ] **M7.2** — `/ws/project/<id>` routing: control plane
             looks up (or creates) the project's Machine and proxies
             the WS to it.
@@ -641,14 +679,13 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1 — Machines API client /
-per-project Machines in the control plane. That slice also wires
-`DATABASE_URL` on the control plane and unlocks the
-"valid cookie → sidecar wake" probe deferred from M7.0.3.3
-(at which point `verifyLive.spec.ts` from iter 98 can grow a
-sixth probe asserting the happy-path upgrade succeeds).
-Iter 98 closed M8.pw.2 (live-target Playwright spec encoding
-the `deploy/VERIFY.md` probes).
+**Next ordinary iteration:** M7.1.1 — DB schema for the
+project↔machine mapping. With the API client (M7.1.0 / iter 99)
+in place, the next slice introduces the DB column(s) the
+upstream resolver will read, plus the storage primitive to mint
++ look up the machine row. Then M7.1.2 wires it into
+`wsProxy.ts`, M7.1.3 deploys + extends `verifyLive.spec.ts`,
+M7.1.4 closes idle-stop.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
