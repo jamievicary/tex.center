@@ -8,9 +8,24 @@ importers:
 
   .:
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.2.17
+        version: 0.2.17
       '@playwright/test':
         specifier: 1.49.1
         version: 1.49.1
+      '@tex-center/auth':
+        specifier: workspace:*
+        version: link:packages/auth
+      '@tex-center/db':
+        specifier: workspace:*
+        version: link:packages/db
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.2.17)(postgres@3.4.9)
+      tsx:
+        specifier: ^4.19.1
+        version: 4.21.0
       typescript:
         specifier: 5.6.3
         version: 5.6.3

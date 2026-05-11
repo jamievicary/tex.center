@@ -286,20 +286,40 @@ spawning, (D) auth + production polish.
             to include `realpathSync(node_modules)` so the
             DrvFs-symlinked-to-ext4 layout no longer trips Vite's
             "outside of serving allow list" guard.
-      - [ ] **M8.pw.1** — Session-cookie injection + authed
-            surface. `tests_gold/lib/mintSession.ts` (reads
-            `SESSION_SIGNING_KEY` from env; inserts a `sessions`
-            row with `expires_at = now() + 5min` so abandoned
-            rows self-clean via `deleteExpiredSessions`; returns
-            signed cookie); Playwright `authedPage` fixture;
-            `tests_gold/lib/flyProxy.ts` launches `flyctl proxy
-            5433:5432 -a tex-center-db` for `live` target with a
-            health check that surfaces proxy failures distinctly
-            from Playwright flakes. First wave of tests: `/` →
-            `/editor` redirect when authed, `/editor` three-panel
-            layout DOM presence, `/projects` lists the user's
-            projects, sign-out clears cookie + lands on white `/`.
-            Tests teardown their inserted rows in `afterAll`.
+      - [~] **M8.pw.1** — Session-cookie injection + authed
+            surface.
+            - [x] **M8.pw.1.0** — `tests_gold/lib/src/mintSession.ts`:
+                  pure helper that inserts a fresh `sessions` row
+                  (`insertSession` from `@tex-center/db`) and signs
+                  a matching `tc_session` cookie value
+                  (`signSessionToken` from `@tex-center/auth`).
+                  Default TTL 300s so abandoned rows self-clean
+                  via `deleteExpiredSessions`. PGlite gold case
+                  `tests_gold/cases/test_mint_session.py` exercises
+                  the round-trip (DB row landed, cookie verifies
+                  with the same key, fails with a wrong key,
+                  rejects expired-at-`exp`, rejects non-integer
+                  / non-positive ttl). Helper deps wired via root
+                  `package.json` devDependencies on
+                  `@tex-center/auth`/`@tex-center/db`/
+                  `@electric-sql/pglite`/`drizzle-orm` (rather
+                  than making `tests_gold/lib` its own workspace
+                  package — keeps Docker contexts unchanged).
+                  _(iter 79.)_
+            - [ ] **M8.pw.1.1** — Playwright `authedPage` fixture
+                  + `tests_gold/lib/src/flyProxy.ts` launching
+                  `flyctl proxy 5433:5432 -a tex-center-db` for
+                  `live` target with a distinct-failure-mode
+                  health check. Local target also needs DB
+                  co-location with the dev server (PGlite-server
+                  or shared ephemeral Postgres); design + land
+                  here.
+            - [ ] **M8.pw.1.2** — First wave of tests: `/` →
+                  `/projects` redirect when authed, `/editor/<id>`
+                  three-panel layout DOM presence, `/projects`
+                  lists the user's projects, sign-out clears
+                  cookie + lands on white `/`. Tests teardown
+                  their inserted rows in `afterAll`.
       - [ ] **M8.pw.2** — Deploy-iteration verification. Extend
             `deploy/VERIFY.md` to require `live`-target Playwright
             pass as the deploy-success signal. `tests_gold` case
@@ -317,19 +337,16 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1 — session-cookie injection
-+ authed surface. Queue (per discussion 77): pw.1 → M7.0.2 →
-pw.2 → M7.0.3. Concrete next-iteration scope:
-`tests_gold/lib/mintSession.ts` (HMAC-sign with
-`SESSION_SIGNING_KEY` from env, insert a `sessions` row with
-`expires_at = now() + 5min` so abandoned rows self-clean via
-`deleteExpiredSessions`); Playwright `authedPage` fixture that
-calls the helper and `addCookies`; `tests_gold/lib/flyProxy.ts`
-to launch `flyctl proxy 5433:5432 -a tex-center-db` for the
-`live` target with a distinct-failure-mode health check; first
-wave of authed tests (`/` → `/projects` redirect when authed,
-`/editor/<id>` three-panel layout, `/projects` list,
-sign-out clears cookie).
+**Next ordinary iteration:** M8.pw.1.1 — `authedPage` fixture
++ `flyProxy.ts` + DB co-location for the `local` Playwright
+target. `mintSession` helper itself landed iter 79
+(`tests_gold/lib/src/mintSession.ts`); next step is wiring it
+through a Playwright fixture that `addCookies` before the test
+runs, and a strategy for the `local` target's DB-with-dev-server
+co-location (the dev server needs a Postgres-wire DB the test
+process can also write to). Queue (per discussion 77, plus iter
+79 split): pw.1.1 → pw.1.2 (first wave of authed tests) →
+M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Multi-file-project slice on the sidecar. Listing primitive

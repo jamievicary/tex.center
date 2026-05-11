@@ -1,3 +1,4 @@
+test_mint_session (test_mint_session.TestMintSession.test_mint_session) ... ok
 test_apply_against_pglite (test_pglite_migrations.TestPgliteMigrations.test_apply_against_pglite) ... ok
 test_projects (test_pglite_projects.TestPgliteProjects.test_projects) ... ok
 test_users_and_sessions (test_pglite_users_sessions.TestPgliteUsersSessions.test_users_and_sessions) ... ok
@@ -6,7 +7,7 @@ test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright
 ok
 
 ----------------------------------------------------------------------
-Ran 5 tests in 26.098s
+Ran 6 tests in 21.661s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS
