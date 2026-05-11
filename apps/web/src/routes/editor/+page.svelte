@@ -75,7 +75,11 @@
     {/if}
   </header>
   <aside class="tree">
-    <FileTree files={snapshot.files} bind:selected />
+    <FileTree
+      files={snapshot.files}
+      bind:selected
+      onCreateFile={(name) => client?.createFile(name)}
+    />
   </aside>
   <section class="editor">
     {#key text}

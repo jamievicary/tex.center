@@ -328,6 +328,21 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           case "control":
             if (decoded.message.type === "view") {
               client.viewingPage = decoded.message.page;
+            } else if (decoded.message.type === "create-file") {
+              const name = decoded.message.name;
+              void project.persistence.addFile(name).then((res) => {
+                if (!res.added) {
+                  app.log.warn(
+                    { name, reason: res.reason, projectId: project.id },
+                    "create-file rejected",
+                  );
+                  return;
+                }
+                broadcast(
+                  project,
+                  encodeControl({ type: "file-list", files: project.persistence.files() }),
+                );
+              });
             }
             break;
           case "awareness":

@@ -138,6 +138,16 @@ export class WsClient {
   }
 
   /**
+   * Ask the sidecar to create a new file in this project. The
+   * server validates the name and broadcasts a refreshed
+   * `file-list` on success; rejected names produce no visible
+   * change (a warning is logged server-side).
+   */
+  createFile(name: string): void {
+    this.send(encodeControl({ type: "create-file", name }));
+  }
+
+  /**
    * Returns the `Y.Text` for a given filename on the project doc.
    * Each persisted file is hydrated by the server into
    * `doc.getText(<relative-path>)`; calling this with an unknown

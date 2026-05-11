@@ -104,6 +104,34 @@ export interface ProjectPersistence {
    * after `awaitHydrated()` for a complete view.
    */
   files(): string[];
+  /**
+   * Add a new project file. Validates `name` as a single blob-key
+   * segment, rejects duplicates (any name already in `files()`),
+   * and — when the blob store is wired and hydration succeeded —
+   * PUTs an empty blob so the file survives a session restart even
+   * if the user never edits it.
+   *
+   * Returns `{ added: true }` on success, otherwise
+   * `{ added: false, reason }` with a short human-readable reason.
+   * The in-memory `knownFiles` set is only mutated on success.
+   */
+  addFile(name: string): Promise<{ added: true } | { added: false; reason: string }>;
+}
+
+const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Validate a project-relative filename. Single segment (no `/`),
+ * not `.` or `..`, matches the BlobStore key segment regex. Returns
+ * a reason string when invalid, otherwise `null`.
+ */
+export function validateProjectFileName(name: string): string | null {
+  if (typeof name !== "string" || name.length === 0) return "empty name";
+  if (name.length > 128) return "name too long";
+  if (name === "." || name === "..") return "reserved name";
+  if (name.includes("/")) return "name must not contain '/'";
+  if (!FILE_NAME_RE.test(name)) return "name has disallowed characters";
+  return null;
 }
 
 export function createProjectPersistence(args: {
@@ -115,10 +143,20 @@ export function createProjectPersistence(args: {
   const { blobStore, projectId, doc, log } = args;
 
   if (!blobStore) {
+    // In-memory only: still track created files so `files()` and
+    // the broadcast file-list reflect them within this session.
+    const memFiles = new Set<string>([MAIN_DOC_NAME]);
     return {
       awaitHydrated: () => Promise.resolve(),
       maybePersist: () => Promise.resolve(),
-      files: () => [MAIN_DOC_NAME],
+      files: () => Array.from(memFiles).sort(),
+      async addFile(name) {
+        const reason = validateProjectFileName(name);
+        if (reason) return { added: false, reason };
+        if (memFiles.has(name)) return { added: false, reason: "already exists" };
+        memFiles.add(name);
+        return { added: true };
+      },
     };
   }
 
@@ -174,6 +212,25 @@ export function createProjectPersistence(args: {
   return {
     awaitHydrated: () => hydrated,
     files: () => Array.from(knownFiles).sort(),
+    async addFile(name): Promise<{ added: true } | { added: false; reason: string }> {
+      const reason = validateProjectFileName(name);
+      if (reason) return { added: false, reason };
+      if (knownFiles.has(name)) return { added: false, reason: "already exists" };
+      if (canPersist) {
+        try {
+          await blobStore.put(`${projectFilesDir(projectId)}/${name}`, new Uint8Array(0));
+          persistedByName.set(name, "");
+        } catch (e) {
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            `blob create failed for ${name}`,
+          );
+          return { added: false, reason: "blob create failed" };
+        }
+      }
+      knownFiles.add(name);
+      return { added: true };
+    },
     async maybePersist(): Promise<void> {
       if (!canPersist) return;
       const enc = new TextEncoder();

@@ -153,6 +153,10 @@ Smaller in-tree alternatives if blocked:
   `listProjectFiles` independently — one round-trip removed per
   connection and the file-list emitted to the client now equals
   the set persistence operates on.
+- File-tree create landed iter 61: `create-file` protocol verb,
+  `ProjectPersistence.addFile(name)` (PUTs an empty blob when
+  `canPersist`), `WsClient.createFile`, FileTree new-file input.
+  Rename / delete still queued in `FUTURE_IDEAS.md`.
 
 ## Live caveats
 

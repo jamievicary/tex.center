@@ -33,7 +33,8 @@ export type ControlMessage =
   | { type: "hello"; protocol: number }
   | { type: "view"; page: number }
   | { type: "compile-status"; state: "idle" | "running" | "error"; detail?: string }
-  | { type: "file-list"; files: string[] };
+  | { type: "file-list"; files: string[] }
+  | { type: "create-file"; name: string };
 
 export interface PdfSegment {
   totalLength: number;
