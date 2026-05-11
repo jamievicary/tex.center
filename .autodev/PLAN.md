@@ -351,8 +351,9 @@ waits for docker-compose; M4.3.2 checkpoint half waits for the
 upstream `--daemon DIR` mode / M7.
 
 M5 tail items deferred to FUTURE_IDEAS: session sweeper for
-expired rows, JWKS clock-skew tolerance, GET-via-shim for
-logout-from-link.
+expired rows, GET-via-shim for logout-from-link. (JWKS clock-skew
+tolerance landed iter 47 — `makeVerifyGoogleIdToken` builder with
+60s default `clockTolerance`; injectable `keyInput` for tests.)
 
 ## Live caveats
 

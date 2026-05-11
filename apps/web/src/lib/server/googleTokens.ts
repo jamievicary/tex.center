@@ -16,6 +16,8 @@ import {
   createRemoteJWKSet,
   jwtVerify,
   type JWTPayload,
+  type JWTVerifyGetKey,
+  type KeyLike,
 } from "jose";
 
 import type {
@@ -28,14 +30,11 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
 
-let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
-
-function jwks(): ReturnType<typeof createRemoteJWKSet> {
-  if (cachedJwks === null) {
-    cachedJwks = createRemoteJWKSet(new URL(JWKS_URL));
-  }
-  return cachedJwks;
-}
+// Google's signers and our verifier can drift by a few seconds.
+// Without tolerance, a token whose `exp` is just past our clock
+// fails with `"exp" claim timestamp check failed`. 60s mirrors
+// Google's own client libraries' default.
+const DEFAULT_CLOCK_TOLERANCE_SECONDS = 60;
 
 export interface ExchangeCodeForTokensConfig {
   readonly clientId: string;
@@ -89,17 +88,42 @@ async function safeText(res: Response): Promise<string> {
   }
 }
 
-export const verifyGoogleIdToken: VerifyIdTokenFn = async ({
-  idToken,
-  audience,
-}) => {
-  const { payload } = await jwtVerify(idToken, jwks(), {
-    audience,
-    issuer: Array.from(ISSUERS),
-    algorithms: ["RS256"],
-  });
-  return claimsFromPayload(payload);
-};
+export interface VerifyGoogleIdTokenConfig {
+  /** Override Google's JWKS endpoint (tests). */
+  readonly jwksUrl?: string;
+  /** Tolerance for `iat`/`exp` checks. Defaults to 60 seconds. */
+  readonly clockToleranceSeconds?: number;
+  /**
+   * Inject a JWKS resolver or static key (tests). When provided,
+   * `jwksUrl` is ignored and no remote fetcher is created.
+   */
+  readonly keyInput?: KeyLike | Uint8Array | JWTVerifyGetKey;
+}
+
+export function makeVerifyGoogleIdToken(
+  config: VerifyGoogleIdTokenConfig = {},
+): VerifyIdTokenFn {
+  const clockTolerance =
+    config.clockToleranceSeconds ?? DEFAULT_CLOCK_TOLERANCE_SECONDS;
+  const keyInput =
+    config.keyInput ??
+    createRemoteJWKSet(new URL(config.jwksUrl ?? JWKS_URL));
+  return async ({ idToken, audience }) => {
+    const options = {
+      audience,
+      issuer: Array.from(ISSUERS),
+      algorithms: ["RS256"],
+      clockTolerance,
+    };
+    const { payload } =
+      typeof keyInput === "function"
+        ? await jwtVerify(idToken, keyInput, options)
+        : await jwtVerify(idToken, keyInput, options);
+    return claimsFromPayload(payload);
+  };
+}
+
+export const verifyGoogleIdToken: VerifyIdTokenFn = makeVerifyGoogleIdToken();
 
 function claimsFromPayload(p: JWTPayload): VerifiedIdToken {
   const sub = typeof p.sub === "string" ? p.sub : "";

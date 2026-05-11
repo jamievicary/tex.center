@@ -2,8 +2,6 @@
 
 - **Session sweeper.** `DELETE FROM sessions WHERE expires_at <
   now()`; ride on any periodic task once one exists.
-- **JWKS clock-skew tolerance** in `verifyGoogleIdToken` (iter 36
-  noted; still open after iter 39).
 - **`GET /auth/logout` link affordance.** Today only `POST` works;
   for an email-link or status-page link, a CSRF-protected GET→POST
   shim would be needed.
