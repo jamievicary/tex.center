@@ -40,22 +40,10 @@ export default defineConfig({
       },
     },
   ],
-  webServer:
-    process.env.PLAYWRIGHT_SKIP_WEBSERVER === "1"
-      ? undefined
-      : {
-          // The `local` project owns the dev server. The `live`
-          // project skips it by setting PLAYWRIGHT_SKIP_WEBSERVER=1
-          // (see tests_gold/cases/test_playwright.py for the
-          // gating logic). hooks.server.ts is deliberately resilient
-          // to a missing SESSION_SIGNING_KEY (collapses to
-          // anonymous), so the dev server can boot without any
-          // OAuth/db secrets for the landing-page test.
-          command: "pnpm --filter @tex-center/web dev --port " + LOCAL_PORT,
-          url: `http://127.0.0.1:${LOCAL_PORT}/`,
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-          stdout: "pipe",
-          stderr: "pipe",
-        },
+  // The dev server is intentionally NOT configured via Playwright's
+  // top-level `webServer` block: the runner starts `webServer`
+  // before `globalSetup`, so env vars `globalSetup` exports
+  // (`DATABASE_URL`, `SESSION_SIGNING_KEY`) would never reach the
+  // dev server. `globalSetup.ts` spawns it manually after the
+  // PGlite-over-TCP boot, in the correct order.
 });

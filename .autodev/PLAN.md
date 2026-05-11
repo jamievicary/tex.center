@@ -386,12 +386,32 @@ spawning, (D) auth + production polish.
                               `import.meta.url` as before;
                               globalSetup derives the same path
                               via `__dirname`.
-            - [ ] **M8.pw.1.2** — First wave of tests: `/` →
-                  `/projects` redirect when authed, `/editor/<id>`
-                  three-panel layout DOM presence, `/projects`
-                  lists the user's projects, sign-out clears
-                  cookie + lands on white `/`. Tests teardown
-                  their inserted rows in `afterAll`.
+            - [x] **M8.pw.1.2** — First wave of authed specs.
+                  _(iter 86.)_ Four specs under
+                  `tests_gold/playwright/`:
+                  `authedHome.spec.ts` (authed `/` → `/projects`),
+                  `projects.spec.ts` (seeded list + empty state),
+                  `editor.spec.ts` (three-panel grid),
+                  `signout.spec.ts` (POST `/auth/logout` clears
+                  cookie, lands on white `/`). Seeded rows torn
+                  down in `afterEach`. **Side-fix to the iter-85
+                  wiring**: iter 85's `globalSetup` set env *after*
+                  Playwright launched the `webServer`, so the dev
+                  server never inherited `DATABASE_URL` /
+                  `SESSION_SIGNING_KEY` and silently collapsed to
+                  anonymous — only `landing.spec.ts` exercised the
+                  path so the bug was invisible. Fix: removed
+                  Playwright's top-level `webServer` block;
+                  `globalSetup.ts` now spawns
+                  `pnpm --filter @tex-center/web dev` itself
+                  *after* PGlite boot, with port-in-use guard,
+                  `detached:true` + process-group kill for clean
+                  teardown of vite (a grandchild of pnpm).
+                  Editor 404-for-stranger case deferred to pw.2
+                  (`+layout.ts` sets `ssr=false` so the initial
+                  document is always 200; 404 only surfaces on
+                  the client-side data fetch, needs CSR-aware
+                  assertion).
       - [ ] **M8.pw.2** — Deploy-iteration verification. Extend
             `deploy/VERIFY.md` to require `live`-target Playwright
             pass as the deploy-success signal. `tests_gold` case
@@ -409,12 +429,10 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M8.pw.1.2 — write the first wave
-of authed specs (`/` → `/projects` redirect when authed,
-`/editor/<id>` three-panel DOM, `/projects` lists projects,
-sign-out clears cookie + lands on white `/`) using the new
-`authedPage` fixture. Specs should teardown their inserted
-rows in `afterAll`. Queue: pw.1.2 → M7.0.2 → pw.2 → M7.0.3.
+**Next ordinary iteration:** M7.0.2 — second Fly app
+`tex-center-sidecar` in `fra`, `apps/sidecar/fly.toml`, first
+`flyctl deploy --remote-only`. No public IPs (6PN-only),
+internal port 3001. Queue: M7.0.2 → pw.2 → M7.0.3.
 
 Smaller alternatives if M7.0 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
