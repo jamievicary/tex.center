@@ -83,6 +83,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_session_hook(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "sessionHook.test.mjs")
 
+    def test_web_route_redirect(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "routeRedirect.test.mjs")
+
     def test_web_logout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "logout.test.mjs")
 
