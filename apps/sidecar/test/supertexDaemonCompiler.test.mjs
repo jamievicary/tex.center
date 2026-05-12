@@ -39,8 +39,10 @@ mkdirSync(dir, { recursive: true });
 for (const e of readdirSync(dir)) unlinkSync(join(dir, e));
 
 const total = parseInt(process.env.FAKE_TOTAL ?? "3", 10);
-const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid
+const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid | rollback | error-then-ok
 const exitOn = process.env.FAKE_EXIT_AFTER ?? ""; // count of rounds before exit
+const errorRounds = parseInt(process.env.FAKE_ERROR_ROUNDS ?? "1", 10);
+const rollbackK = parseInt(process.env.FAKE_ROLLBACK_K ?? "0", 10);
 
 let rounds = 0;
 process.stderr.write("supertex: daemon ready\\n");
@@ -77,7 +79,16 @@ function handleLine(line) {
     writeFileSync(join(dir, i + ".out"), "CHUNK-" + i + "\\n");
     process.stdout.write("[" + i + ".out]\\n");
   }
-  if (mode === "error") {
+  if (mode === "rollback") {
+    // Unlink chunks > K from disk (the real daemon does this on
+    // rollback) and announce the rollback. No reshipping after,
+    // so the round ends with maxShipout = K.
+    for (let i = rollbackK + 1; i <= target; i++) {
+      try { unlinkSync(join(dir, i + ".out")); } catch {}
+    }
+    process.stdout.write("[rollback " + rollbackK + "]\\n");
+  }
+  if (mode === "error" || (mode === "error-then-ok" && rounds <= errorRounds)) {
     process.stdout.write("[error simulated failure]\\n");
   }
   process.stdout.write("[round-done]\\n");
@@ -267,6 +278,57 @@ const require = createRequire(import.meta.url);
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, false);
   assert.match(r.error, /ENOENT|not found|no such file|spawn/i);
+  await c.close();
+}
+
+// 10. Rollback: `[rollback K]` truncates the assembled segment to
+//     chunks 0..K, ignoring shipout events for indices > K within
+//     the same round.
+{
+  const workDir = await makeWorkDir("rollback");
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({
+      FAKE_TOTAL: "3",
+      FAKE_MODE: "rollback",
+      FAKE_ROLLBACK_K: "0",
+    }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+  });
+  const r = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r.ok, true, "rollback compile ok");
+  const text = Buffer.from(r.segments[0].bytes).toString("utf8");
+  assert.match(text, /^CHUNK-0\n$/, "segment truncated to chunk 0 after rollback");
+  // Only the chunks ≤ K survive on disk.
+  const onDisk = readdirSync(join(workDir, "chunks")).sort();
+  assert.deepEqual(onDisk, ["0.out"]);
+  await c.close();
+}
+
+// 11. Error recovery: first compile fails with [error …], second
+//     compile on the same daemon process succeeds.
+{
+  const workDir = await makeWorkDir("error-then-ok");
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({
+      FAKE_TOTAL: "2",
+      FAKE_MODE: "error-then-ok",
+      FAKE_ERROR_ROUNDS: "1",
+    }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+  });
+  const r1 = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r1.ok, false);
+  assert.match(r1.error, /simulated failure/);
+  const r2 = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r2.ok, true, "recovery compile ok");
+  const text = Buffer.from(r2.segments[0].bytes).toString("utf8");
+  assert.match(text, /^CHUNK-0\nCHUNK-1\n$/);
   await c.close();
 }
 

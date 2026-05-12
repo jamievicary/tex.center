@@ -203,10 +203,16 @@ spawning, (D) auth + production polish.
                   wire frame in `packages/protocol`; surface in editor UI.
             - [ ] M7.5.4 — Gate `PdfStabilityWatcher` on compiler kind
                   (once-path keeps it; daemon uses `[round-done]`).
-            - [ ] M7.5.5 — Integration tests (initial compile, recompile,
-                  rollback, error-recovery, clean shutdown); flip
-                  `SIDECAR_COMPILER` default to `supertex-daemon` only
-                  after this suite is green.
+            - [~] M7.5.5 — Integration tests against the fake daemon
+                  (`supertexDaemonCompiler.test.mjs`). Covered: initial
+                  compile, targetPage clamp, persistent process across
+                  rounds, error+round-done, protocol violation, round
+                  timeout, close idempotent, concurrent reject, spawn
+                  ENOENT, **rollback truncates assembled segment**,
+                  **error→ok recovery on same process** _(iter 113)_.
+                  Still pending before flipping `SIDECAR_COMPILER`
+                  default to `supertex-daemon`: an end-to-end test
+                  against the real `supertex` ELF (not the fake).
 
 - [~] **M8 — Acceptance pass + Playwright (pulled forward).**
       - [x] M8.pw.0 — Playwright skeleton. _(iter 78.)_
