@@ -5,13 +5,14 @@
 The live site at https://tex.center is non-functional for the core
 loop: login + project list + project open work, but inside the
 editor typing doesn't save, the create-file button does nothing,
-and the PDF preview never renders. Shared cause hypothesis: the
-WebSocket path (browser → control-plane `wsProxy.ts` → sidecar) is
-broken in production. Anon WS probe (iter 145) returns 401 cleanly,
-so Fly proxy + WS handler are intact; the remaining hypotheses are
-(a) auth gate returning `deny-anon`/`deny-acl` for a real signed-in
-user, or (b) upgrade succeeds but sidecar doesn't wake / Yjs
-doesn't init / compile path hangs.
+and the PDF preview never renders.
+
+**Root cause (iter 147 diagnosis):** per-project sidecar Machines
+bind only to `127.0.0.1` (`apps/sidecar/src/index.ts:19` defaults
+`HOST` to `"127.0.0.1"`), so the control plane's dial against the
+Fly 6PN IPv6 address is refused. Probe + Fly log evidence,
+including secondary bug in `wsProxy.ts` swallowing dial errors,
+written up in `deploy/INCIDENT-147.md`.
 
 **Until `verifyLiveFullPipeline.spec.ts` (M8.pw.4) runs green
 automatically on every deploy, no other engineering work
@@ -38,19 +39,28 @@ The remaining work for the user to do all five of:
 
 Estimated iteration sequence (adjust as work unfolds):
 
-- **Iter 148 — Diagnose live WS.** flyctl-proxy live Postgres,
-  `mintSession` for `creds/live-user-id.txt`, WS handshake against
-  `wss://tex.center/ws/project/<owned-id>` with the cookie.
-  Capture exact status code + which side hangs. Single-purpose;
-  no fix attempt. Findings → `deploy/INCIDENT-148.md`.
-- **Iter 149 — Fix the broken layer.** Identify root cause per 148's
-  diagnosis, fix it, add a regression test, redeploy, re-run probe.
-- **Iter 150 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 147 — Diagnose live WS.** *Done.* Authed WS probe to
+  `wss://tex.center/ws/project/<owned-id>` returns 502 in ~240 ms
+  (Fly-edge synthesised; one `via` hop). Root cause: sidecar
+  binds 127.0.0.1 only, 6PN dial refused. Probe script:
+  `scripts/probe-live-ws.mjs`. Findings: `deploy/INCIDENT-147.md`.
+- **Iter 148 — Fix the broken layer.** Change sidecar default
+  host to `"::"` (dual-stack IPv6) in `apps/sidecar/src/index.ts`,
+  add a regression test asserting that default, deploy the new
+  sidecar image, roll `SIDECAR_IMAGE` on `tex-center`, destroy
+  the two stale per-project Machines so the next upgrade
+  re-creates them at the new sha, re-run the probe and expect
+  `kind: "upgrade", status: 101`. Also land the wsProxy 502-on-
+  dial-error fix (`apps/web/src/lib/server/wsProxy.ts`
+  `upstream.on("error")` path: write `HTTP/1.1 502` before
+  `clientSocket.destroy()`) so future dial failures show up as
+  our 502 with two via hops rather than Fly's synthetic one.
+- **Iter 149 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 150 passes green automatically, the freezes above may
+After iter 149 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state
