@@ -60,6 +60,12 @@ export function buildUpstreamFromEnv(
     sidecarPort,
     sidecarRegion,
     machineConfig,
+    // 5-minute cold-start budget. Live iter-164 trace observed
+    // fresh Machines taking 1m12s + 1m38s to reach `started`
+    // (image pull). Fly's `/wait` API caps a single call at 60s
+    // and returns 408 on miss; the resolver retries under this
+    // overall deadline.
+    coldStartTimeoutSec: 300,
   });
 }
 

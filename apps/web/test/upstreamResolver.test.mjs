@@ -311,4 +311,76 @@ const baseOpts = {
   assert.equal(store.rows.get("p7"), undefined);
 }
 
+// ---- case 8: 408 on waitForState("started") is retried under cold-start budget ----
+//
+// Iter 164 diagnosis: a fresh per-project Fly Machine can take >60s
+// to reach `started` because of image pull; the Fly API's `/wait`
+// endpoint caps `timeoutSec` at 60 and returns 408 on timeout. The
+// resolver must retry until the overall cold-start budget elapses.
+{
+  const store = makeStore();
+  let waitCalls = 0;
+  const machines = {
+    appName: "test-app",
+    async createMachine(req) {
+      return { id: "m-cold", state: "created", region: req.region };
+    },
+    async getMachine(id) {
+      // After the retry succeeds we report "started".
+      return { id, state: waitCalls >= 2 ? "started" : "created" };
+    },
+    async startMachine() {},
+    async waitForState(_id, state, _opts) {
+      waitCalls += 1;
+      if (state === "started" && waitCalls < 2) {
+        const err = new Error("Fly Machines API 408 deadline_exceeded");
+        err.status = 408;
+        throw err;
+      }
+    },
+    internalAddress(id) {
+      return `${id}.vm.test-app.internal`;
+    },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    coldStartTimeoutSec: 300,
+  });
+  const upstream = await resolve("p8");
+  assert.equal(upstream.host, "m-cold.vm.test-app.internal");
+  assert.equal(waitCalls, 2, "must retry once after 408");
+}
+
+// ---- case 9: 408 past cold-start deadline propagates ----
+{
+  const store = makeStore();
+  const machines = {
+    appName: "test-app",
+    async createMachine(req) {
+      return { id: "m-toolate", state: "created", region: req.region };
+    },
+    async getMachine(id) {
+      return { id, state: "created" };
+    },
+    async startMachine() {},
+    async waitForState() {
+      const err = new Error("Fly Machines API 408 deadline_exceeded");
+      err.status = 408;
+      throw err;
+    },
+    internalAddress(id) {
+      return id;
+    },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    coldStartTimeoutSec: 0,
+  });
+  await assert.rejects(() => resolve("p9"), /408/);
+}
+
 console.log("upstreamResolver ok");

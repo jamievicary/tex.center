@@ -74,6 +74,15 @@ export interface UpstreamResolverOptions {
   readonly machineConfig: MachineConfig;
   /** API-side `waitForState` timeout (seconds). Defaults to 60. */
   readonly waitTimeoutSec?: number;
+  /**
+   * Overall deadline for driving a Machine to `started`, in
+   * seconds. Defaults to 300. The Fly Machines `/wait` endpoint
+   * caps `timeoutSec` at 60, but a cold-start image pull can take
+   * 1m30s+ (observed live, iter 164). When `/wait` returns 408,
+   * we re-poll until this overall deadline elapses. The single API
+   * call still uses `waitTimeoutSec`.
+   */
+  readonly coldStartTimeoutSec?: number;
 }
 
 const TERMINAL_STATES: ReadonlySet<MachineState> = new Set([
@@ -124,6 +133,26 @@ export function createUpstreamResolver(
     return created.id;
   };
 
+  const waitForStartedWithRetry = async (machineId: string): Promise<void> => {
+    const apiCallTimeoutSec = opts.waitTimeoutSec ?? 60;
+    const coldStartDeadline =
+      Date.now() + (opts.coldStartTimeoutSec ?? 300) * 1000;
+    while (true) {
+      try {
+        await opts.machines.waitForState(machineId, "started", {
+          timeoutSec: apiCallTimeoutSec,
+        });
+        return;
+      } catch (err) {
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 408 && Date.now() < coldStartDeadline) {
+          continue;
+        }
+        throw err;
+      }
+    }
+  };
+
   const driveToStarted = async (
     machineId: string,
     machine: Machine,
@@ -133,16 +162,16 @@ export function createUpstreamResolver(
     if (machine.state === "stopping" || machine.state === "suspending") {
       await opts.machines.waitForState(machineId, "stopped", { timeoutSec });
       await opts.machines.startMachine(machineId);
-      await opts.machines.waitForState(machineId, "started", { timeoutSec });
+      await waitForStartedWithRetry(machineId);
       return await opts.machines.getMachine(machineId);
     }
     if (machine.state === "stopped" || machine.state === "suspended") {
       await opts.machines.startMachine(machineId);
-      await opts.machines.waitForState(machineId, "started", { timeoutSec });
+      await waitForStartedWithRetry(machineId);
       return await opts.machines.getMachine(machineId);
     }
     if (machine.state === "created" || machine.state === "starting") {
-      await opts.machines.waitForState(machineId, "started", { timeoutSec });
+      await waitForStartedWithRetry(machineId);
       return await opts.machines.getMachine(machineId);
     }
     throw new Error(

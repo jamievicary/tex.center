@@ -276,11 +276,42 @@ Estimated iteration sequence (adjust as work unfolds):
   test also failed in CI because the live user has accumulated
   projects from probes. Not critical-path; deferred.
 
-- **Iter 164 — Read iter-163's live-pipeline + diagnose with logs.**
-  With WS-proxy events and sidecar Yjs/compile logs now flowing,
-  re-read the deploy's live-pipeline result + `flyctl logs -a
-  tex-center` (web) + `flyctl logs -a tex-center-sidecar`
-  (sidecar) for the spec window. The cause separates into:
+- **Iter 164 — Cold-start retry loop in upstream resolver.** *Done.*
+  Iter 163's observability landed on prod (deploy 25737945622).
+  M8.pw.4 still failed. `flyctl logs -a tex-center` for the
+  13:37–13:42Z spec window showed a single
+  `ws_proxy.kind=resolve-error` per spec project with body
+  `Fly Machines API 408 https://api.machines.dev/.../wait?...&timeout=60: deadline_exceeded: machine failed to reach desired state, started, currently created`.
+  Sidecar logs confirmed: per-project Machines `28692e1fe09d48`
+  and `7813e27c437218` reached "Server listening at http://[::]:3001"
+  at 13:39:05Z / 13:39:12Z — i.e. **1m12s and 1m38s** after
+  `flyctl logs` first noted the image pull. The control-plane
+  resolver's `waitForState(machineId, "started")` call was capped
+  at 60s by `flyMachines.ts:264` (`timeout=60` query param —
+  Fly's `/wait` endpoint caps `timeoutSec` there), so it 408'd
+  before either Machine finished pulling the image.
+  Fix: `apps/web/src/lib/server/upstreamResolver.ts` —
+  `coldStartTimeoutSec` option (default 300), wrapped every
+  `waitForState(..., "started")` call in a retry loop that
+  catches errors with `.status === 408` and retries until the
+  overall deadline. Wired through `upstreamFromEnv.ts` with the
+  300s default. Lock-in: `apps/web/test/upstreamResolver.test.mjs`
+  cases 8 (one 408 → retry → success) and 9 (deadline=0 → 408
+  propagates). The harness commit triggers a new deploy where
+  M8.pw.4 should reach the dial step after the Machine actually
+  starts.
+
+  **Independent flake** `projects.spec.ts:50` (`No projects yet.`
+  empty-state) still failing because the live user keeps
+  accumulating projects from probes. Not on critical path —
+  deferred to a later iteration once M8.pw.4 is green.
+
+- **Iter 165 — Confirm iter-164's deploy / M8.pw.4 result.**
+  Same shape as iter 164: read the deploy's live-pipeline result;
+  if pdf-segment frames arrive, FREEZE-lift is ready (per `162_answer.md`
+  criterion, also requires the pre-existing-project edit variant).
+  If a different failure surfaces, diagnose with the now-richer log
+  trail (web ws_proxy + sidecar doc-update/compile lines). The cause separates into:
   - **No `upstream-connect` event** for the project's WS:
     auth deny / resolver failed before producing an upstream.
     Look for `auth-error` / `resolve-error` / `unauthorised`.
@@ -305,7 +336,7 @@ Estimated iteration sequence (adjust as work unfolds):
   reuses a pre-seeded fixture project owned by the live test
   user — the seeded-fresh vs reused-existing path divergence
   remains a known coverage hole.
-- **Iter 165+ — Save-feedback affordance.** New `SyncStatus`
+- **Iter 166+ — Save-feedback affordance.** New `SyncStatus`
   indicator in `apps/web`. Three visual states (idle/"Saved",
   in-flight/"Saving…" with 250ms tail debounce, error/"Save
   failed" persistent). Source of truth: Yjs provider sync state

@@ -11,14 +11,14 @@ Done in 1s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -145,7 +145,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 119 tests in 42.581s
+Ran 119 tests in 41.995s
 
 OK
 tests_normal/run_tests.sh: PASS
