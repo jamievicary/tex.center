@@ -29,9 +29,8 @@ spawning, (D) auth + production polish.
       `SupertexOnceCompiler` (per-edit spawn of
       `supertex --once --output-directory`). Streaming/daemon variant
       tracked as M7.5. `SIDECAR_COMPILER` env-var: `fixture` (dev/unit)
-      vs `supertex` (production). `awaitPdfStable` watcher (iter 41)
-      deleted iter 115 — neither compile path needs it (once exits
-      cleanly, daemon emits `[round-done]`).
+      vs `supertex` vs `supertex-daemon` (production default since
+      iter 123).
 
 - [~] **M4 — Persistence.** Postgres (Drizzle) for entities;
       Tigris (S3) for blobs.
@@ -44,325 +43,133 @@ spawning, (D) auth + production polish.
                   against MinIO once docker-compose lands
                   (`FUTURE_IDEAS.md`). `health()` = HeadBucket.
             - [~] M4.3.2 — Sidecar wiring. Source-file half done
-                  (iter 28–30): `buildServer` accepts `blobStore?`;
-                  hydration into `Y.Text`; `writeMain` persists via
-                  `persistence.ts` gated by `canPersist`. Checkpoint
-                  persistence waits for M7.4 (no checkpoint-blob
-                  protocol yet).
+                  (iter 28–30). Checkpoint persistence waits for M7.4.2
+                  (no upstream serialise wire yet).
 
 - [x] **M5 — Auth.** Google OAuth (Auth Code + PKCE), JWKS verify,
       server-side sessions, allowlist `jamievicary@gmail.com`.
       _(iter 32–39, 47–49.)_ Pure `packages/auth` (HMAC tokens, PKCE);
       `apps/web` start/callback/logout routes; `hooks.server.ts`
       injects `event.locals.session`; `/editor` redirects unauth to
-      `/`. JWKS 60s `clockTolerance`. OAuth `access_denied` → `/`.
-      Session sweeper storage primitive `deleteExpiredSessions` landed
-      iter 54; scheduling deferred to FUTURE_IDEAS.
+      `/`. Session sweeper storage primitive
+      `deleteExpiredSessions` landed iter 54; scheduling deferred to
+      FUTURE_IDEAS.
 
-- [~] **M6 — Fly deploy: control plane.**
-      - [x] M6.0–M6.2.1 — `apps/web/Dockerfile`, `fly.toml`,
-            GitHub Actions deploy, `/healthz`. _(iter 42–45.)_
-      - [x] M6.3 — Custom domain `tex.center` via Cloudflare.
-            `scripts/cloudflare-dns.mjs` reconciler (iter 46);
-            live deploy (iter 73, 76): `tex-center` in `fra`, shared
-            IPv4 + dedicated IPv6, Cloudflare apex reconciled, Fly
-            cert via TLS-ALPN-01, OAuth secrets via env-first
-            `oauthConfig.ts`. See `deploy/README.md` +
-            `deploy/VERIFY.md`.
+- [x] **M6 — Fly deploy: control plane.** _(iter 42–46, 73, 76.)_
+      `apps/web/Dockerfile`, `fly.toml`, GitHub Actions deploy,
+      `/healthz`, custom domain `tex.center` via Cloudflare apex
+      reconciliation (`scripts/cloudflare-dns.mjs`), Fly cert via
+      TLS-ALPN-01, OAuth secrets via env-first `oauthConfig.ts`.
+      See `deploy/README.md` + `deploy/VERIFY.md`.
 
 - [~] **M7 — Sidecar + per-project Machines.**
-      - [~] **M7.0** — Single shared sidecar Machine (deployable cut
-            so the live site compiles LaTeX).
-            - [x] M7.0.0 — `apps/sidecar/Dockerfile` multi-stage +
-                  structural test. _(iter 74)_
-            - [x] M7.0.1 — Provision patched lualatex engine. Route (b):
-                  prebuilt stripped ELF vendored at
-                  `vendor/engine/x86_64-linux/lualatex-incremental`
-                  (7.3 MB, glibc ≤ 2.34, runs on bookworm). Runtime
-                  installs wrapper `/opt/engine/bin/lualatex-incremental`,
-                  dumps `lualatex.fmt` in cacheable layer.
-                  `TEXMFCNF=/etc/texmf/web2c:/usr/share/texlive/texmf-dist/web2c`
-                  set after apt-install RUN. Provenance:
-                  `jamievicary/luatex-incremental@aa053dd-dirty`; see
-                  `vendor/engine/README.md`. _(iter 75, 87–88.)_
-            - [x] M7.0.2 — `apps/sidecar/fly.toml` + Fly app
-                  `tex-center-sidecar` in `fra` (6PN-only, no public
-                  IPs, port 3001). _(iter 87, 93.)_ Canonical deploy:
-                  `flyctl deploy --remote-only --no-public-ips
-                  -a tex-center-sidecar --config apps/sidecar/fly.toml .`
-                  (always pass **both** `-a` and `--config`).
-            - [x] M7.0.3 — Control-plane WS proxy. _(iter 94–97.)_
-                  Pure proxy module `apps/web/src/lib/server/wsProxy.ts`
-                  (byte-level forwarder, hooks `http.Server` 'upgrade',
-                  validates pathname `/^[A-Za-z0-9_-]+$/`, no `ws` dep);
-                  custom Node entry `server.ts`/`boot.ts` built via
-                  `scripts/build-server-entry.mjs` (esbuild); SIGTERM/SIGINT
-                  10s hard-stop; optional `authoriseUpgrade(req)` hook
-                  (`wsAuth.ts` adapts `resolveSessionHook`); live probes
-                  pass for 401/404. Happy-path probe folded into M7.1.3.2.
+      - [x] **M7.0** — Single shared sidecar Machine.
+            - M7.0.0 — `apps/sidecar/Dockerfile` multi-stage. _(iter 74)_
+            - M7.0.1 — Patched lualatex engine vendored at
+              `vendor/engine/x86_64-linux/lualatex-incremental`
+              (provenance `jamievicary/luatex-incremental@aa053dd-dirty`;
+              see `vendor/engine/README.md`). _(iter 75, 87–88)_
+            - M7.0.2 — `apps/sidecar/fly.toml` + Fly app
+              `tex-center-sidecar` in `fra` (6PN-only, port 3001).
+              Canonical deploy: `flyctl deploy --remote-only
+              --no-public-ips -a tex-center-sidecar
+              --config apps/sidecar/fly.toml .` (pass **both** `-a`
+              and `--config`). _(iter 87, 93)_
+            - M7.0.3 — Control-plane WS proxy
+              `apps/web/src/lib/server/wsProxy.ts` (byte-level
+              forwarder, hooks `http.Server` 'upgrade'); custom Node
+              entry `server.ts`/`boot.ts` built via
+              `scripts/build-server-entry.mjs`; SIGTERM/SIGINT 10s
+              hard-stop. _(iter 94–97)_
 
-      - [~] **M7.1** — Machines API client in the control plane:
-            spawn, wake, idle-stop, destroy. Replace the shared sidecar
-            with on-demand per-project Machines.
-            - [x] M7.1.0 — `apps/web/src/lib/server/flyMachines.ts`:
-                  `MachinesClient` with `create/get/start/stop/destroy/
-                  waitForState`; pure helpers; internal 6PN form
-                  `<id>.vm.<app>.internal`. _(iter 99.)_
-            - [x] M7.1.1 — DB primitives for project↔machine mapping
-                  (`packages/db/src/machineAssignments.ts`) on the
-                  existing `machine_assignments` table. `app_name` left
-                  ambient (env-driven) — single sidecar app for MVP;
-                  promote to a column if multi-app routing lands.
-                  _(iter 102.)_
-            - [x] M7.1.2 — Per-project upstream resolver.
-                  - M7.1.2.0: `upstreamResolver.ts` with full state
-                    machine + per-projectId promise dedup;
-                    `WsProxyOptions.upstream` widened to factory;
-                    resolution after auth gate; resolver throw → 502.
-                    _(iter 103.)_
-                  - M7.1.2.1: wired in `server.ts` gated on
-                    `FLY_API_TOKEN` + `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`;
-                    static-envvar fallback. `upstreamFromEnv.ts` with
-                    injectable deps for unit tests. `MachineConfig`
-                    carries `auto_destroy: false`, `restart: on-failure`;
-                    `SIDECAR_PORT=3001`, `SIDECAR_REGION=fra` defaults.
-                    _(iter 104.)_
-            - [~] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets on
-                  control plane; deploy; happy-path authed probes.
-                  - [x] M7.1.3.0 — Migration-on-boot helper
-                        (`bootMigrations.ts`); Dockerfile copies
-                        `packages/db/src/migrations/` to `/app/migrations`.
-                        _(iter 105.)_
-                  - [x] M7.1.3.1 — Provision Fly Postgres (`tex-center-db`,
-                        unmanaged single-node `shared-cpu-1x` in `fra`),
-                        attached to `tex-center` (auto-set `DATABASE_URL`),
-                        secrets set (`RUN_MIGRATIONS_ON_BOOT=1`,
-                        `FLY_API_TOKEN`, `SIDECAR_APP_NAME`,
-                        `SIDECAR_IMAGE=<digest>`), deployed. Sidecar
-                        Dockerfile fixed iter 107 (`make … all`,
-                        `SUPERTEX_BIN=…/supertex`); redeployed iter 108
-                        with `sha256:cf00052c…`; ssh-probe confirms
-                        `supertex --once` produces a 56 KB `main.pdf`.
-                        _(iter 106–108.)_ **Token caveat**:
-                        `flyctl tokens create deploy` denied for personal
-                        token scope; control plane uses
-                        `creds/fly.token`. Narrower deploy-scoped token
-                        is a hardening follow-up (FUTURE_IDEAS).
-                  - [~] M7.1.3.2 — Authed deploy-verification probes.
-                        - [x] M7.1.3.2.a — Rotated `SESSION_SIGNING_KEY`
-                              (live), seeded live user row, saved to
-                              `creds/{session-signing-key,live-user-id}.txt`,
-                              added `scripts/seed-live-user.mjs` +
-                              `verifyLiveAuthed.spec.ts` (authed
-                              `/projects` 200; anon `/projects` 302 → `/`).
-                              7/7 live probes pass. _(iter 109.)_
-                        - [~] M7.1.3.2.b — WS-upgrade-with-cookie probe
-                              asserting upgrade → 101 from a real
-                              per-project Machine.
-                              - [x] M7.1.3.2.b.0 — Teardown helper
-                                    `tests_gold/lib/src/cleanupProjectMachine.ts`:
-                                    composes `MachinesClient.destroyMachine`
-                                    + `deleteMachineAssignment`; 404 from
-                                    destroy is "already gone" (success);
-                                    non-404 propagates and preserves the
-                                    row so the next iteration can retry.
-                                    Duck-typed interfaces keep it free of
-                                    an `apps/web` import. Unit-tested via
-                                    `cleanupProjectMachine.test.mjs`
-                                    (happy / no-assignment / 404 / 500).
-                                    _(iter 116.)_
-                              - [x] M7.1.3.2.b.1 — `verifyLiveWsUpgrade.spec.ts`
-                                    drives an `https.request` WS upgrade against
-                                    `/ws/project/<projectId>` with a minted
-                                    `tc_session` cookie and asserts the
-                                    `'upgrade'` event fires with status 101.
-                                    Test-level try/finally runs
-                                    `cleanupProjectMachine` (inline
-                                    `MachineDestroyer` against
-                                    `api.machines.dev` + drizzle-backed
-                                    `AssignmentStore`), deletes the project
-                                    row, and deletes the session. Live-only
-                                    (skips on `local`); further self-skip on
-                                    missing `FLY_API_TOKEN` /
-                                    `SIDECAR_APP_NAME`. `test.setTimeout`
-                                    raised to 5 min for cold-start. Closes
-                                    M7.0.3.3 tail. _(iter 117.)_
-                        - [x] M7.1.3.2.c — Prerender bug on `/`.
-                              `+layout.ts` no longer defaults
-                              `prerender = true`; every concrete page
-                              (`/`, `/projects`, `/editor/[projectId]`)
-                              owns its own `+page.ts` with
-                              `prerender = false`, so the
-                              `routeRedirect` hook fires on production
-                              GETs of `/`. Regression guarded by
-                              `test_landing_sign_in.test_prerender_disabled`.
-                              _(iter 112.)_
-            - [x] M7.1.4 — Idle-stop wiring on per-project Machine side.
-                  `buildServer` accepts `idleTimeoutMs` + `onIdle`; tracks
-                  global viewer count and arms a `setTimeout` only on the
-                  zero-transition (cancelled by next connection). Entry
-                  point reads `SIDECAR_IDLE_TIMEOUT_MS` (default 600_000,
-                  `0` disables) and wires `onIdle` to
-                  `app.close().then(() => process.exit(0))`. Combined with
-                  the per-project Machine `restart: on-failure` policy
-                  set in `upstreamFromEnv.ts`, a clean exit leaves the
-                  Machine `stopped`; `upstreamResolver.ts:139-141` wakes
-                  it on the next WS upgrade. Closes M7.3. _(iter 118.)_
+      - [x] **M7.1** — Machines API client + per-project Machines.
+            - M7.1.0 — `apps/web/src/lib/server/flyMachines.ts`:
+              `MachinesClient` with `create/get/start/stop/destroy/
+              waitForState`; internal 6PN form
+              `<id>.vm.<app>.internal`. _(iter 99)_
+            - M7.1.1 — `packages/db/src/machineAssignments.ts` on the
+              existing `machine_assignments` table. _(iter 102)_
+            - M7.1.2 — `upstreamResolver.ts` with full state machine +
+              per-projectId promise dedup; `upstreamFromEnv.ts` wired
+              in `server.ts` gated on `FLY_API_TOKEN` +
+              `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`.
+              `MachineConfig` carries `auto_destroy: false`,
+              `restart: on-failure`. _(iter 103–104)_
+            - M7.1.3 — Fly Postgres `tex-center-db` attached;
+              migration-on-boot via `bootMigrations.ts`; live deploy
+              with secrets set; authed live probes pass. _(iter 105–109)_
+              **Token caveat**: control plane uses
+              `creds/fly.token` (personal). Narrower deploy-scoped
+              token in FUTURE_IDEAS.
+            - M7.1.4 — Idle-stop wiring. `buildServer` tracks global
+              viewer count, arms timer on zero-transition. Entry
+              point reads `SIDECAR_IDLE_TIMEOUT_MS` (default 600_000,
+              `0` disables) and wires `onIdle` to clean exit.
+              Combined with `restart: on-failure`, Machine ends up
+              `stopped`; `upstreamResolver.ts` wakes it on next WS
+              upgrade. Closes M7.3. _(iter 118)_
+
       - [x] **M7.2** — `/ws/project/<id>` routing per project.
-            - [x] M7.2.0 — Per-project access gate at WS upgrade.
-                  `WsProxyOptions.authoriseUpgrade` widened to `(req,
-                  projectId) => boolean | Promise<boolean>`; the proxy
-                  passes the validated projectId. New
-                  `makeProjectAccessAuthoriser` in
-                  `apps/web/src/lib/server/wsAuth.ts` resolves the
-                  session, then `lookupProjectOwner(projectId)`; admits
-                  only when `ownerId === session.user.id` (missing
-                  project → false, so a hand-typed projectId can't spawn
-                  a Machine). `server.ts` swaps in
-                  `makeProjectAccessAuthoriser` with a
-                  `getProjectById`-backed owner lookup. Unit-tested via
-                  `apps/web/test/wsAuth.test.mjs` (owned project → 200,
-                  other-owned → false, missing project → false, no
-                  session → false, owner-lookup throws → false, session
-                  lookup throws → false). _(iter 138.)_
-            - [x] M7.2.1 — 401 vs 403 discrimination. Authoriser
-                  return widened to a discriminated union
-                  `{ kind: "allow" | "deny-anon" | "deny-acl" }`
-                  (`UpgradeAuthDecision`); proxy maps `deny-anon`
-                  → 401 and `deny-acl` → 403 with a new `forbidden`
-                  event. `makeProjectAccessAuthoriser` deny shape:
-                  no session → anon, owner-lookup throws → acl
-                  (authed caller mustn't be invited to re-auth on a
-                  transient DB hiccup), missing project → acl
-                  (hide existence; don't make the proxy an oracle),
-                  wrong owner → acl. _(iter 139.)_
-      - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4
-            iter 118; see above.)_
+            - M7.2.0 — Per-project access gate at WS upgrade
+              (`makeProjectAccessAuthoriser` in `wsAuth.ts`;
+              `lookupProjectOwner(projectId)` admits only owner).
+              _(iter 138)_
+            - M7.2.1 — 401 vs 403 discrimination via
+              `UpgradeAuthDecision = { kind: "allow" | "deny-anon"
+              | "deny-acl" }`; missing project → `deny-acl` (hide
+              existence); owner-lookup throws → `deny-acl` (don't
+              re-auth on transient DB hiccup). _(iter 139)_
+
+      - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4)_
+
       - [~] **M7.4** — Checkpoint blob protocol on the compiler
             interface; persist on idle-stop, rehydrate on wake.
             Closes M4.3.2 tail.
-            - [x] M7.4.0 — Interface contract + no-op impls.
-                  `Compiler` gains `snapshot(): Promise<Uint8Array | null>`
-                  and `restore(blob): Promise<void>`. All three
-                  compilers implement as no-ops today (no upstream
-                  serialise wire). `persistence.ts`:
-                  `projectCheckpointKey` (lives at
-                  `projects/<id>/checkpoint.bin`, outside `files/`),
-                  `persistCheckpoint` (null/empty → no-op),
-                  `loadCheckpoint` (missing/empty → null).
-                  `checkpointBlob.test.mjs` pins the contract.
-                  _(iter 119.)_
-            - [x] M7.4.1 — Sidecar wiring. _(iter 120.)_
-                  `buildServer`:
-                    - `ensureRestored(p)` — lazy, idempotent per
-                      project; awaits `loadCheckpoint` then
-                      `compiler.restore(blob)` if non-null; runs
-                      inside `runCompile` after `awaitHydrated` and
-                      before `compile()`. Errors logged + swallowed
-                      (next compile rebuilds from scratch — matches
-                      the documented `restore()` fallback).
-                    - `persistAllCheckpoints()` — iterates projects,
-                      `compiler.snapshot()` → `persistCheckpoint`.
-                      Wired into the idle-timer fire so it runs
-                      before the user's `onIdle` (the entry point's
-                      onIdle calls `app.close()`, which destroys
-                      per-project state). Per-project failures
-                      logged, do not abort the rest.
+            - [x] M7.4.0 — Interface contract +
+                  `Compiler.snapshot()/restore()` no-op impls;
+                  `persistence.ts` checkpoint helpers. _(iter 119)_
+            - [x] M7.4.1 — Sidecar wiring: `ensureRestored(p)` lazy
+                  per project before `compile()`;
+                  `persistAllCheckpoints()` on idle-timer fire.
                   Today every concrete `snapshot()` returns null so
-                  end-to-end behaviour is unobservable; wiring
-                  pinned by `serverCheckpointWiring.test.mjs` with a
-                  `RecordingCompiler` (seed→restore, null-snapshot
-                  no-op, snapshot bytes land in the blob store
-                  before user's onIdle fires).
-            - [ ] M7.4.2 — Upstream supertex daemon serialise/restore
-                  wire (PLAN candidate item 2), then real
-                  `SupertexDaemonCompiler.snapshot/restore`. M7.5.5
-                  end-to-end test gates flipping
-                  `SIDECAR_COMPILER=supertex-daemon` to default;
+                  end-to-end behaviour is unobservable; pinned by
+                  `serverCheckpointWiring.test.mjs`. _(iter 120)_
+            - [ ] **M7.4.2** — Upstream supertex daemon
+                  serialise/restore wire (candidate item 2), then
+                  real `SupertexDaemonCompiler.snapshot/restore`.
                   M7.4.2 gates checkpoint persistence ever doing
                   anything observable in prod.
-      - [~] **M7.5** — Supertex `--daemon DIR` adoption. Upstream mode
-            landed (discussion 71); slotted after M7.4 so checkpoint
-            serialisation can ride the same channel.
-            - [x] M7.5.0 — Bump `vendor/supertex` to `c571420`;
-                  `build/supertex` + `build/supertex_daemon`. _(iter 90.)_
-            - [x] M7.5.1 — `daemonProtocol.ts`: `parseDaemonLine` for the
-                  four stdout line types (`[N.out]`, `[rollback K]`,
-                  `[error <reason>]`, `[round-done]`); `DaemonLineBuffer`
-                  splits chunks on `\n`, EOF-partial → violation.
-                  _(iter 91.)_
-            - [x] M7.5.2 — `SupertexDaemonCompiler`
-                  (`supertexDaemon.ts`): persistent process per project,
-                  lazy spawn on first `compile()`, waits for
-                  `supertex: daemon ready` stderr marker, writes
-                  `recompile,<N|end>\n`, assembles chunk files into a
-                  single PDF segment. `close()` is stdin EOF →
-                  `gracefulTimeoutMs` (5s) → SIGTERM → `killTimeoutMs`
-                  (2s) → SIGKILL. Concurrent `compile()` calls reject.
-                  Gated behind `SIDECAR_COMPILER=supertex-daemon`;
-                  production default `supertex` unchanged. _(iter 107.)_
-            - [x] M7.5.3 — `[error <reason>]` → `compile-status` with
-                  `state: "error", detail: <reason>` (already present in
-                  `packages/protocol/src/index.ts:57`); surfaced in
-                  `apps/web/src/lib/wsClient.ts:121-126` as `lastError`.
-                  Sidecar wire path covered by
-                  `serverCompileError.test.mjs` (iter 114); daemon half
-                  by `supertexDaemonCompiler.test.mjs` "error+round-done"
-                  (iter 113).
-            - [x] M7.5.4 — Resolved by deleting `pdfStabilityWatcher.ts`
-                  (iter 115). Neither compile path needs filesystem
-                  polling: `SupertexOnceCompiler` returns after the
-                  child exits with the PDF fully written;
-                  `SupertexDaemonCompiler` consumes `[round-done]` as
-                  the canonical stability signal. Recoverable from git
-                  if a future streaming shape ever needs it.
-            - [x] M7.5.5 — Integration tests against the fake daemon
-                  (`supertexDaemonCompiler.test.mjs`). Covered: initial
-                  compile, targetPage clamp, persistent process across
-                  rounds, error+round-done, protocol violation, round
-                  timeout, close idempotent, concurrent reject, spawn
-                  ENOENT, **rollback truncates assembled segment**,
-                  **error→ok recovery on same process** _(iter 113)_.
-                  Iter 121 fixed a 0/1-indexing mismatch:
-                  `SupertexDaemonCompiler.assembleSegment` (and the
-                  fake daemon) used 0-indexed chunks, but the upstream
-                  protocol (discussion 71) and real binary emit
-                  `[1.out]`/`1.out` … `[N.out]`/`N.out`. After the fix
-                  a manual `SupertexDaemonCompiler` smoke against
-                  `vendor/supertex/build/supertex --daemon` produces a
-                  121 KB `%PDF` segment from a 3-page fixture,
-                  deterministic across runs.
-                  Iter 122 added the standing real-ELF gold test:
-                  `tests_gold/lib/test/supertexDaemonReal.test.mjs`
-                  + `tests_gold/cases/test_supertex_daemon_real.py`
-                  drive `vendor/supertex/build/supertex --daemon`
-                  against a 2-page `.tex` fixture, assert a `%PDF`
-                  segment > 1 KB, and exercise the persistent
-                  process across two compile rounds. Self-skips if
-                  the binary or system `lualatex` are absent
-                  (printed `SKIP`, exit 0) so a fresh checkout
-                  without the submodule built still passes. With
-                  this in place, flipping `SIDECAR_COMPILER=
-                  supertex-daemon` to the production default is no
-                  longer gated on M7.5.5 — only on the sidecar
-                  image actually building both binaries.
+
+      - [x] **M7.5** — Supertex `--daemon DIR` adoption (upstream
+            landed via discussion 71).
+            - M7.5.0 — Bump `vendor/supertex` to `c571420`. _(iter 90)_
+            - M7.5.1 — `daemonProtocol.ts`: line types `[N.out]`,
+              `[rollback K]`, `[error <reason>]`, `[round-done]`.
+              _(iter 91)_
+            - M7.5.2 — `SupertexDaemonCompiler` persistent process,
+              lazy spawn on first `compile()`, graceful close ladder.
+              _(iter 107)_
+            - M7.5.3 — `[error <reason>]` → `compile-status` wire.
+            - M7.5.4 — Deleted `pdfStabilityWatcher.ts`; daemon
+              consumes `[round-done]` as stability signal. _(iter 115)_
+            - M7.5.5 — Integration tests against the fake daemon
+              (`supertexDaemonCompiler.test.mjs`). Iter 121 fixed
+              0/1-indexing mismatch (chunks emit `[1.out]`…). Iter 122
+              added standing real-ELF gold test
+              (`tests_gold/lib/test/supertexDaemonReal.test.mjs`),
+              self-skips if binary or `lualatex` absent.
 
 - [~] **M8 — Acceptance pass + Playwright (pulled forward).**
-      - [x] M8.pw.0 — Playwright skeleton. _(iter 78.)_
-            `tests_gold/setup_playwright.sh` (DrvFs-aware install to
-            `~/.cache/tex-center-pw/`), `playwright.config.ts` with
-            `local`/`live` projects, Python wrapper gates `live` on
-            `TEXCENTER_LIVE_TESTS=1`.
+      - [x] M8.pw.0 — Playwright skeleton. _(iter 78)_
+            `tests_gold/setup_playwright.sh` DrvFs-aware install;
+            `playwright.config.ts` with `local`/`live` projects.
       - [x] M8.pw.1 — Session-cookie injection + authed surface.
-            _(iter 79, 82–86.)_ `mintSession` helper; `flyProxy.ts`
-            spawns `flyctl proxy`; `authedPage` fixture; `local` uses
-            PGlite-over-TCP (`maxConnections: 16` workaround).
-            Playwright `globalSetup` boots PGlite + dev server.
+            `mintSession` helper, `flyProxy.ts`, `authedPage`
+            fixture; `local` uses PGlite-over-TCP. _(iter 79, 82–86)_
       - [x] M8.pw.2 — Deploy-iteration verification.
-            `verifyLive.spec.ts` encodes the five `VERIFY.md` probes;
-            WS probes use Node's `https.request`. Canonical:
-            `TEXCENTER_LIVE_TESTS=1 bash tests_gold/run_tests.sh`.
-            _(iter 98.)_
+            `verifyLive.spec.ts` encodes the five `VERIFY.md` probes.
+            Canonical: `TEXCENTER_LIVE_TESTS=1
+            bash tests_gold/run_tests.sh`. _(iter 98)_
       - [ ] **M8.acceptance** — Walk the seven `GOAL.md` acceptance
             criteria end-to-end on prod, fix gaps. Real OAuth
             consent-screen driving stays out of scope (HTTP-handshake
@@ -371,223 +178,93 @@ spawning, (D) auth + production polish.
 
 ## Priority block (iter 131, discussion-revised)
 
-Two production-down OAuth-callback bugs in 24h (iter 129 `jose`
-module-not-found, iter 131 user-upsert email-unique collision)
-exposed that the current verification surface — `verifyLive.spec.ts`
-+ cookie-injected authed probes — leaves the full callback path
-untested. discussion/131 promotes the following over the open M7.x
-work; do **not** start M7.4.2, M7.2, or refactor/plan-review iters
-until this block lands. One slice per iteration.
+Two production-down OAuth-callback bugs in 24h motivated this block:
+the verification surface — `verifyLive.spec.ts` + cookie-injected
+authed probes — left the full callback path untested. See
+`.autodev/discussion/131_{question,answer}.md` for the full
+diagnosis.
 
-- [x] **M8.smoke.0** — `scripts/smoke-runtime-image.sh` +
-      `smoke` job in `.github/workflows/deploy.yml` (deploy now
-      `needs: smoke`). Script builds `apps/web/Dockerfile`, runs
-      with placeholder `SESSION_SIGNING_KEY` + `GOOGLE_OAUTH_*` env,
-      `DATABASE_URL` unset (the M8.smoke.0 open question resolved
-      by omitting the URL — `runBootMigrations` short-circuits on
-      no URL, and no probed GET touches the DB without an auth'd
-      session). Probes all eight endpoints from PLAN; flags any
-      `ERR_MODULE_NOT_FOUND` / `Cannot find package` / unexpected
-      5xx. Structural invariants pinned by
-      `tests_normal/cases/test_deploy_workflow.py`
-      (`test_smoke_job_gates_deploy`,
-      `test_smoke_script_probes_all_endpoints`). _(iter 132.)_
+- [x] **M8.smoke.0** — `scripts/smoke-runtime-image.sh` + `smoke`
+      job in `.github/workflows/deploy.yml` (deploy now
+      `needs: smoke`). Probes eight endpoints; flags
+      `ERR_MODULE_NOT_FOUND` / unexpected 5xx. Structural
+      invariants pinned by
+      `tests_normal/cases/test_deploy_workflow.py`. _(iter 132)_
 - [~] **M8.pw.3** — Real OAuth round-trip via a dedicated Google
-      Cloud service account with the OAuth client pre-consented.
-      Test obtains an ID token (refresh-token or JWT exchange) and
-      presents it to a test-only callback finaliser endpoint with a
-      bypass-key header; that endpoint runs JWKS verify + allowlist
-      + DB upsert + session-cookie mint — the same code path the
-      real callback runs post-token-exchange. Wired into
-      `verifyLive.spec.ts` as a deploy gate. This is the test that
-      would have caught the iter-131 production-down bug.
-      - [x] **M8.pw.3.0** — Extract `finalizeGoogleSession` from
-            `resolveGoogleCallback` (`oauthCallback.ts`): pure
-            post-verify orchestrator covering allowlist gate, DB
-            session creation, signed session-cookie minting, and
-            the success/signed-out redirect branches.
-            `resolveGoogleCallback` now calls it after the JWKS-
-            verify step. `priorSetCookies` carries the cleared
-            state cookie through to every termination. Unit-tested
-            standalone (`apps/web/test/finalizeGoogleSession.test.mjs`)
-            — happy, prior-cookie passthrough, allowlist-deny,
-            email_verified=false, createSession-throws-500, http
-            (Secure-attr omitted). _(iter 133.)_
-      - [x] M8.pw.3.1 — `POST /auth/google/test-callback` route
-            gated on `TEST_OAUTH_BYPASS_KEY` env var (404 when
-            unset). Body: `{ idToken }`. Header `X-Test-Bypass:
-            HMAC-SHA256(body, key)` lowercase hex; comparison is
-            `timingSafeEqual`. Server calls `verifyGoogleIdToken`
-            (real JWKS check) then `finalizeGoogleSession`. Same
-            302 → `/projects` + Set-Cookie shape as the real
-            callback. Pure orchestrator
-            `apps/web/src/lib/server/testOauthCallback.ts:
-            resolveTestCallback` covers HMAC gate, JSON shape, and
-            verify hand-off; route module is the thin wiring.
-            Unit-tested via
-            `apps/web/test/testOauthCallback.test.mjs` (11 cases:
-            happy, missing/malformed/wrong-key/wrong-body header,
-            empty key, body-not-JSON, missing/empty idToken,
-            verify-throws, finalize-passthrough). _(iter 134.)_
-      - [x] M8.pw.3.2 — `scripts/google-refresh-token.mjs`: one-
-            shot helper that runs the Authorization Code + PKCE
-            flow with `access_type=offline&prompt=consent` against
-            a separate OAuth client (default
-            `creds/google-oauth-test.json`), captures the refresh
-            token, writes `creds/google-refresh-token.txt` (mode
-            0600). Local loopback on `--port` (default 4567);
-            redirect URI `http://localhost:<port>/oauth-callback`
-            must be registered with the test OAuth client. Plus
-            `tests_gold/lib/src/mintGoogleIdToken.ts`: refresh-
-            token-grant against `https://oauth2.googleapis.com/token`,
-            returns a real Google ID token. Injectable `fetchFn` +
-            `tokenUrl`; stub-fetch unit test
-            (`mintGoogleIdToken.test.mjs`, gold case) covers
-            happy/non-2xx/missing-id_token/empty-input. _(iter 135.)_
-      - [x] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts` in the
-            `live` project: mints an ID token via
-            `mintGoogleIdToken` (refresh token at
-            `creds/google-refresh-token.txt`,
-            client at `creds/google-oauth-test.json`), POSTs
-            `{idToken}` to `/auth/google/test-callback` with the
-            HMAC-SHA256 hex `X-Test-Bypass` header, asserts
-            `302 → /projects` + `tc_session` Set-Cookie, runs the
-            cookie through `verifySessionToken` for an early
-            verifier-side regression signal, then GETs `/projects`
-            with the cookie and asserts 200. Cleans up the
-            inserted `sessions` row in a `try/finally` via
-            `deleteSession(db.db.db, sid)` (sid extracted from the
-            verified payload). Self-skips on missing
-            `TEST_OAUTH_BYPASS_KEY` env, missing
-            `creds/google-oauth-test.json`, or missing
-            `creds/google-refresh-token.txt`. _(iter 136.)_
-            **Live activation still pending**: needs
-            `TEST_OAUTH_BYPASS_KEY` set as a Fly secret on
-            `tex-center` (operator step) and the matching env var
-            in the local CI shell, plus the test OAuth client
-            created in GCP and the refresh token captured via
-            `scripts/google-refresh-token.mjs`. Until those land
-            the spec self-skips on every `live` run.
-- [~] **M8.pw.4** — Full product-loop Playwright spec.
-      `tests_gold/playwright/verifyLiveFullPipeline.spec.ts` landed
-      iter 137: live-only, additionally gated on
-      `TEXCENTER_FULL_PIPELINE=1`. Seeds a fresh project via
-      `createProject`, navigates the cookie-injected authed page to
-      `/editor/<id>`, types a minimal `\documentclass{article}…`
-      source into CodeMirror (`closeBrackets`-safe), listens for
-      binary `pdf-segment` WS frames (tag `0x20`) on the
-      `/ws/project/<id>` socket, and asserts PDF.js rendered at
-      least one non-near-white pixel into a `.preview canvas`. 5-min
-      test timeout to cover cold-start of the per-project Machine.
-      Project row deleted on teardown; Machine left to idle-stop on
-      its own (M7.3 path).
-      **Live activation still pending**: needs
-      `TEXCENTER_FULL_PIPELINE=1` exported in the live runner env
-      (composes with the existing `TEXCENTER_LIVE_TESTS=1` plus
-      `TEXCENTER_LIVE_DB_PASSWORD` / `SESSION_SIGNING_KEY` /
-      `TEXCENTER_LIVE_USER_ID` already required by `authedPage`).
-      Subsumes M8.acceptance.
+      service account with the OAuth client pre-consented. Test
+      obtains an ID token (refresh-token grant) and presents it to
+      a test-only callback finaliser endpoint with a bypass-key
+      header, exercising the same code path as the real callback
+      post-token-exchange.
+      - [x] M8.pw.3.0 — Extract `finalizeGoogleSession` from
+            `resolveGoogleCallback` (`oauthCallback.ts`). _(iter 133)_
+      - [x] M8.pw.3.1 — `POST /auth/google/test-callback` gated on
+            `TEST_OAUTH_BYPASS_KEY`; HMAC-SHA256 `X-Test-Bypass`
+            header; pure orchestrator `testOauthCallback.ts:
+            resolveTestCallback`. _(iter 134)_
+      - [x] M8.pw.3.2 — `scripts/google-refresh-token.mjs` one-shot
+            helper +
+            `tests_gold/lib/src/mintGoogleIdToken.ts` (refresh-
+            token-grant). _(iter 135)_
+      - [x] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`: mints
+            ID token, POSTs to `/auth/google/test-callback`,
+            asserts `302 → /projects` + cookie, GETs `/projects`
+            authed → 200; cleans up session row in `try/finally`.
+            **Live activation pending operator step** (see
+            "Live activation" below). _(iter 136)_
+- [~] **M8.pw.4** — Full product-loop spec
+      `tests_gold/playwright/verifyLiveFullPipeline.spec.ts`
+      (iter 137): live-only, additionally gated on
+      `TEXCENTER_FULL_PIPELINE=1`. Seeds project, types into CM,
+      listens for binary `pdf-segment` WS frames (tag `0x20`),
+      asserts PDF.js rendered ≥1 non-near-white pixel. 5-min
+      timeout for cold-start. Subsumes M8.acceptance.
+      **Live activation pending** export of
+      `TEXCENTER_FULL_PIPELINE=1`.
 
-## Current focus
+### Live activation (operator-gated, code-side done)
 
-**Iter 131 (discussion mode).** Second production-down OAuth-
-callback bug in 24h. Real PG error (uncovered by reading the live
-`users` table directly, not by `flyctl logs` — its 100-line buffer
-had rolled past): `UNIQUE (email)` collision between the iter-109
-seed row (`google_sub = 'probe-jamievicary-livefix'`,
-`email = 'jamievicary@gmail.com'`) and the real OAuth callback
-(same email, real google_sub). `ON CONFLICT (google_sub)` couldn't
-fire — the new sub didn't match — so the `unique_email_key`
-constraint raised before the conflict branch. Two fixes landed:
-
-1. One-shot UPDATE on live DB aligned the seed row's `google_sub`
-   to the real value; next OAuth attempt hits the conflict-DO-
-   UPDATE branch.
-2. `0002_drop_users_email_unique.sql` removes the redundant
-   constraint; `drizzle.ts:24` dropped `.unique()`. PGlite test
-   pins the regression (same email + different google_sub →
-   succeeds). Applies to live on next deploy via the existing
-   `RUN_MIGRATIONS_ON_BOOT=1` path.
-
-See `.autodev/discussion/131_{question,answer}.md` for full
-diagnosis. The deeper issue (verification surface gap) is
-addressed by the priority block above — see "Priority block
-(iter 131, discussion-revised)".
-
-**Priority block tail (operator-gated).** Both M8.pw.3.3 and
-M8.pw.4 are landed code-side; both self-skip on every `live` run
-until an operator exports their gating env. To activate:
-
-- M8.pw.3.3 — create the test OAuth client in Google Cloud with
+- **M8.pw.3.3** — create the test OAuth client in GCP with
   `http://localhost:4567/oauth-callback` registered, save as
   `creds/google-oauth-test.json`; run `pnpm exec node
   scripts/google-refresh-token.mjs` once to capture
   `creds/google-refresh-token.txt`; `openssl rand -hex 32` →
   `flyctl secrets set TEST_OAUTH_BYPASS_KEY=<key> -a tex-center`
   + export the same value in the live runner shell.
-- M8.pw.4 — export `TEXCENTER_FULL_PIPELINE=1` alongside the
+- **M8.pw.4** — export `TEXCENTER_FULL_PIPELINE=1` alongside the
   existing `TEXCENTER_LIVE_TESTS=1` + authedPage env. No deploy
-  step; the spec drives prod through the test user's session.
+  step.
 
-Once both activate, the priority block closes and the queue
-returns to M7.4.2 (upstream supertex daemon serialise/restore wire)
-followed by M7.2 (`/ws/project/<id>` routing-per-project).
+Until these activate, both specs self-skip on every `live` run.
 
-**Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
-Production-down: `/auth/google/callback` returned 500 because
-`apps/web/Dockerfile`'s runtime stage shipped no `node_modules`,
-and adapter-node leaves `jose` (Google ID-token JWKS verify) as
-an external bare specifier. Latent since the first deploy with
-auth: every other live probe avoids `jose`'s import graph. Fix:
-`pnpm deploy --prod` in the builder, `COPY` the resulting
-`node_modules` into the runtime stage; regression-pinned by
-`test_web_dockerfile.test_runtime_carries_prod_node_modules`; new
-`/auth/google/callback?error=fake → 400` probe added to both
-`deploy/VERIFY.md` and `verifyLive.spec.ts`. Iter 130: after CD
-of `eed6836` completed, live probe of the callback now returns
-400 (was 500); `TEXCENTER_LIVE_TESTS=1 python3 -m unittest
-tests_gold.cases.test_playwright.TestPlaywrightLive` passes.
-See discussion/129 for full diagnosis.
+## Current focus
 
 **Next ordinary iteration:** M7.4.2 — upstream supertex daemon
-serialise/restore wire (PLAN "Candidate supertex (upstream)
-work" item 2), then real `SupertexDaemonCompiler.snapshot/
-restore`. With M7.4.1 landed, the sidecar half is fully wired:
-the day a real `snapshot()` returns non-null, persistence is
-automatic.
+serialise/restore wire (candidate item 2 below), then real
+`SupertexDaemonCompiler.snapshot/restore`. With M7.4.1 landed, the
+sidecar half is fully wired: the day a real `snapshot()` returns
+non-null, persistence is automatic.
 
-`SIDECAR_COMPILER=supertex-daemon` is now the production default
-(iter 123 flipped `apps/sidecar/Dockerfile`); the next sidecar
-redeploy moves the live site onto the persistent-daemon path.
-Iter 124 added `.github/workflows/deploy-sidecar.yml` — path-gated
-on `apps/sidecar/**`, `vendor/supertex`, `vendor/engine/**`, the
-shared `packages/*` the sidecar depends on, lockfile, workspace,
-and the workflow file itself; plus `workflow_dispatch` for
-manual reruns. First push to `main` touching a gated path
-deploys automatically. To force the daemon-default cutover
-sooner without a code change, `gh workflow run
-deploy-sidecar.yml`. Structural invariants pinned by
+The CD workflow `.github/workflows/deploy-sidecar.yml` (iter 124)
+is path-gated on `apps/sidecar/**`, `vendor/supertex`,
+`vendor/engine/**`, the shared `packages/*` the sidecar depends
+on, lockfile, workspace, and the workflow file itself; plus
+`workflow_dispatch`. Structural invariants pinned by
 `tests_normal/cases/test_deploy_sidecar_workflow.py`.
 
-Smaller alternatives if M7.4.2 is blocked on upstream:
-- M7.2 `/ws/project/<id>` routing-per-project plumbing.
-
-The `verifyLiveWsUpgrade` spec still needs
-`TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`
-in the env to run against prod — first deploy-touching
-iteration that does so will exercise it end-to-end.
+The `verifyLiveWsUpgrade` spec still needs `TEXCENTER_LIVE_TESTS=1`
++ `FLY_API_TOKEN` + `SIDECAR_APP_NAME` in the env to run against
+prod — first deploy-touching iteration that does so will exercise
+it end-to-end.
 
 ## Live caveats
 
 - Production default is `SIDECAR_COMPILER=supertex-daemon` (iter
-  123); takes live effect on next sidecar deploy. Until that
-  redeploy, the running sidecar image still has the once-compiler
-  baked in.
+  123); takes live effect on next sidecar deploy.
 - `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
   Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
   future S3 adapter must implement it. `/healthz` is intentionally a
-  liveness probe (no backing-service status) — `/readyz` candidate in
-  FUTURE_IDEAS.
+  liveness probe — `/readyz` candidate in FUTURE_IDEAS.
 - Persistence is one-shot per session: permanent blob outage means
   edits this process are never persisted. Acceptable in the
   per-project Machine model where Machines cycle frequently.
@@ -624,10 +301,6 @@ layout flat enough for Node's resolver to walk the realpath correctly.
 
 PRs against `github.com/jamievicary/supertex`.
 
-1. ~~`--daemon DIR` mode.~~ **Landed upstream** (discussion 71). Sidecar
-   adoption tracked as M7.5. Stdout protocol: four line types —
-   `[N.out]`, `[rollback K]`, `[error <reason>]`, `[round-done]`;
-   EOF on stdin = clean-shutdown signal. `[error <reason>]` is
-   additive vs original sketch → new `compile-status:error` wire
-   frame (M7.5.3).
-2. **Checkpoint serialise/restore to a single blob.** (M7.4)
+1. ~~`--daemon DIR` mode.~~ **Landed upstream** (discussion 71).
+   Sidecar adoption M7.5.
+2. **Checkpoint serialise/restore to a single blob.** (M7.4.2)
