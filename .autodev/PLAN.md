@@ -225,14 +225,28 @@ spawning, (D) auth + production polish.
                   `loadCheckpoint` (missing/empty → null).
                   `checkpointBlob.test.mjs` pins the contract.
                   _(iter 119.)_
-            - [ ] M7.4.1 — Sidecar wiring. `onIdle` walks projects
-                  and calls `persistCheckpoint(persist.snapshot())`
-                  before `app.close()`; first `compile()` per
-                  project reads `loadCheckpoint` and calls
-                  `compiler.restore()` before its first compile.
-                  Today every snapshot returns null so this is a
-                  no-op end-to-end — value is the wiring being
-                  ready when the upstream protocol lands.
+            - [x] M7.4.1 — Sidecar wiring. _(iter 120.)_
+                  `buildServer`:
+                    - `ensureRestored(p)` — lazy, idempotent per
+                      project; awaits `loadCheckpoint` then
+                      `compiler.restore(blob)` if non-null; runs
+                      inside `runCompile` after `awaitHydrated` and
+                      before `compile()`. Errors logged + swallowed
+                      (next compile rebuilds from scratch — matches
+                      the documented `restore()` fallback).
+                    - `persistAllCheckpoints()` — iterates projects,
+                      `compiler.snapshot()` → `persistCheckpoint`.
+                      Wired into the idle-timer fire so it runs
+                      before the user's `onIdle` (the entry point's
+                      onIdle calls `app.close()`, which destroys
+                      per-project state). Per-project failures
+                      logged, do not abort the rest.
+                  Today every concrete `snapshot()` returns null so
+                  end-to-end behaviour is unobservable; wiring
+                  pinned by `serverCheckpointWiring.test.mjs` with a
+                  `RecordingCompiler` (seed→restore, null-snapshot
+                  no-op, snapshot bytes land in the blob store
+                  before user's onIdle fires).
             - [ ] M7.4.2 — Upstream supertex daemon serialise/restore
                   wire (PLAN candidate item 2), then real
                   `SupertexDaemonCompiler.snapshot/restore`. M7.5.5
@@ -310,21 +324,22 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.4.1 — wire the M7.4.0 primitives
-into the sidecar idle-stop / first-compile path. End-to-end
-behaviour is still a no-op (every `snapshot()` returns null
-until upstream supertex gains a serialise wire), but the wiring
-needs to exist so the day the daemon-side lands, no further
-sidecar plumbing is needed.
+**Next ordinary iteration:** M7.4.2 — upstream supertex daemon
+serialise/restore wire (PLAN "Candidate supertex (upstream)
+work" item 2), then real `SupertexDaemonCompiler.snapshot/
+restore`. With M7.4.1 landed, the sidecar half is fully wired:
+the day a real `snapshot()` returns non-null, persistence is
+automatic.
+
+Smaller alternatives if M7.4.2 is blocked on upstream:
+- M7.5.5 end-to-end test against the real `supertex` ELF (gates
+  flipping `SIDECAR_COMPILER=supertex-daemon` to default).
+- M7.2 `/ws/project/<id>` routing-per-project plumbing.
 
 The `verifyLiveWsUpgrade` spec still needs
 `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`
 in the env to run against prod — first deploy-touching
 iteration that does so will exercise it end-to-end.
-
-Smaller alternatives if M7.1 hits a blocker:
-- Anything that doesn't require docker (S3 adapter M4.3.1 still
-  blocked on docker-compose; checkpoint persistence on M7.4).
 
 ## Live caveats
 

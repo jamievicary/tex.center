@@ -48,6 +48,8 @@ import { ProjectWorkspace } from "./workspace.js";
 import {
   createProjectPersistence,
   defaultBlobStoreFromEnv,
+  loadCheckpoint,
+  persistCheckpoint,
   type ProjectPersistence,
 } from "./persistence.js";
 
@@ -62,6 +64,13 @@ interface ProjectState {
   compiler: Compiler;
   workspace: ProjectWorkspace;
   persistence: ProjectPersistence;
+  /**
+   * One-shot cold-start restore for this project's compiler. Lazily
+   * initialised on the first `compile()`; subsequent compiles await
+   * the same promise so restore happens exactly once per project
+   * lifetime. `null` when no blob store is wired (restore is a no-op).
+   */
+  restorePromise: Promise<void> | null;
 }
 
 interface ProjectClient {
@@ -175,11 +184,21 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       clearIdleTimer();
       idleTimer = setTimeout(() => {
         idleTimer = null;
-        try {
-          onIdle!();
-        } catch (e) {
-          app.log.error({ err: e instanceof Error ? e.message : String(e) }, "onIdle threw");
-        }
+        // Persist checkpoints before handing off to the user's
+        // onIdle callback. The entry point's onIdle calls
+        // `app.close()` which destroys per-project state, so any
+        // snapshot/persist has to happen first.
+        void (async () => {
+          await persistAllCheckpoints();
+          try {
+            onIdle!();
+          } catch (e) {
+            app.log.error(
+              { err: e instanceof Error ? e.message : String(e) },
+              "onIdle threw",
+            );
+          }
+        })();
       }, idleTimeoutMs!);
       // Don't pin the event loop just to fire idle-stop.
       idleTimer.unref?.();
@@ -207,6 +226,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       compiler: compilerFactory({ projectId: id, workspace }),
       workspace,
       persistence,
+      restorePromise: null,
     };
     projects.set(id, state);
     return state;
@@ -235,8 +255,54 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     return max;
   }
 
+  // Cold-start checkpoint restore. Idempotent per project: the first
+  // call kicks off load+restore, every subsequent call awaits the
+  // same promise. A failure is logged and swallowed — the next
+  // `compile()` rebuilds from scratch, which is the documented
+  // fallback for the compiler's `restore()` contract.
+  function ensureRestored(p: ProjectState): Promise<void> {
+    if (!blobStore) return Promise.resolve();
+    if (!p.restorePromise) {
+      p.restorePromise = (async () => {
+        try {
+          const blob = await loadCheckpoint(blobStore, p.id);
+          if (blob) await p.compiler.restore(blob);
+        } catch (e) {
+          app.log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId: p.id },
+            "checkpoint restore failed; continuing without restore",
+          );
+        }
+      })();
+    }
+    return p.restorePromise;
+  }
+
+  // Snapshot every project's compiler and persist the resulting
+  // blob. Today every concrete compiler returns null, so this is
+  // observable only with a fake compiler in tests; the wiring lands
+  // now so the daemon-side serialise wire (M7.4.2) needs no further
+  // sidecar plumbing. Per-project failures are logged and do not
+  // abort the rest — one wedged project must not block idle-stop
+  // of the others.
+  async function persistAllCheckpoints(): Promise<void> {
+    if (!blobStore) return;
+    for (const p of projects.values()) {
+      try {
+        const bytes = await p.compiler.snapshot();
+        await persistCheckpoint(blobStore, p.id, bytes);
+      } catch (e) {
+        app.log.warn(
+          { err: e instanceof Error ? e.message : String(e), projectId: p.id },
+          "checkpoint persist failed",
+        );
+      }
+    }
+  }
+
   async function runCompile(p: ProjectState): Promise<void> {
     await p.persistence.awaitHydrated();
+    await ensureRestored(p);
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
     const source = p.text.toString();
     // Mirror current source to the on-disk workspace before
