@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Toasts from "$lib/Toasts.svelte";
   let { children } = $props();
 </script>
 
@@ -14,3 +15,4 @@
 </style>
 
 {@render children()}
+<Toasts />

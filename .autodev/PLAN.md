@@ -126,16 +126,46 @@ GT-A (`verifyLiveNoFlashLoad`), GT-B
   view-fire-through gated by highestEmittedShipoutPage, (4)
   quiescent path. Expected to flip GT-B/C/D green on the next
   live deploy. Status: **done**.
-- **Toast UX + debug toasts.** `apps/web/src/lib/Toasts.svelte`
-  + writable store, supporting multiple color categories, TTL
-  variations (auto-dismiss / persistent), aggregation by
-  `aggregateKey` with count badge (≥500ms window). Debug-mode
-  toggle via `localStorage.debug==="1"` or `?debug=1`. Color
-  map: blue=`pdf-segment`, green=outgoing Yjs op, orange=
-  compile-status, grey=`hello`/`file-list`, red=`file-op-error`.
-  GT-E (local) covers info/success/error/dedup; GT-F (local)
-  covers debug toggle + categories + aggregation. Status:
-  **pending**.
+- **Toast UX + debug toasts.** Component + store landed iter
+  179. `apps/web/src/lib/toastStore.ts` exposes
+  `createToastStore({ now, setTimeout, clearTimeout })` (DI for
+  tests) and a module singleton `toasts`. Push admits
+  `{ category, text, ttlMs?, persistent?, aggregateKey? }`.
+  Categories: `info` / `success` / `error` (user-visible),
+  `debug-blue` / `debug-green` / `debug-orange` / `debug-grey`
+  / `debug-red` (debug-mode). Per-category default TTLs
+  (3–6s user, 2–4s debug). Aggregation: same `aggregateKey`
+  within `AGGREGATE_WINDOW_MS` (500ms) of the previous push
+  merges into the existing toast, bumps `count`, updates
+  `text`, and re-arms the TTL. Persistent toasts (`persistent:
+  true`) have no TTL and require explicit `dismiss(id)`.
+  `apps/web/src/lib/Toasts.svelte` renders a fixed-bottom-
+  right stack reading the singleton; mounted in
+  `apps/web/src/routes/+layout.svelte`. Unit test
+  `apps/web/test/toastStore.test.mjs` covers 7 cases (push +
+  subscribe, default TTL by category, explicit ttlMs, merge
+  with count bump and text update, distinct keys/no-key don't
+  merge, dismiss clears its TTL, merge re-arms TTL). Status:
+  **scaffold done; consumers pending**.
+  Pending follow-up slices:
+  1. Debug-mode toggle (`localStorage.debug==="1"` or
+     `?debug=1`) + WS-client fan-out to debug toasts: blue=
+     `pdf-segment`, green=outgoing Yjs op, orange=
+     `compile-status`, grey=`hello`/`file-list`, red=
+     `file-op-error`. Hidden keyboard shortcut (Ctrl+Shift+D).
+     Wire as a subscriber to `WsClient.onChange` / outgoing
+     send hook.
+  2. User-facing consumers: `file-op-error` → red toast (dedup
+     by reason), compile error → error toast (dedup by detail),
+     successful save → success toast (post-debounce).
+  3. GT-E (local Playwright): info/success/error spawn the
+     right toast, dedup by repeated `file-op-error` produces
+     `×N` badge.
+  4. GT-F (local Playwright): `?debug=1` flips localStorage,
+     types a single character, observes a green `Yjs op` toast
+     and (after compile) a blue `pdf-segment` toast; rapid
+     typing aggregates green into a single `×N` toast; without
+     the flag, none of these toasts appear.
 - **Save-feedback affordance.** `SyncStatus` indicator with
   idle/in-flight/error states sourced from Yjs provider sync
   state acked by sidecar persistence (NOT per-keystroke).
