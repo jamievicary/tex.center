@@ -55,9 +55,14 @@ test.describe("live no-flash editor load (GT-A)", () => {
     // iter 175 the skeleton placeholder will keep `.cm-content`
     // out of the DOM until Yjs hydration completes, so by the
     // time `attached` resolves the text must already contain
-    // the seed template.
+    // the seed template. Use the 120s cold-start TCP-probe
+    // budget (matching `verifyLiveFullPipeline.spec.ts` per
+    // iter 180): a freshly-seeded project requires cold-starting
+    // the per-project Fly Machine before hydration can complete,
+    // and 60s was racing the tail of that envelope (iter 177
+    // and iter 180 timeouts).
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "attached", timeout: 60_000 });
+    await cmContent.waitFor({ state: "attached", timeout: 120_000 });
 
     const text = (await cmContent.textContent()) ?? "";
     // The CodeMirror DOM may collapse `\n` differently than the

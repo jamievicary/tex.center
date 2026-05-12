@@ -2,9 +2,11 @@
 
 Normal cron resumes: `N%10==0` refactor, `N%10==1` plan-review.
 Iter 180 deferred the refactor cron to fix a regression in the
-M8.pw.4 gating spec; iter 181 takes the plan-review and rolls the
-refactor cron onto iter 182. If that compounds, one of them
-defers one more iter with log notation.
+M8.pw.4 gating spec; iter 181 took plan-review; iter 182 took the
+cold-start fresh-project flake investigation (anti-flake bounded-
+poll fix on the canvas paint + GT-A timeout to cold-start budget).
+Refactor cron rolls onto iter 183 — second-and-final defer
+allowed under §3.
 
 ## 1. Recent state
 
@@ -110,22 +112,19 @@ shape and count guardrail locks cleanup). See git log and
 
 ## 3. Open questions / known gaps
 
-- **Cold-start fresh-project flakiness.** `verifyLiveFullPipeline`
-  (M8.pw.4) and `verifyLiveGt1NoFlashLoad` (GT-A) are the only
-  two specs that hit a freshly-created project + cold-started Fly
-  Machine. They have flaked across iters 178–180: M8.pw.4 red
-  every iter since 178 (most-recent failure was "preview canvas
-  near-white" after the 120s `.cm-content` bump in iter 180, i.e.
-  hydration completed but PDF render didn't paint), GT-A red in
-  177 and 180 but green in 178/179. Reused-pipeline spec is
-  green throughout, so the warm-machine path is sound. Likely
-  root causes to investigate: (a) Fly cold-start tail latency,
-  (b) compile coalescer interaction with the very first
-  `pdf-segment` for a brand-new Y.Doc, (c) PdfViewer canvas
-  paint racing the first `pdf-segment` arrival. Iter 182 (after
-  the refactor cron) takes this as primary work — start by
-  pulling logs from a failing M8.pw.4 run and instrumenting the
-  pdf-segment → canvas paint path.
+- **Cold-start fresh-project flakiness (iter 182 fix landed).**
+  M8.pw.4 / reused / GT-A all sampled the preview canvas with a
+  single-shot `evaluate` racing PDF.js's async paint, and GT-A's
+  `.cm-content` 60s timeout under-budgeted Fly cold-start (180
+  bumped M8.pw.4 to 120s for the same reason; GT-A was missed).
+  Iter 182 replaced the single-shot canvas check with a bounded
+  30s `expect.poll` (re-locating `.preview canvas` each tick to
+  handle re-render replacement, swallowing per-tick evaluate
+  errors), and bumped GT-A's `.cm-content` to 120s. If iter 183+
+  still sees red on these, root cause is hypothesis (a) Fly
+  cold-start tail >120s — next step there is `flyctl machine
+  logs` from a failing run (with leaked-subprocess hygiene per
+  150_answer).
 - **Per-project Fly Machines vs shared sidecar.** Current model
   is per-project. Shared-pool exists as the app-tagged
   deployment machines but isn't routed to. Decision deferred

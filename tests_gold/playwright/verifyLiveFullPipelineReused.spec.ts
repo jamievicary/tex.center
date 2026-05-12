@@ -152,28 +152,47 @@ test.describe("live full pipeline reused (M8.pw.4 reused project)", () => {
       })
       .toBeGreaterThan(0);
 
+    // Bounded poll for the canvas paint — the `pdf-segment`
+    // frame's arrival only proves the bytes reached the page;
+    // PDF.js parse + render is async, so a single-shot
+    // `evaluate` races the paint. Iter 181 surfaced this as a
+    // flake on the reused (warm) path where the frame arrived
+    // immediately and the canvas was still blank when sampled.
+    // Re-locate inside the poll so a canvas replaced by an
+    // incremental re-render is handled.
     const canvas = authedPage.locator(".preview canvas").first();
     await canvas.waitFor({ state: "attached", timeout: 30_000 });
 
-    const nonBlank = await canvas.evaluate((el: Element) => {
-      const c = el as HTMLCanvasElement;
-      const ctx = c.getContext("2d");
-      if (!ctx) return false;
-      const { data } = ctx.getImageData(0, 0, c.width, c.height);
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i]!;
-        const g = data[i + 1]!;
-        const b = data[i + 2]!;
-        const a = data[i + 3]!;
-        if (a === 0) continue;
-        if (r < 240 || g < 240 || b < 240) return true;
-      }
-      return false;
-    });
-    expect(
-      nonBlank,
-      "reused-project preview canvas had no non-near-white pixel — " +
-        "PDF rendered blank or canvas tainted",
-    ).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          return await authedPage
+            .locator(".preview canvas")
+            .first()
+            .evaluate((el: Element) => {
+              const c = el as HTMLCanvasElement;
+              const ctx = c.getContext("2d");
+              if (!ctx) return false;
+              if (c.width === 0 || c.height === 0) return false;
+              const { data } = ctx.getImageData(0, 0, c.width, c.height);
+              for (let i = 0; i < data.length; i += 4) {
+                const r = data[i]!;
+                const g = data[i + 1]!;
+                const b = data[i + 2]!;
+                const a = data[i + 3]!;
+                if (a === 0) continue;
+                if (r < 240 || g < 240 || b < 240) return true;
+              }
+              return false;
+            })
+            .catch(() => false);
+        },
+        {
+          timeout: 30_000,
+          message:
+            "reused-project preview canvas had no non-near-white pixel within 30s — PDF rendered blank or canvas tainted",
+        },
+      )
+      .toBe(true);
   });
 });
