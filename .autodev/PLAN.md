@@ -63,6 +63,57 @@ Remaining slices:
   a sidecar persistence-ack wire signal that doesn't exist yet.
   Local + live Playwright variants.
 
+### M10.branding — logo assets (post-MVP UX)
+
+`assets/logo_stacked.svg` and `assets/logo_linear.svg` are in tree.
+Inline via Vite `?raw` import (no static fetch; enables
+`currentColor` theming). `/projects` page: stacked mark above the
+project list. Topbar: replace `tex.center` wordmark with linear
+mark, preserving the iter-177 `<a href="/projects">` wrapper and
+the iter-185 indicator slot. Existing topbar/landing/projects gold
+specs need to swap wordmark-text assertions for image/SVG
+aria-label assertions. Single iteration. See `discussion/191_answer.md`.
+
+### M11.file-tree — tree component + CRUD UX (post-MVP UX)
+
+Native Svelte 5 component (no React island, no third-party tree
+lib). Sub-slices, each its own iteration:
+
+- **M11.1** read-only collapsible tree (folders inferred from
+  `/`-separated paths). Replaces flat picker.
+- **M11.2** create/delete/rename via context menu + keyboard
+  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
+- **M11.3** create folder via virtual-folder model (no sentinel
+  file; folder materialises on first child).
+- **M11.4** intra-tree DnD move = rename op; one file per drag.
+- **M11.5** OS-drop upload. **Blocked by FUTURE_IDEAS "binary
+  asset upload"** for non-UTF-8 payloads — text-only is
+  insufficient since the real motivation is image/PDF/font drops.
+
+### M12.panels — draggable dividers (post-MVP UX)
+
+Native `<ResizableSplit>` Svelte component, no library. Pointer
+capture + CSS custom-property widths. Per-project widths persisted
+to `localStorage` keyed by `projectId`. Min widths: ~200px editor,
+~200px PDF; file picker collapsible to zero with a re-open chevron.
+Single iteration. Local gold: drag → reload → widths persist.
+
+### M13.open-latency — instrument-then-fix (post-MVP UX)
+
+- **M13.1** `performance.mark` at click → route loaded → WS open
+  → Yjs sync complete → first text paint → first pdf-segment.
+  Surface via iter-187 `?debug=1` toast fan-out. Local gold
+  asserts mark ordering + monotonic timestamps.
+- **M13.2** single highest-impact fix indicated by M13.1 data.
+  Likely overlaps M7.0.2 shared-sidecar pool if cold-start
+  dominates; in that case M13.2 may collapse into M7.0.2
+  sequencing rather than ship separately.
+
+Default sequencing (M10–M13 all post-MVP, ordered after MVP-gap
+M7.4.x and the GT-E/GT-F/save-feedback work): M10 → M13.1 →
+M12 → M11.1–M11.4 → M13.2. M11.5 gated on binary-asset wire
+work.
+
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
 Code complete. Operator-gated: create test OAuth client in GCP

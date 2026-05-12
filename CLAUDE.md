@@ -23,6 +23,8 @@ not a manual step — credentials live in `creds/` (gitignored).
 
 As the main Claude agent for the session, you never edit any project code directly unless expressly authorised. The default mode of making changes to the project is to raise a discussion question for the autodev agent, by creating a file "./.autodev/N_question.md" where N is the latest iteration number. The autodev agent will read this content in its next iteration and decide what to do, as well as writing a response.
 
+If the autodev agent needs to be terminated for any reason, create the file ./.autodev/finished.md. The iterator.sh script will notice it on its next iteration. The iterator can be restarted again with the script ./autodev/iterator.sh.
+
 ## Layout
 
 - `apps/` — SvelteKit web frontend + per-project sidecar.

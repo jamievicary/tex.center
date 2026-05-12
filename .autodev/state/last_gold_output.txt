@@ -9,43 +9,43 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-[dev] 10:25:47 PM [vite] ws proxy error:
+[dev] 10:40:33 PM [vite] ws proxy error:
 Error: connect ECONNREFUSED 127.0.0.1:3001
     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
     at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
-[globalSetup] DB ready (userId=4020e657-fc28-4154-b060-0bc7ad7f7272); spawning dev server on :3000
+[globalSetup] DB ready (userId=753c3f12-73d7-4dd1-a74a-9c3188115452); spawning dev server on :3000
 
 Running 30 tests using 1 worker
 
-  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.1s)
+  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.2s)
   ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.0s)
-  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (215ms)
-  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (436ms)
-  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (561ms)
-  ✓  6 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (255ms)
+  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (457ms)
+  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (453ms)
+  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (553ms)
+  ✓  6 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (220ms)
   ✓  7 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.9s)
-  ✓  8 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (462ms)
-  ✓  9 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (514ms)
+  ✓  8 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (505ms)
+  ✓  9 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (500ms)
   -  10 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects
-  ✓  11 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (548ms)
-  ✓  12 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (186ms)
-  ✓  13 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (79ms)
-  ✓  14 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (26.2s)
+  ✓  11 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (520ms)
+  ✓  12 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (188ms)
+  ✓  13 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (81ms)
+  ✓  14 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (1.3m)
   ✓  15 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (10.6s)
   -  16 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
   -  17 [live] › verifyLiveWsUpgrade.spec.ts:60:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  18 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (192ms)
-  ✓  19 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (169ms)
-  ✓  20 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (43ms)
-  ✓  21 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (54ms)
-  ✓  22 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (45ms)
+  ✓  18 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (243ms)
+  ✓  19 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (97ms)
+  ✓  20 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (47ms)
+  ✓  21 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (41ms)
+  ✓  22 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (44ms)
   ✓  23 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (129ms)
-  ✓  24 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (74ms)
-  ✓  25 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (70ms)
-  ✓  26 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (12.5s)
+  ✓  24 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (54ms)
+  ✓  25 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (72ms)
+  ✓  26 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (14.0s)
   ✓  27 [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input (5.1s)
   ✘  28 [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error (4.0m)
-  ✓  29 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (48.4s)
+  ✓  29 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (49.2s)
   ✘  30 [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas (4.0m)
 
 
@@ -93,14 +93,14 @@ Running 30 tests using 1 worker
 
   Slow test file: [live] › verifyLiveGt5EditUpdatesPreview.spec.ts (4.0m)
   Slow test file: [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts (4.0m)
-  Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (48.4s)
-  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (26.2s)
+  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (1.3m)
+  Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (49.2s)
   Consider splitting slow test files to speed up parallel execution
   2 failed
     [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error 
     [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas 
   3 skipped
-  25 passed (10.3m)
+  25 passed (11.2m)
 FAIL
 test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... ok
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
@@ -114,6 +114,6 @@ Traceback (most recent call last):
 AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
 ----------------------------------------------------------------------
-Ran 13 tests in 635.963s
+Ran 13 tests in 692.407s
 
 FAILED (failures=1)
