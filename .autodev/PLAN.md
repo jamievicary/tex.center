@@ -197,10 +197,20 @@ spawning, (D) auth + production polish.
                               GETs of `/`. Regression guarded by
                               `test_landing_sign_in.test_prerender_disabled`.
                               _(iter 112.)_
-            - [ ] M7.1.4 — Idle-stop wiring on per-project Machine side;
-                  closes M7.3.
+            - [x] M7.1.4 — Idle-stop wiring on per-project Machine side.
+                  `buildServer` accepts `idleTimeoutMs` + `onIdle`; tracks
+                  global viewer count and arms a `setTimeout` only on the
+                  zero-transition (cancelled by next connection). Entry
+                  point reads `SIDECAR_IDLE_TIMEOUT_MS` (default 600_000,
+                  `0` disables) and wires `onIdle` to
+                  `app.close().then(() => process.exit(0))`. Combined with
+                  the per-project Machine `restart: on-failure` policy
+                  set in `upstreamFromEnv.ts`, a clean exit leaves the
+                  Machine `stopped`; `upstreamResolver.ts:139-141` wakes
+                  it on the next WS upgrade. Closes M7.3. _(iter 118.)_
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
-      - [ ] **M7.3** — ~10-min idle auto-stop.
+      - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4
+            iter 118; see above.)_
       - [ ] **M7.4** — Checkpoint blob protocol on the compiler
             interface; persist on idle-stop, rehydrate on wake.
             Closes M4.3.2 tail.
@@ -274,12 +284,15 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.4 (idle-stop wiring on the
-per-project Machine side; closes M7.3). The `verifyLiveWsUpgrade`
-spec needs `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` +
-`SIDECAR_APP_NAME` in the env to run against prod — first
-deploy-touching iteration that does so will exercise it
-end-to-end.
+**Next ordinary iteration:** M7.4 (checkpoint blob protocol on
+the compiler interface; persist on idle-stop, rehydrate on wake;
+closes M4.3.2 tail). The idle-stop path now landed (M7.1.4)
+makes "persist on idle-stop" a concrete hook to bind to.
+
+The `verifyLiveWsUpgrade` spec still needs
+`TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`
+in the env to run against prod — first deploy-touching
+iteration that does so will exercise it end-to-end.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Anything that doesn't require docker (S3 adapter M4.3.1 still

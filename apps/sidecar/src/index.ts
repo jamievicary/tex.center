@@ -17,7 +17,27 @@ export function describe(): string {
 export async function main(): Promise<void> {
   const port = Number(process.env.PORT ?? 3001);
   const host = process.env.HOST ?? "127.0.0.1";
-  const app = await buildServer({ logger: true });
+  // Idle-stop: 0 disables, anything >0 arms the timer. Default
+  // 10 min matches the architecture note in GOAL.md. The Fly
+  // Machine `restart: on-failure` policy turns a clean exit
+  // into a `stopped` Machine the resolver can later wake.
+  const idleRaw = process.env.SIDECAR_IDLE_TIMEOUT_MS;
+  const idleTimeoutMs = idleRaw === undefined ? 600_000 : Number(idleRaw);
+  let app: Awaited<ReturnType<typeof buildServer>> | null = null;
+  const onIdle = (): void => {
+    void (async (): Promise<void> => {
+      try {
+        if (app) await app.close();
+      } finally {
+        process.exit(0);
+      }
+    })();
+  };
+  app = await buildServer({
+    logger: true,
+    idleTimeoutMs: Number.isFinite(idleTimeoutMs) ? idleTimeoutMs : 0,
+    onIdle,
+  });
   await app.listen({ port, host });
 }
 

@@ -103,6 +103,17 @@ export interface SidecarOptions {
    * Y.Doc only).
    */
   blobStore?: BlobStore;
+  /**
+   * Milliseconds the sidecar should sit with **zero viewers**
+   * before invoking `onIdle`. Both must be set for idle-stop to
+   * arm; either unset disables the feature (the default for
+   * tests). On a per-project Fly Machine the entry point wires
+   * `onIdle` to `app.close().then(() => process.exit(0))`; with
+   * `restart: on-failure` on the Machine config, a clean exit
+   * leaves the Machine in `stopped` state for the next wake.
+   */
+  idleTimeoutMs?: number;
+  onIdle?: () => void;
 }
 
 export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyInstance> {
@@ -134,6 +145,46 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   const blobStore = opts.blobStore ?? defaultBlobStoreFromEnv();
 
   const projects = new Map<string, ProjectState>();
+
+  // Idle-stop bookkeeping. `viewerCount` aggregates across every
+  // project; the timer is armed only when it transitions to zero
+  // and cancelled on the first re-connection.
+  let viewerCount = 0;
+  let idleTimer: NodeJS.Timeout | null = null;
+  const idleTimeoutMs = opts.idleTimeoutMs;
+  const onIdle = opts.onIdle;
+  const idleEnabled =
+    typeof idleTimeoutMs === "number" && idleTimeoutMs > 0 && typeof onIdle === "function";
+
+  function clearIdleTimer(): void {
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+  }
+
+  function noteViewerAdded(): void {
+    viewerCount += 1;
+    clearIdleTimer();
+  }
+
+  function noteViewerRemoved(): void {
+    viewerCount -= 1;
+    if (viewerCount < 0) viewerCount = 0;
+    if (viewerCount === 0 && idleEnabled) {
+      clearIdleTimer();
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        try {
+          onIdle!();
+        } catch (e) {
+          app.log.error({ err: e instanceof Error ? e.message : String(e) }, "onIdle threw");
+        }
+      }, idleTimeoutMs!);
+      // Don't pin the event loop just to fire idle-stop.
+      idleTimer.unref?.();
+    }
+  }
 
   function getProject(id: string): ProjectState {
     let p = projects.get(id);
@@ -279,6 +330,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         },
       };
       project.viewers.add(client);
+      noteViewerAdded();
 
       // Greet, then ship current Yjs state and a fresh compile.
       // Hydration may still be in flight; await before snapshotting
@@ -396,7 +448,9 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       });
 
       socket.on("close", () => {
+        if (!project.viewers.has(client)) return;
         project.viewers.delete(client);
+        noteViewerRemoved();
         project.doc.off("update", onTextChange);
         project.doc.off("update", onDocUpdate);
         if (project.viewers.size === 0 && project.compileTimer) {
@@ -408,6 +462,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   });
 
   app.addHook("onClose", async () => {
+    clearIdleTimer();
     for (const p of projects.values()) {
       if (p.compileTimer) {
         clearTimeout(p.compileTimer);

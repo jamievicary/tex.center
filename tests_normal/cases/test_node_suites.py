@@ -71,6 +71,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_compile_error(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverCompileError.test.mjs")
 
+    def test_sidecar_server_idle_stop(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverIdleStop.test.mjs")
+
     def test_sidecar_fixture_compiler(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "fixtureCompiler.test.mjs")
 
