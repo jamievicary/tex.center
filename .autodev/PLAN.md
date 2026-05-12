@@ -267,24 +267,34 @@ spawning, (D) auth + production polish.
             - [x] M7.5.0 — Bump `vendor/supertex` submodule
                   `69317e8 → c571420`; `make -C vendor/supertex
                   all` builds `build/supertex` + `build/supertex_
-                  daemon`. _(iter 90.)_ **Carry-over for M7.5.2**:
-                  the sidecar Dockerfile's `RUN make -C
-                  vendor/supertex -j` (no target) only builds
-                  `build/baseline_snapshot` — implicit first goal
-                  hits a prerequisite-only rule. Fix in M7.5.2:
-                  switch to `make -C vendor/supertex all` and
-                  update `SUPERTEX_BIN` (which currently points at
-                  a removed Python entry).
+                  daemon`. _(iter 90.)_ Dockerfile carry-over fixed
+                  iter 107 alongside M7.5.2: `make … all`,
+                  `SUPERTEX_BIN=/opt/supertex/build/supertex`.
             - [x] M7.5.1 — `apps/sidecar/src/compiler/daemonProtocol.ts`:
                   `parseDaemonLine` for the four stdout line types
                   (`[N.out]`, `[rollback K]`, `[error <reason>]`,
                   `[round-done]`); `DaemonLineBuffer` splits chunks
                   on `\n`, EOF-partial → violation. _(iter 91.)_
-            - [ ] M7.5.2 — `SupertexDaemonCompiler` next to
-                  `SupertexOnceCompiler`: one persistent process
-                  per project, lazy spawn, lifecycle via
-                  `Compiler.close()` (stdin EOF → wait → SIGTERM
-                  → SIGKILL). Fix M7.5.0 Dockerfile carry-over here.
+            - [x] M7.5.2 — `SupertexDaemonCompiler` next to
+                  `SupertexOnceCompiler` (iter 107).
+                  `apps/sidecar/src/compiler/supertexDaemon.ts`:
+                  one persistent process per project, lazy spawn
+                  on first `compile()`, waits for the
+                  `supertex: daemon ready` stderr marker, writes
+                  `recompile,<N|end>\n` per round, collects events
+                  via `DaemonLineBuffer`, assembles chunk files
+                  `0.out…K.out` from `<workDir>/chunks/` into a
+                  single PDF segment. `close()` is stdin EOF →
+                  `gracefulTimeoutMs` (5s) → SIGTERM →
+                  `killTimeoutMs` (2s) → SIGKILL. `[error reason]`
+                  → `CompileFailure` (`supertex daemon error: …`).
+                  Protocol violation → kill child + surface raw
+                  line. Concurrent `compile()` calls reject.
+                  Gated behind `SIDECAR_COMPILER=supertex-daemon`;
+                  production default `supertex` (once-compiler)
+                  unchanged. Tests:
+                  `apps/sidecar/test/supertexDaemonCompiler.test.mjs`
+                  (9 cases against a fake daemon).
             - [ ] M7.5.3 — `[error <reason>]` → new
                   `compile-status:error` wire frame in
                   `packages/protocol`; surface in editor UI.
@@ -337,8 +347,14 @@ probe in `verifyLive.spec.ts`. Mint a session via `mintSession`
 against the live DB through `flyctl proxy`, then assert WS upgrade
 → 101 from a freshly-spawned per-project Machine. Closes the
 M7.0.3.3 tail and exercises the upstream resolver end-to-end for
-the first time. After that: M7.1.4 (idle-stop wiring on the
-per-project Machine side).
+the first time. Note: this needs the live `SESSION_SIGNING_KEY`
+locally available — secrets can't be read back from Fly, so the
+slice will likely rotate the key (generate locally, persist in
+`creds/session-signing-key.txt`, `flyctl secrets set`, redeploy)
+before the probe can mint cookies the prod control plane will
+verify. After that: M7.1.4 (idle-stop wiring on the per-project
+Machine side), then M7.5.3 (`compile-status:error` wire frame on
+the heels of M7.5.2).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

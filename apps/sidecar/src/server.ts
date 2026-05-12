@@ -43,6 +43,7 @@ declare module "fastify" {
 import type { Compiler } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
+import { SupertexDaemonCompiler } from "./compiler/supertexDaemon.js";
 import { ProjectWorkspace } from "./workspace.js";
 import {
   createProjectPersistence,
@@ -443,12 +444,15 @@ function defaultCompilerFactory(
   if (which === "fixture") {
     return () => new FixtureCompiler(fixturePath);
   }
-  if (which === "supertex") {
+  if (which === "supertex" || which === "supertex-daemon") {
     const supertexBin = process.env.SUPERTEX_BIN;
     if (!supertexBin) {
       throw new Error(
         `SIDECAR_COMPILER=${which} requires SUPERTEX_BIN to point at a supertex executable`,
       );
+    }
+    if (which === "supertex-daemon") {
+      return (ctx) => new SupertexDaemonCompiler({ workDir: ctx.workspace.dir, supertexBin });
     }
     return (ctx) => new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
   }

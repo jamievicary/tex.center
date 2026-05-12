@@ -56,9 +56,12 @@ COPY packages/protocol/ packages/protocol/
 RUN pnpm --filter @tex-center/sidecar typecheck
 
 # Build supertex C artefacts (LD_PRELOAD shim + daemon + helper
-# tools). `vendor/supertex` is a git submodule.
+# tools). `vendor/supertex` is a git submodule. `make` with no
+# target defaults to the first prerequisite-only rule (just
+# `baseline_snapshot`); pass `all` so we get `build/supertex` +
+# `build/supertex_daemon` + the shim + helper tools.
 COPY vendor/supertex/ vendor/supertex/
-RUN make -C vendor/supertex -j
+RUN make -C vendor/supertex -j all
 
 # ---------- runtime ----------
 # Stays on the Node base image so `tsx` / pnpm work out of the
@@ -74,7 +77,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:/opt/engine/bin:$PATH \
     SIDECAR_COMPILER=supertex \
-    SUPERTEX_BIN=/opt/supertex/src/supertex
+    SUPERTEX_BIN=/opt/supertex/build/supertex
 RUN apt-get update && apt-get install -y --no-install-recommends \
         texlive-full \
         python3 \
