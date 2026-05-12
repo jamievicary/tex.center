@@ -18,20 +18,21 @@
 // so it does not beat on production on every iteration. Mandatory
 // on deploy-touching iterations.
 //
-// The fresh project row is deleted in `afterEach`; the
-// per-project Machine is left running and will idle-stop itself.
-// (`cleanupProjectMachine` is intentionally NOT called — proving
-// the wake/idle-stop cycle is a separate verification, owned by
-// `verifyLiveWsUpgrade`.)
-
-import { eq } from "drizzle-orm";
+// The fresh project row and its per-project Machine are reaped
+// in `afterEach` via `cleanupLiveProjectMachine` (see
+// `173b_answer.md` — idle-stop is an optimisation, not a
+// correctness guarantee for test cleanup; specs must reap what
+// they spawn). The reused-pipeline variant
+// (`verifyLiveFullPipelineReused.spec.ts`) is the deliberate
+// exception, since its premise requires the Machine to survive
+// across runs.
 
 import {
   createProject,
-  projects,
   type ProjectRow,
 } from "@tex-center/db";
 
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
 
 // `@tex-center/protocol` is not in the root workspace devDeps that
@@ -57,7 +58,10 @@ test.describe("live full pipeline (M8.pw.4)", () => {
 
   test.afterEach(async ({ db }) => {
     if (seeded !== null) {
-      await db.db.db.delete(projects).where(eq(projects.id, seeded.id));
+      await cleanupLiveProjectMachine({
+        projectId: seeded.id,
+        drizzle: db.db.db,
+      });
       seeded = null;
     }
   });

@@ -20,14 +20,12 @@
 //   2. No `compile-status state:error` control frame contains
 //      the substring "already in flight".
 
-import { eq } from "drizzle-orm";
-
 import {
   createProject,
-  projects,
   type ProjectRow,
 } from "@tex-center/db";
 
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
 
 const TAG_PDF_SEGMENT = 0x20;
@@ -49,7 +47,10 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
 
   test.afterEach(async ({ db }) => {
     if (seeded !== null) {
-      await db.db.db.delete(projects).where(eq(projects.id, seeded.id));
+      await cleanupLiveProjectMachine({
+        projectId: seeded.id,
+        drizzle: db.db.db,
+      });
       seeded = null;
     }
   });

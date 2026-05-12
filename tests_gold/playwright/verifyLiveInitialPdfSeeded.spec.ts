@@ -18,14 +18,12 @@
 //
 // Live-only, gated on `TEXCENTER_FULL_PIPELINE=1`.
 
-import { eq } from "drizzle-orm";
-
 import {
   createProject,
-  projects,
   type ProjectRow,
 } from "@tex-center/db";
 
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
 
 const TAG_PDF_SEGMENT = 0x20;
@@ -46,7 +44,10 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
 
   test.afterEach(async ({ db }) => {
     if (seeded !== null) {
-      await db.db.db.delete(projects).where(eq(projects.id, seeded.id));
+      await cleanupLiveProjectMachine({
+        projectId: seeded.id,
+        drizzle: db.db.db,
+      });
       seeded = null;
     }
   });

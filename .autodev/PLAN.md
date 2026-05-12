@@ -53,20 +53,19 @@ See `173b_question.md` + `173b_answer.md`.
 
 Two slices:
 
-- **Spec teardown + count guardrail.** Add
-  `cleanupProjectMachine` to `afterEach` in
-  `verifyLiveFullPipeline.spec.ts`,
-  `verifyLiveEditTriggersFreshPdf.spec.ts`,
-  `verifyLiveInitialPdfSeeded.spec.ts`,
-  `verifyLiveNoFlashLoad.spec.ts`,
-  `verifyLiveSustainedTyping.spec.ts`. Update comments to match
-  the correctness-vs-optimisation framing. Leave the reused-
-  pipeline spec untouched (its premise requires retained Machine).
-  Add a gold-suite case asserting
-  `flyctl machine list -a tex-center-sidecar` count ≤
-  `TEXCENTER_MAX_SIDECAR_MACHINES` (default 5), failing with
-  full ID + created_at + state listing on breach. Status:
-  **next slice**.
+- **Spec teardown + count guardrail.** Landed iter 175.
+  `cleanupLiveProjectMachine` helper at
+  `tests_gold/playwright/fixtures/cleanupLiveProjectMachine.ts`
+  wraps the existing `cleanupProjectMachine` primitive with
+  env-derived `FLY_API_TOKEN` + `SIDECAR_APP_NAME` (default
+  `tex-center-sidecar`); called from `afterEach` in
+  `verifyLiveFullPipeline`, `verifyLiveEditTriggersFreshPdf`,
+  `verifyLiveInitialPdfSeeded`, `verifyLiveNoFlashLoad`,
+  `verifyLiveSustainedTyping`. Reused-pipeline spec deliberately
+  unchanged. Count guardrail at
+  `tests_gold/cases/test_sidecar_machine_count.py` calls Fly
+  Machines API, asserts ≤ `TEXCENTER_MAX_SIDECAR_MACHINES`
+  (default 5), lists offenders on breach. Status: **done**.
 - **Idle-stop diagnosis + regression spec.** `flyctl secrets
   list -a tex-center-sidecar` for `SIDECAR_IDLE_TIMEOUT_MS`,
   `flyctl logs` for viewer-count zero-transition + idle-timer
@@ -74,7 +73,7 @@ Two slices:
   Add gated regression spec under `TEXCENTER_VERIFY_IDLE_STOP=1`
   (lower the timeout on the test project if a runtime override
   exists; otherwise eat the 12-min wallclock). Status:
-  **after spec teardown lands**.
+  **next slice**.
 
 ### M9.editor-ux — live editor UX bugs (TDD'd via gold)
 

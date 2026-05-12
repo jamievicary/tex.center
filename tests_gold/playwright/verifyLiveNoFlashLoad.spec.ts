@@ -24,14 +24,12 @@
 // Live-only and gated on `TEXCENTER_FULL_PIPELINE=1` to match
 // the rest of the live full-pipeline specs.
 
-import { eq } from "drizzle-orm";
-
 import {
   createProject,
-  projects,
   type ProjectRow,
 } from "@tex-center/db";
 
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
 
 // Authoritative source: `packages/protocol/src/index.ts:MAIN_DOC_HELLO_WORLD`.
@@ -60,7 +58,10 @@ test.describe("live no-flash editor load (GT-A)", () => {
 
   test.afterEach(async ({ db }) => {
     if (seeded !== null) {
-      await db.db.db.delete(projects).where(eq(projects.id, seeded.id));
+      await cleanupLiveProjectMachine({
+        projectId: seeded.id,
+        drizzle: db.db.db,
+      });
       seeded = null;
     }
   });

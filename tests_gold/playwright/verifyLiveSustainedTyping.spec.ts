@@ -24,14 +24,12 @@
 // the committed Y.Doc state; a divergence would be its own
 // (more dramatic) bug.
 
-import { eq } from "drizzle-orm";
-
 import {
   createProject,
-  projects,
   type ProjectRow,
 } from "@tex-center/db";
 
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
 
 const TAG_PDF_SEGMENT = 0x20;
@@ -60,7 +58,10 @@ test.describe("live sustained typing (GT-D)", () => {
 
   test.afterEach(async ({ db }) => {
     if (seeded !== null) {
-      await db.db.db.delete(projects).where(eq(projects.id, seeded.id));
+      await cleanupLiveProjectMachine({
+        projectId: seeded.id,
+        drizzle: db.db.db,
+      });
       seeded = null;
     }
   });
