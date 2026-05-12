@@ -107,6 +107,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_oauth_start(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "oauthStart.test.mjs")
 
+    def test_web_oauth_config(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "oauthConfig.test.mjs")
+
     def test_web_oauth_callback(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "oauthCallback.test.mjs")
 

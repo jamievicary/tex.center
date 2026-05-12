@@ -6,12 +6,6 @@
   scope. A user-issued deploy token (org-scoped, ≤720h) would be a
   meaningful hardening — the control plane only needs Machines API
   create/start/stop on `tex-center-sidecar`.
-- **Unit test `loadOAuthConfig` env-vs-file precedence.** Iter 76
-  refactored `apps/web/src/lib/server/oauthConfig.ts` to env-first
-  with dev-only file fallback. No targeted unit test today because
-  `tests_normal/lib.sh` lacks a temp-dir + env-stash harness for
-  ESM/Node code. Add the harness, then test: env-only path, file-
-  only dev path, file-ignored-in-prod path, malformed-key paths.
 - **Source-build the patched lualatex engine.** Iter 75 vendored a
   prebuilt ELF (`vendor/engine/x86_64-linux/lualatex-incremental`)
   built from `jamievicary/luatex-incremental@aa053dd-dirty`. Push
