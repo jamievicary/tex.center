@@ -445,19 +445,27 @@ Estimated iteration sequence (adjust as work unfolds):
   item 6 (no blob/sidecar reach from control plane). Slots 173–177
   below schedule the work.
 
-- **Iter 173 — Land GT-A/B/C/D as failing gold tests.** *Pending.*
+- **Iter 173 — Land GT-A/B/C/D as failing gold tests.** *Done.*
   Four new specs under `tests_gold/playwright/`, one per file:
-  GT-A (no-flash load: assert canonical seeded `main.tex` shows
-  in CodeMirror within ~200ms of `goto`), GT-B (initial PDF for
-  seeded content arrives without user input), GT-C (single-
-  keystroke edit triggers fresh `pdf-segment`; no overlap-error
-  surfaces), GT-D (sustained typing — refined assertions: no
-  overlap error, final server doc bytes == typed bytes, ≥1
-  pdf-segment with final source). Live-project variants; reuse
-  the iter-171 fixture-project pattern. No production code
-  touched. Gold output reads red for these four until 174–177
-  land. Regression lock in `tests_normal/cases/` asserting the
-  four spec files exist with the expected assertion shapes.
+  `verifyLiveNoFlashLoad.spec.ts` (GT-A: when `.cm-content`
+  first attaches it must already contain `Hello, world!` +
+  `documentclass`), `verifyLiveInitialPdfSeeded.spec.ts` (GT-B:
+  pdf-segment arrives for seeded template with **no typing**),
+  `verifyLiveEditTriggersFreshPdf.spec.ts` (GT-C: single
+  keystroke after initial compile produces a distinct second
+  pdf-segment AND zero control frames carrying
+  `already in flight`), `verifyLiveSustainedTyping.spec.ts`
+  (GT-D: ~150 chars at 30ms/key followed by 30s wait — no
+  overlap error, `≥1` pdf-segment, final CodeMirror text
+  contains the typed body). GT-D refined per `172_answer.md`:
+  dropped `≥2 segments` brittle assertion; kept "no overlap
+  error" + "final state matches". All four live-only, gated on
+  `TEXCENTER_FULL_PIPELINE=1`. No production code touched.
+  Regression lock: `tests_normal/cases/test_editor_ux_gold_specs.py`
+  (16 assertions across the four specs, including a guard
+  forbidding GT-D from being tightened back to `≥2`). Gold
+  suite will read red on GT-A, GT-C, GT-D until iters 175/176
+  land; GT-B may already be green.
 
 - **Iter 174 — Logo → /projects in editor.** *Pending.*
   `apps/web/src/routes/editor/[projectId]/+page.svelte:69`
