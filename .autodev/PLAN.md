@@ -236,29 +236,76 @@ Estimated iteration sequence (adjust as work unfolds):
   path has never been confirmed live. Sequencing for next slices
   below.
 
-- **Iter 163 — Read iter-162's live-pipeline result + diagnose.**
-  Three branches:
-  - (a) M8.pw.4 passes green: gap is between fresh-project seed
-    (spec) and reused-existing-project (user). Write a
-    write-bearing probe (extension of
-    `scripts/probe-live-ws-payload.mjs`) that opens an existing
-    project's WS, sends a Yjs insert, waits for `pdf-segment`,
-    and reads `flyctl logs -a tex-center-sidecar` during the
-    run. Goal: reproduce the user failure with a script.
-  - (b) M8.pw.4 fails on the `pdf-segment` poll: write path is
-    broken in CI too. Read CI failure + sidecar logs to find the
-    layer (sidecar not reacting to Yjs updates / compile error /
-    response not routed back).
-  - (c) M8.pw.4 fails on the canvas-pixel check: PDF.js client-
-    side. Browser console in trace identifies it.
-- **Iter 164 — Fix the diagnosed layer + lock a regression.**
-  Whatever 163 finds, fix it. Add a regression spec/probe that
-  covers the precise failure shape. For branch (a) specifically,
-  add an "existing-project edit" variant of M8.pw.4 (or a
-  separate spec) that does NOT call `createProject` — uses a
-  pre-seeded fixture project owned by the live test user — so
-  the reuse path is automatically locked.
-- **Iter 165 — Save-feedback affordance.** New `SyncStatus`
+- **Iter 163 — Read iter-162 result + add observability.** *Done.*
+  iter-161 live-pipeline (run 25737092129, the first deploy
+  containing the iter-161 DB-name default fix) was the first
+  run to actually reach M8.pw.4. Result: **branch (b)** — spec
+  failed with `no pdf-segment frame received within timeout`
+  (240_000ms). Crucially the sidecar's per-project Machines
+  (`e829704ae25658`, `d8d329da16e738`) for the spec window
+  13:22–13:26Z reached "Server listening at http://[::]:3001"
+  but emitted **zero `incoming request` lines** for
+  `/ws/project/<id>` — the dial either didn't reach them or
+  failed before reaching them.
+
+  Production had no diagnostic trail because
+  `apps/web/src/server.ts` passed **no `onEvent`** to
+  `attachWsProxy`, and `boot.ts` didn't even forward an option.
+  Every `resolve-error` / `upstream-error` / `auth-error` /
+  `closed` evaporated. Iter 163 fixed the observability gap on
+  both sides of the proxy:
+  - `apps/web/src/lib/server/boot.ts`: added `onWsProxyEvent`
+    to `BootOptions`, forwarded to `attachWsProxy`.
+  - `apps/web/src/server.ts`: supplies a `console.log` shim
+    emitting one-line JSON per WS-proxy lifecycle event.
+  - `apps/sidecar/src/server.ts`: info-level logs on client
+    `doc-update` arrival; compile start (with sourceLen);
+    compile ok (elapsedMs / segments / bytesShipped) or
+    compile error.
+  - Regression lock in `apps/web/test/boot.test.mjs`:
+    asserts `onWsProxyEvent` plumbing receives both `no-match`
+    (from the /nope upgrade) and `upstream-connect`(ed) (from
+    the /ws/project/ upgrade).
+
+  No fix to the actual loop in this iteration — diagnosis was
+  the wrong layer (no logs). The harness commit triggers a new
+  deploy whose live-pipeline result is now diagnosable from
+  `flyctl logs`.
+
+  Secondary find: unrelated `projects.spec.ts` empty-state
+  test also failed in CI because the live user has accumulated
+  projects from probes. Not critical-path; deferred.
+
+- **Iter 164 — Read iter-163's live-pipeline + diagnose with logs.**
+  With WS-proxy events and sidecar Yjs/compile logs now flowing,
+  re-read the deploy's live-pipeline result + `flyctl logs -a
+  tex-center` (web) + `flyctl logs -a tex-center-sidecar`
+  (sidecar) for the spec window. The cause separates into:
+  - **No `upstream-connect` event** for the project's WS:
+    auth deny / resolver failed before producing an upstream.
+    Look for `auth-error` / `resolve-error` / `unauthorised`.
+  - **`upstream-connect` but no `upstream-connected`** within
+    the proxy's connect timeout: dial reached an unreachable
+    Machine address. Compare resolver-chosen address vs.
+    Machine's actual 6PN IP.
+  - **`upstream-connected` but no sidecar `incoming request`**:
+    pipe established to wrong address (a stale Machine still
+    listening from a previous deploy).
+  - **Sidecar `incoming request` but no `client doc-update`**:
+    Yjs frames aren't reaching the sidecar through the proxy.
+  - **`client doc-update` but no `compile ok`**: compile
+    failure inside `SupertexDaemonCompiler` (engine error /
+    spawn failure / round timeout) — error log will say which.
+  - **`compile ok` but client doesn't render**: PDF.js path
+    on apps/web's `Preview.svelte`. Browser-side bug.
+
+  Land the actual fix + regression spec covering the precise
+  failure shape. For "no sidecar incoming request" specifically,
+  also add an "existing-project edit" variant of M8.pw.4 that
+  reuses a pre-seeded fixture project owned by the live test
+  user — the seeded-fresh vs reused-existing path divergence
+  remains a known coverage hole.
+- **Iter 165+ — Save-feedback affordance.** New `SyncStatus`
   indicator in `apps/web`. Three visual states (idle/"Saved",
   in-flight/"Saving…" with 250ms tail debounce, error/"Save
   failed" persistent). Source of truth: Yjs provider sync state

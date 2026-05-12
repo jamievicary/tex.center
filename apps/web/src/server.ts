@@ -84,6 +84,14 @@ const { server } = boot({
   env: process.env,
   authoriseUpgrade,
   ...(resolveUpstream ? { resolveUpstream } : {}),
+  // Structured one-line JSON per WS-proxy lifecycle event. Lets
+  // `flyctl logs -a tex-center` show resolver/dial outcomes for
+  // every `/ws/project/<id>` upgrade — without this, every
+  // failure mode silently 502s and we have no diagnostic trail
+  // (iter 163).
+  onWsProxyEvent: (event) => {
+    console.log(JSON.stringify({ ws_proxy: event }));
+  },
 });
 
 server.on("listening", () => {

@@ -10,6 +10,7 @@ import {
   attachWsProxy,
   resolveSidecarUpstream,
   type UpstreamSource,
+  type WsProxyEvent,
 } from "./wsProxy.js";
 import type { UpgradeAuthoriser } from "./wsAuth.js";
 
@@ -26,6 +27,12 @@ export interface BootOptions {
   // (`SIDECAR_HOST` / `SIDECAR_PORT`); this is the M7.0 path.
   // M7.1.2 wires a real `createUpstreamResolver(...)` here.
   readonly resolveUpstream?: UpstreamSource;
+  // Optional observer for WS-proxy lifecycle events. Production
+  // (`server.ts`) supplies a `console.log` shim so dial failures,
+  // resolver errors, auth denials, and pre/post-connect outcomes
+  // are diagnosable from `flyctl logs`. Without this, production
+  // had zero visibility into the WS path (iter 163).
+  readonly onWsProxyEvent?: (event: WsProxyEvent) => void;
 }
 
 export interface BootResult {
@@ -42,6 +49,7 @@ export function boot(opts: BootOptions): BootResult {
     ...(opts.authoriseUpgrade
       ? { authoriseUpgrade: opts.authoriseUpgrade }
       : {}),
+    ...(opts.onWsProxyEvent ? { onEvent: opts.onWsProxyEvent } : {}),
   });
   server.listen(opts.port, opts.host);
   return { server, detachProxy };

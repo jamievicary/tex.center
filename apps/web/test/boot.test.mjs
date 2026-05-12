@@ -46,11 +46,16 @@ const handler = (req, res) => {
   res.end(`handled:${req.url}`);
 };
 
+// `onWsProxyEvent` is forwarded to the WS proxy so production
+// (`server.ts`) can log structured lifecycle events to stdout.
+// Captured here to lock the plumbing.
+const proxyEvents = [];
 const { server, detachProxy } = boot({
   handler,
   host: "127.0.0.1",
   port: 0,
   env: { SIDECAR_HOST: "127.0.0.1", SIDECAR_PORT: String(upstreamPort) },
+  onWsProxyEvent: (e) => proxyEvents.push(e),
 });
 
 await new Promise((res) => server.once("listening", res));
@@ -127,6 +132,19 @@ const listenPort = server.address().port;
   });
   assert.match(got, /HTTP\/1\.1 404/);
   sock.destroy();
+}
+
+// (4) onWsProxyEvent received events from the two upgrade attempts
+// above. The valid /ws/project/proj1 upgrade emits at minimum
+// `upstream-connect` and `upstream-connected`; the /nope upgrade
+// emits `no-match`. Lock the wiring, not the exact event sequence.
+{
+  const kinds = new Set(proxyEvents.map((e) => e.kind));
+  assert.ok(kinds.has("no-match"), `expected no-match, got ${[...kinds].join(",")}`);
+  assert.ok(
+    kinds.has("upstream-connect") || kinds.has("upstream-connected"),
+    `expected upstream-connect(ed), got ${[...kinds].join(",")}`,
+  );
 }
 
 // Teardown.

@@ -304,6 +304,8 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   async function runCompile(p: ProjectState): Promise<void> {
     await p.persistence.awaitHydrated();
     await ensureRestored(p);
+    const compileStart = Date.now();
+    app.log.info({ projectId: p.id, sourceLen: p.text.length }, "compile start");
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
     const source = p.text.toString();
     // Mirror current source to the on-disk workspace before
@@ -331,15 +333,30 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       targetPage: maxViewingPage(p),
     });
     if (!result.ok) {
+      app.log.warn(
+        { projectId: p.id, elapsedMs: Date.now() - compileStart, error: result.error },
+        "compile error",
+      );
       broadcast(
         p,
         encodeControl({ type: "compile-status", state: "error", detail: result.error }),
       );
       return;
     }
+    let bytesShipped = 0;
     for (const seg of result.segments) {
+      bytesShipped += seg.bytes.byteLength;
       broadcast(p, encodePdfSegment(seg));
     }
+    app.log.info(
+      {
+        projectId: p.id,
+        elapsedMs: Date.now() - compileStart,
+        segments: result.segments.length,
+        bytesShipped,
+      },
+      "compile ok",
+    );
     broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
   }
 
@@ -473,6 +490,10 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         }
         switch (decoded.kind) {
           case "doc-update":
+            app.log.info(
+              { projectId: project.id, updateBytes: decoded.update.byteLength },
+              "client doc-update",
+            );
             Y.applyUpdate(project.doc, decoded.update, client);
             break;
           case "control":
