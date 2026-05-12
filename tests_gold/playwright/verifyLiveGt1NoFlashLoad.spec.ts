@@ -47,22 +47,17 @@ test.describe("live no-flash editor load (GT-A)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(60_000);
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 
-    // Wait for the editor element to become attached. After
-    // iter 175 the skeleton placeholder will keep `.cm-content`
-    // out of the DOM until Yjs hydration completes, so by the
-    // time `attached` resolves the text must already contain
-    // the seed template. Use the 120s cold-start TCP-probe
-    // budget (matching `verifyLiveFullPipeline.spec.ts` per
-    // iter 180): a freshly-seeded project requires cold-starting
-    // the per-project Fly Machine before hydration can complete,
-    // and 60s was racing the tail of that envelope (iter 177
-    // and iter 180 timeouts).
+    // Warm-up has already cold-started the Machine and observed
+    // an initial pdf-segment (see `sharedLiveProject.ts`), so a
+    // fresh page-load only needs to clear connect + hydrate. 10s
+    // is comfortable for that path; a blow-out is unambiguously
+    // a hydrate-path regression rather than a cold-start tail.
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "attached", timeout: 120_000 });
+    await cmContent.waitFor({ state: "attached", timeout: 10_000 });
 
     const text = (await cmContent.textContent()) ?? "";
     // The CodeMirror DOM may collapse `\n` differently than the

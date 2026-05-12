@@ -42,23 +42,18 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M9.gold-restructure — warm-up vs per-spec timeouts (iter 197).**
-  Per `.autodev/discussion/196_question.md` + `196_answer.md`. The
-  gold suite has regressed from ~2 min to ~10–13 min because GT-3
-  and GT-5 (both RED on live) sit out their full 240s/60s polls
-  on every run — the polls were sized as cold-start absorbers,
-  not as feature assertions. Decouple: extend
-  `tests_gold/playwright/fixtures/sharedLiveProject.ts` to run a
-  one-shot warm-up after `createProject`, opening an authed
-  context and waiting up to 180_000 for an initial `pdf-segment`
-  frame on the project's WS using the existing wire-frame helper.
-  Then drop initial-frame polls in GT-1..5 to ~5_000 and
-  post-edit polls (GT-3, GT-5) to ~10_000. GT-2 stays; it now
-  re-verifies the client-side hydrate path on a fresh page after
-  warm-up has proved the server-side compile. Acceptance:
-  (a) warm-up completes inside 180s on a cold Fly Machine;
-  (b) green specs run in seconds; (c) GT-3, GT-5 still RED but
-  fail in ~10s, not ~5min.
+- **M9.gold-restructure — warm-up vs per-spec timeouts — DONE (iter 197).**
+  `sharedLiveProject` now runs a one-shot warm-up after `createProject`:
+  mints a session, opens an authed `BrowserContext`, navigates to
+  `/editor/<id>`, and waits up to 180_000 for an initial `pdf-segment`
+  frame on the project WS (filtered via the existing `TAG_PDF_SEGMENT`
+  constant), logging elapsed-ms to stderr as a cold-start metric.
+  Per-spec polls retargeted: GT-1 cmContent attach 120s→10s; GT-2/3/4/5
+  initial-frame polls 240s→5s; GT-3 post-edit poll 60s→10s; GT-5
+  `expectPreviewCanvasChanged` 60s→10s; spec `setTimeout` envelopes
+  shrunk to match. GT-2 retained as a fresh-page hydrate re-check.
+  Expectation: live GT-3 / GT-5 still RED on the iter-724 daemon
+  protocol gap (M7.4.x), but fail in ~10s instead of ~5min.
 - **M7.4.x — sidecar adapts to iter-724 daemon protocol (iter 198).**
   Deferred one iteration behind M9.gold-restructure because the
   diagnostic loop here is dominated by gold-suite wallclock; with

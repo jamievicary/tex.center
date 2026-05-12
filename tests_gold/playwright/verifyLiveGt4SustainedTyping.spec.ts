@@ -54,7 +54,7 @@ test.describe("live sustained typing (GT-D)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(420_000);
+    test.setTimeout(120_000);
 
     // Shared frame-capture helper (see `fixtures/wireFrames.ts`).
     const { pdfSegmentFrames, overlapErrors } = captureFrames(
@@ -69,13 +69,13 @@ test.describe("live sustained typing (GT-D)", () => {
     // mirrors GT-C's preamble.
     await expect
       .poll(() => pdfSegmentFrames.length, {
-        timeout: 240_000,
+        timeout: 5_000,
         message: "no initial pdf-segment for the seeded template",
       })
       .toBeGreaterThan(0);
 
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+    await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
     await authedPage.keyboard.press("Control+End");
 

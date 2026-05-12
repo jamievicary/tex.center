@@ -47,7 +47,7 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(420_000);
+    test.setTimeout(90_000);
 
     const { pdfSegmentFrames, overlapErrors } = captureFrames(
       authedPage,
@@ -62,7 +62,7 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     // pdf-segment frame arrives.
     await expect
       .poll(() => pdfSegmentFrames.length, {
-        timeout: 240_000,
+        timeout: 5_000,
         message:
           "no initial pdf-segment frame (seeded template path broken)",
       })
@@ -96,7 +96,7 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     // y-region the seeded "Hello, world!" line doesn't occupy, so
     // any non-broken re-render will pixel-diff against the initial.
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+    await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
     await authedPage.keyboard.press("Control+End");
     await authedPage.keyboard.type(EDIT_PAYLOAD, { delay: 5 });
@@ -104,7 +104,7 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     // Assert the canvas hash diverged. 60s budget covers the
     // sidecar's compile coalescer + supertex round + PDF.js paint.
     await expectPreviewCanvasChanged(authedPage, preEditHash!, {
-      timeoutMs: 60_000,
+      timeoutMs: 10_000,
     });
 
     // Sanity: no overlap error during the edit either (covered by

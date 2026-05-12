@@ -42,7 +42,7 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(360_000);
+    test.setTimeout(60_000);
 
     // Shared helper buckets pdf-segment frames and the
     // "already in flight" overlap-error control frames (see
@@ -61,7 +61,7 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     // coalescer's queued-recompile path when iter 176 lands.
     await expect
       .poll(() => pdfSegmentFrames.length, {
-        timeout: 240_000,
+        timeout: 5_000,
         message: "no initial pdf-segment frame (seeded template path broken)",
       })
       .toBeGreaterThan(0);
@@ -72,7 +72,7 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     // append avoids tripping over CodeMirror's auto-closer
     // wrappers around `{` `}`.
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+    await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
     await authedPage.keyboard.press("Control+End");
     await authedPage.keyboard.type("!", { delay: 5 });
@@ -84,7 +84,7 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     // producing a strong dual signal in failure mode.
     await expect
       .poll(() => pdfSegmentFrames.length, {
-        timeout: 60_000,
+        timeout: 10_000,
         message:
           "single-keystroke edit did not produce a fresh pdf-segment " +
           `(initial=${initialCount}, overlap errors observed=` +

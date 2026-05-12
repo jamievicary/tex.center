@@ -41,18 +41,20 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(60_000);
 
     const { pdfSegmentFrames } = captureFrames(authedPage, liveProject.id);
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 
-    // No typing — the sidecar should hydrate the seeded
-    // `main.tex` template and ship a pdf-segment frame on its
-    // own. Generous timeout for cold-start + first lualatex.
+    // Warm-up already proved the server-side compile path; this
+    // spec now re-verifies the **client-side hydrate** path on a
+    // fresh page. A pdf-segment should arrive promptly because
+    // the daemon is already warm and the seeded main.tex is
+    // unchanged. 5s is the per-spec budget per `196_answer.md`.
     await expect
       .poll(() => pdfSegmentFrames.length, {
-        timeout: 240_000,
+        timeout: 5_000,
         message:
           "no pdf-segment frame arrived for the seeded hello-world " +
           "template without user input — the initial-compile path " +
