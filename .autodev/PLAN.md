@@ -24,402 +24,238 @@ spawning, (D) auth + production polish.
       `ws`, in-memory Yjs, "viewing page N" channel, fixture
       compile loop; `packages/protocol` wire format; browser
       `WsClient` + `PdfBuffer`; `y-codemirror.next` binds CM6.
-- [~] **M3 — supertex compile path.** Real engine path today is
-      `SupertexOnceCompiler` (per-edit spawn of `supertex --once
-      --output-directory`). Streaming variant unblocked upstream
-      (discussion 71); sidecar adoption tracked as M7.5.
-      - [x] M3.0–M3.2 — Compiler interface, `ProjectWorkspace`,
-            `SupertexOnceCompiler`. _(iter 8–12, 41.)_
-      - [~] **M3.6** — `awaitPdfStable` watcher exists (iter 41)
-            but unwired; subsumed by M7.5 (`[round-done]` *is* the
-            stability signal). Watcher stays gated on compiler kind;
-            wiring happens inside M7.5.4.
 
-      Retired iter 41: `SupertexWatchCompiler`, `ShipoutSegmenter`,
-      `--help` feature detector (superseded two-flag contract).
-      `SIDECAR_COMPILER` env-var: `fixture` (dev/unit) vs `supertex`
-      (production).
+- [~] **M3 — supertex compile path.** Real engine today is
+      `SupertexOnceCompiler` (per-edit spawn of
+      `supertex --once --output-directory`). Streaming/daemon variant
+      tracked as M7.5. `SIDECAR_COMPILER` env-var: `fixture` (dev/unit)
+      vs `supertex` (production). `awaitPdfStable` watcher (iter 41)
+      stays unwired; subsumed by M7.5.4 (`[round-done]` = stability
+      signal).
 
 - [~] **M4 — Persistence.** Postgres (Drizzle) for entities;
       Tigris (S3) for blobs.
       - [x] M4.0–M4.2.2 — Schema, tables, migration loader, PGlite
             gold test, `app.db` wiring. _(iter 16–19, 23.)_
       - [~] **M4.3 — Project hydration.**
-            - [x] M4.3.0 — `packages/blobs`: `BlobStore` interface
-                  + `LocalFsBlobStore`. _(iter 24)_
+            - [x] M4.3.0 — `packages/blobs`: `BlobStore` interface +
+                  `LocalFsBlobStore`. _(iter 24)_
             - [ ] M4.3.1 — `S3BlobStore` against AWS SDK; gold-test
                   against MinIO once docker-compose lands
                   (`FUTURE_IDEAS.md`). `health()` = HeadBucket.
-            - [~] M4.3.2 — Sidecar wiring. **Source-file half done**
+            - [~] M4.3.2 — Sidecar wiring. Source-file half done
                   (iter 28–30): `buildServer` accepts `blobStore?`;
                   hydration into `Y.Text`; `writeMain` persists via
-                  `persistence.ts` gated by `canPersist` (set on
-                  hydration success). **Checkpoint persistence
-                  waits for M7.4** (no checkpoint-blob protocol
-                  yet).
+                  `persistence.ts` gated by `canPersist`. Checkpoint
+                  persistence waits for M7.4 (no checkpoint-blob
+                  protocol yet).
 
 - [x] **M5 — Auth.** Google OAuth (Auth Code + PKCE), JWKS verify,
       server-side sessions, allowlist `jamievicary@gmail.com`.
-      _(iter 32–39, 47–49.)_ Pure `packages/auth` (HMAC tokens,
-      PKCE); `apps/web` start/callback/logout routes; `hooks.
-      server.ts` injects `event.locals.session`; `/editor`
-      redirects unauth to `/`. JWKS 60s `clockTolerance`. OAuth
-      `access_denied` → `/`. Session sweeper storage primitive
-      `deleteExpiredSessions` landed iter 54; scheduling deferred
-      to FUTURE_IDEAS.
+      _(iter 32–39, 47–49.)_ Pure `packages/auth` (HMAC tokens, PKCE);
+      `apps/web` start/callback/logout routes; `hooks.server.ts`
+      injects `event.locals.session`; `/editor` redirects unauth to
+      `/`. JWKS 60s `clockTolerance`. OAuth `access_denied` → `/`.
+      Session sweeper storage primitive `deleteExpiredSessions` landed
+      iter 54; scheduling deferred to FUTURE_IDEAS.
 
 - [~] **M6 — Fly deploy: control plane.**
       - [x] M6.0–M6.2.1 — `apps/web/Dockerfile`, `fly.toml`,
             GitHub Actions deploy, `/healthz`. _(iter 42–45.)_
-      - [~] **M6.3** — Custom domain `tex.center` via Cloudflare.
-            - [x] M6.3.0 — `scripts/cloudflare-dns.mjs` reconciler.
-                  _(iter 46.)_
-            - [x] M6.3.1 — Live control-plane deploy. _(iter 73,
-                  76.)_ `tex-center` in `fra`, shared IPv4 +
-                  dedicated IPv6, Cloudflare apex reconciled, Fly
-                  cert via TLS-ALPN-01, OAuth secrets via
-                  env-first `oauthConfig.ts`. Procedure in
-                  `deploy/README.md`; probes in `deploy/VERIFY.md`.
+      - [x] M6.3 — Custom domain `tex.center` via Cloudflare.
+            `scripts/cloudflare-dns.mjs` reconciler (iter 46);
+            live deploy (iter 73, 76): `tex-center` in `fra`, shared
+            IPv4 + dedicated IPv6, Cloudflare apex reconciled, Fly
+            cert via TLS-ALPN-01, OAuth secrets via env-first
+            `oauthConfig.ts`. See `deploy/README.md` +
+            `deploy/VERIFY.md`.
 
 - [~] **M7 — Sidecar + per-project Machines.**
-      - [~] **M7.0** — Single shared sidecar Machine (deployable
-            cut so the live site compiles LaTeX).
-            - [x] M7.0.0 — `apps/sidecar/Dockerfile` multi-stage
-                  + structural test. Engine path `/opt/engine/bin`
-                  pre-baked on `$PATH`. _(iter 74)_
-            - [x] M7.0.1 — Provision patched lualatex engine.
-                  Route (b): prebuilt stripped ELF vendored at
+      - [~] **M7.0** — Single shared sidecar Machine (deployable cut
+            so the live site compiles LaTeX).
+            - [x] M7.0.0 — `apps/sidecar/Dockerfile` multi-stage +
+                  structural test. _(iter 74)_
+            - [x] M7.0.1 — Provision patched lualatex engine. Route (b):
+                  prebuilt stripped ELF vendored at
                   `vendor/engine/x86_64-linux/lualatex-incremental`
                   (7.3 MB, glibc ≤ 2.34, runs on bookworm). Runtime
-                  copies to `/opt/engine/binary`, installs wrapper
-                  `/opt/engine/bin/lualatex-incremental` (sets
-                  `TEXFORMATS`, execs `binary --fmt=lualatex`),
+                  installs wrapper `/opt/engine/bin/lualatex-incremental`,
                   dumps `lualatex.fmt` in cacheable layer.
-                  `TEXMFCNF=/etc/texmf/web2c:/usr/share/texlive/
-                  texmf-dist/web2c` set after the apt-install RUN
-                  so kpathsea finds `lualatex.ini` on the patched
-                  binary. Provenance: `jamievicary/luatex-
-                  incremental@aa053dd-dirty`; see
+                  `TEXMFCNF=/etc/texmf/web2c:/usr/share/texlive/texmf-dist/web2c`
+                  set after apt-install RUN. Provenance:
+                  `jamievicary/luatex-incremental@aa053dd-dirty`; see
                   `vendor/engine/README.md`. _(iter 75, 87–88.)_
             - [x] M7.0.2 — `apps/sidecar/fly.toml` + Fly app
-                  `tex-center-sidecar` in `fra` (6PN-only, no
-                  public IPs, port 3001). First deploy _(iter
-                  87, 93)_; image runs, ssh-probe compiles
-                  `\documentclass{article}…` to valid PDF; primary
-                  + standby machines in `fra`. Canonical deploy
-                  command in `deploy/README.md`:
+                  `tex-center-sidecar` in `fra` (6PN-only, no public
+                  IPs, port 3001). _(iter 87, 93.)_ Canonical deploy:
                   `flyctl deploy --remote-only --no-public-ips
-                  -a tex-center-sidecar --config
-                  apps/sidecar/fly.toml .` (always pass **both**
-                  `-a` and `--config`).
-            - [x] M7.0.3 — Control-plane WS proxy.
-                  - [x] M7.0.3.0 — Pure proxy module
-                        `apps/web/src/lib/server/wsProxy.ts`. Byte-
-                        level forwarder, hooks `http.Server`
-                        'upgrade', validates pathname
-                        `/^[A-Za-z0-9_-]+$/`, no `ws` dep. _(iter 94.)_
-                  - [x] M7.0.3.1 — Custom Node entry `server.ts`
-                        + `boot.ts`; built via
-                        `scripts/build-server-entry.mjs` (esbuild),
-                        `./handler.js` external; SIGTERM/SIGINT
-                        10s hard-stop. _(iter 95.)_
-                  - [x] M7.0.3.2 — Auth gating: optional
-                        `authoriseUpgrade(req)` hook on
-                        `wsProxy.ts`; rejects write 401 and destroy
-                        without dialling upstream. `wsAuth.ts`
-                        adapts `resolveSessionHook`. _(iter 96.)_
-                        Bundle gained `@tex-center/db` + drizzle
-                        (~300 KB); acceptable for MVP.
-                  - [x] M7.0.3.3 — Deploy + verify. _(iter 97.)_
-                        Live probes: `/healthz` 200; upgrade
-                        `/ws/project/smoke` (no cookie) → 401;
-                        upgrade `/ws/nope` → 404. **Happy-path
-                        (valid cookie → sidecar wake) not yet
-                        verified**: `DATABASE_URL` not set on
-                        control plane, so signed cookies still 401
-                        (`getDb()` throws, fail-closed). Wiring +
-                        live-session probe folded into M7.1.3.
+                  -a tex-center-sidecar --config apps/sidecar/fly.toml .`
+                  (always pass **both** `-a` and `--config`).
+            - [x] M7.0.3 — Control-plane WS proxy. _(iter 94–97.)_
+                  Pure proxy module `apps/web/src/lib/server/wsProxy.ts`
+                  (byte-level forwarder, hooks `http.Server` 'upgrade',
+                  validates pathname `/^[A-Za-z0-9_-]+$/`, no `ws` dep);
+                  custom Node entry `server.ts`/`boot.ts` built via
+                  `scripts/build-server-entry.mjs` (esbuild); SIGTERM/SIGINT
+                  10s hard-stop; optional `authoriseUpgrade(req)` hook
+                  (`wsAuth.ts` adapts `resolveSessionHook`); live probes
+                  pass for 401/404. Happy-path probe folded into M7.1.3.2.
 
       - [~] **M7.1** — Machines API client in the control plane:
-            spawn, wake, idle-stop, destroy. Replace the shared
-            sidecar with on-demand per-project Machines.
-            - [x] M7.1.0 — Pure-logic Fly Machines API client at
-                  `apps/web/src/lib/server/flyMachines.ts`:
-                  `MachinesClient` with `createMachine`,
-                  `getMachine`, `start/stop/destroyMachine`,
-                  `waitForState`; typed `MachineState`,
-                  `FlyApiError`; pure helpers
-                  `buildMachinesUrl`/`buildAuthHeaders`/
-                  `internalAddress`/`parseMachineState`. Default
-                  base `https://api.machines.dev/v1`; injectable
-                  `fetch`. Internal 6PN form
+            spawn, wake, idle-stop, destroy. Replace the shared sidecar
+            with on-demand per-project Machines.
+            - [x] M7.1.0 — `apps/web/src/lib/server/flyMachines.ts`:
+                  `MachinesClient` with `create/get/start/stop/destroy/
+                  waitForState`; pure helpers; internal 6PN form
                   `<id>.vm.<app>.internal`. _(iter 99.)_
-            - [x] **M7.1.1 — DB schema for project↔machine
-                  mapping.** _(iter 102.)_ Sibling table
-                  `machine_assignments` (`project_id` PK,
-                  `machine_id`, `region`, `state`, `last_seen_at`,
-                  `created_at`) was already declared in
-                  `schema.ts` + migration `0001_initial.sql`;
-                  iter 102 added the storage primitives
-                  (`upsertMachineAssignment`,
-                  `getMachineAssignmentByProjectId`,
-                  `updateMachineAssignmentState`,
-                  `deleteMachineAssignment`) in
-                  `packages/db/src/machineAssignments.ts` plus a
-                  PGlite integration test. `app_name` left
-                  ambient (env-driven on the control plane) since
-                  the MVP runs a single sidecar app
-                  (`tex-center-sidecar`); promote to a column if
-                  multi-app routing lands.
-            - [~] **M7.1.2** — Per-project upstream resolver.
-                  - [x] M7.1.2.0 — `upstreamResolver.ts`:
-                        `createUpstreamResolver({machines, store,
-                        sidecarPort, sidecarRegion, machineConfig})`
-                        returns
-                        `(projectId)→Promise<SidecarUpstream>`.
-                        State machine handles started / starting /
-                        stopped / suspended / created /
-                        stopping/suspending / terminal-recreate. In-
-                        process per-projectId promise dedup. Store
-                        adapter `dbMachineAssignmentStore(db)` wraps
-                        the iter-102 storage primitives.
-                        `WsProxyOptions.upstream` widened to
-                        `SidecarUpstream | (projectId)=>Promise<…>`;
-                        resolution runs *after* the auth gate.
-                        Resolver throw → 502 (new
-                        `resolve-error` event), upstream never
-                        dialled. `BootOptions.resolveUpstream`
-                        forwards to the proxy; fallback path is
-                        unchanged static envvar. _(iter 103.)_
-                  - [x] M7.1.2.1 — Wire `createUpstreamResolver` in
-                        `server.ts` gated on `FLY_API_TOKEN` +
-                        `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`; falls
-                        back to static envvar if absent. _(iter
-                        104.)_ Factored as
-                        `apps/web/src/lib/server/upstreamFromEnv.ts`
-                        with injectable
-                        `makeMachinesClient`/`makeStore` deps so the
-                        helper can be unit-tested without a db or
-                        the live Fly API. `MachineConfig` carries
-                        `image` from `SIDECAR_IMAGE` plus
-                        `auto_destroy: false`, `restart:
-                        on-failure`; `SIDECAR_PORT` defaults to
-                        3001, `SIDECAR_REGION` to `fra`. Stubs are
-                        not constructed when env is incomplete
-                        (otherwise missing `DATABASE_URL` would
-                        crash the fallback path at boot).
-            - [~] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets
-                  on the control plane; deploy; extend
-                  `verifyLive.spec.ts` with a happy-path
-                  authed-upgrade probe (closes the M7.0.3.3 tail).
-                  - [x] M7.1.3.0 — Migration-on-boot helper.
-                        `apps/web/src/lib/server/bootMigrations.ts`
-                        applies pending migrations during `server.ts`
-                        boot when `DATABASE_URL` is set and
-                        `RUN_MIGRATIONS_ON_BOOT=1`. Dockerfile copies
-                        `packages/db/src/migrations/` to
-                        `/app/migrations` (the default
-                        `MIGRATIONS_DIR`). _(iter 105.)_
-                  - [x] M7.1.3.1.a — Sidecar redeploy (iter 108) to
-                        pick up the iter-107 Dockerfile fix
-                        (`make … all`, `SUPERTEX_BIN=…/supertex`); new
-                        digest `sha256:cf00052c…`, `SIDECAR_IMAGE` on
-                        control plane updated via `flyctl secrets
-                        set --stage` + `flyctl secrets deploy`.
-                        ssh-probe confirmed `supertex --once` on
-                        `\documentclass{article}…` produces a 56 KB
-                        `main.pdf` end-to-end.
-                  - [x] M7.1.3.1 — Provision Fly Postgres (unmanaged,
-                        single-node `shared-cpu-1x` in `fra`), attach
-                        to `tex-center` (sets `DATABASE_URL`
-                        automatically), set `RUN_MIGRATIONS_ON_BOOT=1`,
-                        `FLY_API_TOKEN`, `SIDECAR_APP_NAME=tex-center-
-                        sidecar`, `SIDECAR_IMAGE=<digest>`, deploy.
-                        _(iter 106.)_ Cluster `tex-center-db`
-                        (machine `287d475f314128`, `fra`,
-                        `shared-cpu-1x` / 1 GB vol, flex). Attach
-                        injected `DATABASE_URL=postgres://tex_center:…
-                        @tex-center-db.flycast:5432/tex_center?
-                        sslmode=disable`. Secret-set redeployed
-                        existing image (`sha256:e035ded…`, built on
-                        iter-105 commit); boot log shows
-                        `migrations: 1 applied, 0 already present
-                        (0001_initial)`. `/healthz` 200. **Caveat**:
-                        `/healthz` is intentionally a liveness probe
-                        — no `db.state` field (per
-                        `apps/web/src/routes/healthz/+server.ts`
-                        rationale). DB readiness verified via the
-                        boot-migration log line; a `/readyz` with
-                        backing-service status is candidate work in
-                        `FUTURE_IDEAS.md`. **Token caveat**:
-                        `flyctl tokens create deploy` denied for the
-                        personal token's scope; control plane uses
-                        the personal `creds/fly.token` directly. A
-                        narrower deploy-scoped token is a hardening
-                        follow-up (`FUTURE_IDEAS.md`).
+            - [x] M7.1.1 — DB primitives for project↔machine mapping
+                  (`packages/db/src/machineAssignments.ts`) on the
+                  existing `machine_assignments` table. `app_name` left
+                  ambient (env-driven) — single sidecar app for MVP;
+                  promote to a column if multi-app routing lands.
+                  _(iter 102.)_
+            - [x] M7.1.2 — Per-project upstream resolver.
+                  - M7.1.2.0: `upstreamResolver.ts` with full state
+                    machine + per-projectId promise dedup;
+                    `WsProxyOptions.upstream` widened to factory;
+                    resolution after auth gate; resolver throw → 502.
+                    _(iter 103.)_
+                  - M7.1.2.1: wired in `server.ts` gated on
+                    `FLY_API_TOKEN` + `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`;
+                    static-envvar fallback. `upstreamFromEnv.ts` with
+                    injectable deps for unit tests. `MachineConfig`
+                    carries `auto_destroy: false`, `restart: on-failure`;
+                    `SIDECAR_PORT=3001`, `SIDECAR_REGION=fra` defaults.
+                    _(iter 104.)_
+            - [~] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets on
+                  control plane; deploy; happy-path authed probes.
+                  - [x] M7.1.3.0 — Migration-on-boot helper
+                        (`bootMigrations.ts`); Dockerfile copies
+                        `packages/db/src/migrations/` to `/app/migrations`.
+                        _(iter 105.)_
+                  - [x] M7.1.3.1 — Provision Fly Postgres (`tex-center-db`,
+                        unmanaged single-node `shared-cpu-1x` in `fra`),
+                        attached to `tex-center` (auto-set `DATABASE_URL`),
+                        secrets set (`RUN_MIGRATIONS_ON_BOOT=1`,
+                        `FLY_API_TOKEN`, `SIDECAR_APP_NAME`,
+                        `SIDECAR_IMAGE=<digest>`), deployed. Sidecar
+                        Dockerfile fixed iter 107 (`make … all`,
+                        `SUPERTEX_BIN=…/supertex`); redeployed iter 108
+                        with `sha256:cf00052c…`; ssh-probe confirms
+                        `supertex --once` produces a 56 KB `main.pdf`.
+                        _(iter 106–108.)_ **Token caveat**:
+                        `flyctl tokens create deploy` denied for personal
+                        token scope; control plane uses
+                        `creds/fly.token`. Narrower deploy-scoped token
+                        is a hardening follow-up (FUTURE_IDEAS).
                   - [~] M7.1.3.2 — Authed deploy-verification probes.
-                        - [x] M7.1.3.2.a — Rotate `SESSION_SIGNING_KEY`
-                              (live), seed live user row for
-                              `jamievicary@gmail.com`, save both to
+                        - [x] M7.1.3.2.a — Rotated `SESSION_SIGNING_KEY`
+                              (live), seeded live user row, saved to
                               `creds/{session-signing-key,live-user-id}.txt`,
-                              add `scripts/seed-live-user.mjs`. Add
-                              `verifyLiveAuthed.spec.ts` with two
-                              probes: authed GET `/projects` → 200
-                              and anon GET `/projects` → 302 to `/`.
-                              Verified live (7/7 live probes pass).
-                              _(iter 109.)_
-                        - [ ] M7.1.3.2.b — WS-upgrade-with-cookie
-                              probe asserting upgrade → 101 from a
-                              real per-project Machine. Defers until
-                              we have a cleanup path that destroys
-                              the spawned Machine (and its
-                              `machine_assignments` row) at the end
-                              of the probe so test debris doesn't
-                              accumulate. Closes M7.0.3.3 tail.
-                        - [ ] M7.1.3.2.c — Prerender bug on `/`: with
+                              added `scripts/seed-live-user.mjs` +
+                              `verifyLiveAuthed.spec.ts` (authed
+                              `/projects` 200; anon `/projects` 302 → `/`).
+                              7/7 live probes pass. _(iter 109.)_
+                        - [ ] M7.1.3.2.b — WS-upgrade-with-cookie probe
+                              asserting upgrade → 101 from a real
+                              per-project Machine. Blocked on a cleanup
+                              path that destroys the spawned Machine (and
+                              its `machine_assignments` row) at probe
+                              end. Closes M7.0.3.3 tail.
+                        - [ ] M7.1.3.2.c — Prerender bug on `/`:
                               `prerender = true; ssr = false` in
-                              `+layout.ts`, the auth-aware redirect
-                              `routeRedirect` programs for GET `/`
-                              with a session is bypassed in
-                              production (hook never runs for the
-                              prerendered static file). Local Vite
-                              dev SSRs the page and the hook fires,
-                              masking the issue. Fix: either drop
-                              prerender on `/` so SSR runs the hook,
-                              or rely on the client-side redirect
-                              from `+layout.ts` once we add one.
-                              Surfaced iter 109 while verifying
-                              M7.1.3.2.a.
-            - [ ] M7.1.4 — Idle-stop wiring on per-project Machine
-                  side; closes M7.3.
+                              `+layout.ts` causes the auth-aware redirect
+                              in `routeRedirect` for GET `/` to be
+                              bypassed in production (hook never runs
+                              for prerendered static file). Local Vite
+                              dev SSRs and masks the issue. Fix: drop
+                              prerender on `/`, or add a client-side
+                              redirect from `+layout.ts`. Surfaced iter
+                              109.
+            - [ ] M7.1.4 — Idle-stop wiring on per-project Machine side;
+                  closes M7.3.
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
       - [ ] **M7.3** — ~10-min idle auto-stop.
       - [ ] **M7.4** — Checkpoint blob protocol on the compiler
             interface; persist on idle-stop, rehydrate on wake.
             Closes M4.3.2 tail.
-      - [~] **M7.5** — Supertex `--daemon DIR` adoption. Upstream
-            mode landed (discussion 71); slotted after M7.4 so
-            checkpoint serialisation can ride the same channel.
-            - [x] M7.5.0 — Bump `vendor/supertex` submodule
-                  `69317e8 → c571420`; `make -C vendor/supertex
-                  all` builds `build/supertex` + `build/supertex_
-                  daemon`. _(iter 90.)_ Dockerfile carry-over fixed
-                  iter 107 alongside M7.5.2: `make … all`,
-                  `SUPERTEX_BIN=/opt/supertex/build/supertex`.
-            - [x] M7.5.1 — `apps/sidecar/src/compiler/daemonProtocol.ts`:
-                  `parseDaemonLine` for the four stdout line types
-                  (`[N.out]`, `[rollback K]`, `[error <reason>]`,
-                  `[round-done]`); `DaemonLineBuffer` splits chunks
-                  on `\n`, EOF-partial → violation. _(iter 91.)_
-            - [x] M7.5.2 — `SupertexDaemonCompiler` next to
-                  `SupertexOnceCompiler` (iter 107).
-                  `apps/sidecar/src/compiler/supertexDaemon.ts`:
-                  one persistent process per project, lazy spawn
-                  on first `compile()`, waits for the
+      - [~] **M7.5** — Supertex `--daemon DIR` adoption. Upstream mode
+            landed (discussion 71); slotted after M7.4 so checkpoint
+            serialisation can ride the same channel.
+            - [x] M7.5.0 — Bump `vendor/supertex` to `c571420`;
+                  `build/supertex` + `build/supertex_daemon`. _(iter 90.)_
+            - [x] M7.5.1 — `daemonProtocol.ts`: `parseDaemonLine` for the
+                  four stdout line types (`[N.out]`, `[rollback K]`,
+                  `[error <reason>]`, `[round-done]`); `DaemonLineBuffer`
+                  splits chunks on `\n`, EOF-partial → violation.
+                  _(iter 91.)_
+            - [x] M7.5.2 — `SupertexDaemonCompiler`
+                  (`supertexDaemon.ts`): persistent process per project,
+                  lazy spawn on first `compile()`, waits for
                   `supertex: daemon ready` stderr marker, writes
-                  `recompile,<N|end>\n` per round, collects events
-                  via `DaemonLineBuffer`, assembles chunk files
-                  `0.out…K.out` from `<workDir>/chunks/` into a
+                  `recompile,<N|end>\n`, assembles chunk files into a
                   single PDF segment. `close()` is stdin EOF →
-                  `gracefulTimeoutMs` (5s) → SIGTERM →
-                  `killTimeoutMs` (2s) → SIGKILL. `[error reason]`
-                  → `CompileFailure` (`supertex daemon error: …`).
-                  Protocol violation → kill child + surface raw
-                  line. Concurrent `compile()` calls reject.
+                  `gracefulTimeoutMs` (5s) → SIGTERM → `killTimeoutMs`
+                  (2s) → SIGKILL. Concurrent `compile()` calls reject.
                   Gated behind `SIDECAR_COMPILER=supertex-daemon`;
-                  production default `supertex` (once-compiler)
-                  unchanged. Tests:
-                  `apps/sidecar/test/supertexDaemonCompiler.test.mjs`
-                  (9 cases against a fake daemon).
-            - [ ] M7.5.3 — `[error <reason>]` → new
-                  `compile-status:error` wire frame in
-                  `packages/protocol`; surface in editor UI.
-            - [ ] M7.5.4 — Gate `PdfStabilityWatcher` on compiler
-                  kind (once-path keeps it; daemon uses
-                  `[round-done]`).
-            - [ ] M7.5.5 — Integration tests (initial compile,
-                  recompile, rollback, error-recovery, clean
-                  shutdown); flip `SIDECAR_COMPILER` default to
-                  `supertex-daemon` only after this suite is green.
+                  production default `supertex` unchanged. _(iter 107.)_
+            - [ ] M7.5.3 — `[error <reason>]` → new `compile-status:error`
+                  wire frame in `packages/protocol`; surface in editor UI.
+            - [ ] M7.5.4 — Gate `PdfStabilityWatcher` on compiler kind
+                  (once-path keeps it; daemon uses `[round-done]`).
+            - [ ] M7.5.5 — Integration tests (initial compile, recompile,
+                  rollback, error-recovery, clean shutdown); flip
+                  `SIDECAR_COMPILER` default to `supertex-daemon` only
+                  after this suite is green.
 
 - [~] **M8 — Acceptance pass + Playwright (pulled forward).**
       - [x] M8.pw.0 — Playwright skeleton. _(iter 78.)_
-            `tests_gold/setup_playwright.sh` (DrvFs-aware install
-            to `~/.cache/tex-center-pw/`), `playwright.config.ts`
-            with `local`/`live` projects, `landing.spec.ts`,
-            Python wrapper `test_playwright.py` that gates `live`
-            on `TEXCENTER_LIVE_TESTS=1`.
+            `tests_gold/setup_playwright.sh` (DrvFs-aware install to
+            `~/.cache/tex-center-pw/`), `playwright.config.ts` with
+            `local`/`live` projects, Python wrapper gates `live` on
+            `TEXCENTER_LIVE_TESTS=1`.
       - [x] M8.pw.1 — Session-cookie injection + authed surface.
-            _(iter 79, 82–86.)_ `mintSession` helper inserts row +
-            signs `tc_session` cookie (default TTL 300s);
-            `flyProxy.ts` spawns `flyctl proxy` with four
-            distinct-failure-mode error paths; `authedPage`
-            fixture branches on project name; `local` target uses
-            PGlite-over-TCP via `@electric-sql/pglite-socket`
-            (`maxConnections: 16` workaround — default is 1, not
-            100 as JSDoc claims); Playwright `globalSetup` boots
-            PGlite *and* spawns dev server itself (top-level
-            `webServer` block removed iter 86 — env was being set
-            after webServer launch). First wave: `authedHome`,
-            `projects`, `editor`, `signout`. Editor 404-for-
-            stranger case deferred to pw.2 (`+layout.ts` sets
-            `ssr=false`).
-      - [x] M8.pw.2 — Deploy-iteration verification. _(iter 98.)_
-            `verifyLive.spec.ts` encodes the five `VERIFY.md`
-            probes (healthz, `/` HTML, OAuth start 302, WS 401,
-            WS 404); self-skips when project ≠ `live`; WS probes
-            use Node's `https.request` directly. Canonical:
+            _(iter 79, 82–86.)_ `mintSession` helper; `flyProxy.ts`
+            spawns `flyctl proxy`; `authedPage` fixture; `local` uses
+            PGlite-over-TCP (`maxConnections: 16` workaround).
+            Playwright `globalSetup` boots PGlite + dev server.
+      - [x] M8.pw.2 — Deploy-iteration verification.
+            `verifyLive.spec.ts` encodes the five `VERIFY.md` probes;
+            WS probes use Node's `https.request`. Canonical:
             `TEXCENTER_LIVE_TESTS=1 bash tests_gold/run_tests.sh`.
-      - [ ] **M8.acceptance** — Walk the seven `GOAL.md`
-            acceptance criteria end-to-end on prod, fix gaps.
-            Real OAuth consent-screen driving stays out of scope
-            (HTTP-handshake check + cookie-injection authed tests
-            cover the same surface).
+            _(iter 98.)_
+      - [ ] **M8.acceptance** — Walk the seven `GOAL.md` acceptance
+            criteria end-to-end on prod, fix gaps. Real OAuth
+            consent-screen driving stays out of scope (HTTP-handshake
+            check + cookie-injection authed tests cover the same
+            surface).
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.2.c (fix prerender bug on `/`)
-or M7.1.3.2.b (WS-upgrade-with-cookie probe + Machine cleanup).
-Both are tractable; M7.1.3.2.c is the smaller one (drop
-`prerender = true` on `/` so the session-redirect hook fires in
-production). After that: M7.1.4 (idle-stop wiring on the
-per-project Machine side), then M7.5.3 (`compile-status:error` wire
-frame on the heels of M7.5.2).
-
-Iter 109 closed M7.1.3.2.a: rotated `SESSION_SIGNING_KEY` on
-`tex-center`, seeded the live user row (`scripts/seed-live-user.mjs`),
-saved both to `creds/`, added `verifyLiveAuthed.spec.ts`, and
-verified end-to-end (`TEXCENTER_LIVE_TESTS=1 …
-bash tests_gold/run_tests.sh` → 7/7 live probes green). See
-`deploy/README.md#live-playwright-probes` for the env-var
-invocation.
+**Next ordinary iteration:** M7.1.3.2.c (fix prerender bug on `/`) is
+the smaller pick (drop `prerender = true` on `/` so the
+session-redirect hook fires in production). M7.1.3.2.b
+(WS-upgrade-with-cookie probe + Machine cleanup) is the alternative.
+After that: M7.1.4 (idle-stop wiring on per-project Machine side),
+then M7.5.3 (`compile-status:error` wire frame on the heels of M7.5.2).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7.4).
 
-Closed in-tree slices (consult `git log` / `.autodev/logs/` for
-detail): multi-file project (iter 55–60), file-tree CRUD
-(iter 61–66), `file-op-error` protocol (iter 64–65), project-row
-storage primitives (iter 67), `/projects` dashboard + per-project
-`/editor/[projectId]` routing (iter 68), strict sidecar `projectId`
-validation (iter 69).
-
 ## Live caveats
 
-- `SIDECAR_COMPILER=supertex` (once-compiler) is the only real
-  engine path today; daemon-mode (M7.5) deferred behind M7.0.
-- `app.db` only powers `/healthz` (`SELECT 1`, reports
-  `db: { state }`). Same endpoint reports `blobs: { state }`
-  via `BlobStore.health()`; future S3 adapter must implement it.
-- Persistence is one-shot per session: permanent blob outage
-  means edits this process are never persisted. Acceptable in
-  the per-project Machine model where Machines cycle frequently.
-- ~~Control plane `DATABASE_URL` not yet set: authed WS upgrade
-  collapses to 401 fail-closed.~~ Set iter 106 (Fly Postgres
-  `tex-center-db` attached); auth queries now live. Happy-path
-  upgrade probe still pending (M7.1.3.2).
+- `SIDECAR_COMPILER=supertex` (once-compiler) is the only real engine
+  path today; daemon-mode (M7.5) gated on M7.5.5.
+- `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
+  Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
+  future S3 adapter must implement it. `/healthz` is intentionally a
+  liveness probe (no backing-service status) — `/readyz` candidate in
+  FUTURE_IDEAS.
+- Persistence is one-shot per session: permanent blob outage means
+  edits this process are never persisted. Acceptable in the
+  per-project Machine model where Machines cycle frequently.
 
 ## Local toolchain
 
@@ -429,38 +265,34 @@ Node 20.18.1 auto-provisioned per-checkout into `.tools/node/`
 typecheck`. pnpm via corepack at the version pinned in root
 `package.json#packageManager`.
 
-**DrvFs (/mnt/c) workaround.** WSL2 mounts of the Windows
-filesystem can't host pnpm's atomic-rename install reliably
-(Windows file watchers hold transient handles → `EACCES`,
-half-extracted `_tmp_*` dirs). `setup_node.sh` detects `/mnt/*`
-checkouts, stashes `node_modules/` under
-`~/.cache/tex-center-nm/<sha1-of-checkout-path>/node_modules`
-(ext4), and symlinks back. `node-linker=hoisted` (in repo
-`.npmrc`) keeps the layout flat enough for Node's resolver to
-walk the realpath correctly.
+**DrvFs (/mnt/c) workaround.** WSL2 mounts of the Windows filesystem
+can't host pnpm's atomic-rename install reliably. `setup_node.sh`
+detects `/mnt/*` checkouts, stashes `node_modules/` under
+`~/.cache/tex-center-nm/<sha1-of-checkout-path>/node_modules` (ext4),
+and symlinks back. `node-linker=hoisted` (in repo `.npmrc`) keeps the
+layout flat enough for Node's resolver to walk the realpath correctly.
 
 ## Open questions / risks
 
-- **Checkpoint blob size and Tigris round-trip.** Cold-start
-  Machine must restore in seconds for the second-visit UX.
-  Measure early in M7.4.
-- **Fly Machine cold start vs the 100s-of-ms target.** Latency
-  goal applies once warm; cold start needs a UI affordance.
-- **Yjs for single-user MVP** is over-engineered, but rewriting
-  for collab later is worse. Keeping it.
+- **Checkpoint blob size and Tigris round-trip.** Cold-start Machine
+  must restore in seconds for the second-visit UX. Measure early in M7.4.
+- **Fly Machine cold start vs the 100s-of-ms target.** Latency goal
+  applies once warm; cold start needs a UI affordance.
+- **Yjs for single-user MVP** is over-engineered, but rewriting for
+  collab later is worse. Keeping it.
 - **Test strategy.** `tests_normal/` = fast unit + type checks;
-  `tests_gold/` = end-to-end (Playwright in M8) and
-  real-supertex compile tests. Gold needs a docker-compose
-  bring-up for the S3 path (`FUTURE_IDEAS.md`).
+  `tests_gold/` = end-to-end (Playwright) + real-supertex compile
+  tests. Gold needs a docker-compose bring-up for the S3 path
+  (FUTURE_IDEAS).
 
 ## Candidate supertex (upstream) work
 
 PRs against `github.com/jamievicary/supertex`.
 
-1. ~~`--daemon DIR` mode.~~ **Landed upstream** (discussion 71).
-   Sidecar adoption tracked as M7.5. Stdout protocol is four line
-   types — `[N.out]`, `[rollback K]`, `[error <reason>]`,
-   `[round-done]`; EOF on stdin = clean-shutdown signal.
-   `[error <reason>]` is additive vs. original sketch → new
-   `compile-status:error` wire frame (M7.5.3).
+1. ~~`--daemon DIR` mode.~~ **Landed upstream** (discussion 71). Sidecar
+   adoption tracked as M7.5. Stdout protocol: four line types —
+   `[N.out]`, `[rollback K]`, `[error <reason>]`, `[round-done]`;
+   EOF on stdin = clean-shutdown signal. `[error <reason>]` is
+   additive vs original sketch → new `compile-status:error` wire
+   frame (M7.5.3).
 2. **Checkpoint serialise/restore to a single blob.** (M7.4)
