@@ -80,6 +80,31 @@ Remaining slices:
   acked by sidecar persistence (NOT per-keystroke). Local +
   live Playwright variants.
 
+**Edit→preview regression (iter 188).** User-visible bug: PDF
+preview never reflects source edits despite `pdf-segment` frames
+arriving over the wire. Root cause (188_answer.md, hypothesis-
+ranked): upstream supertex `--daemon` rollback no-ops when
+`process_event` finds no usable checkpoint, the sidecar's
+`assembleSegment` directory-scan fallback then re-ships stale
+chunks as a fresh segment. Iter 188 landed:
+- GT-5 (`verifyLiveGt5EditUpdatesPreview.spec.ts`) — pixel-hash
+  diff over the preview canvas, locked in
+  `test_editor_ux_gold_specs.py`.
+- `snapshotPreviewCanvasHash` + `expectPreviewCanvasChanged` in
+  `fixtures/previewCanvas.ts`.
+- `wsClientPdfSegmentIdentity.test.mjs` — locks the snapshot
+  identity invariant (closes hypothesis 3 by construction).
+Remaining (next iteration target):
+- **Sidecar fallback fix**: remove or guard
+  `assembleSegment`'s `maxShipout < 0` directory-scan fallback so
+  a no-op recompile emits no `pdf-segment` frame. Makes the
+  upstream bug visible to the user (`compiling…` toast resolves
+  without a preview update) instead of papering over it.
+- **Upstream supertex fix** (M7.4.x): ensure `process_event`
+  finds a rollback target for the post-initial-compile edit
+  case. PR upstream once sidecar diagnostics make the failure
+  mode reproducible against the live deploy.
+
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
 `aggregateKey` within 500ms re-arms TTL and bumps `count`.

@@ -22,6 +22,7 @@ GT_A = SPEC_DIR / "verifyLiveGt1NoFlashLoad.spec.ts"
 GT_B = SPEC_DIR / "verifyLiveGt2InitialPdfSeeded.spec.ts"
 GT_C = SPEC_DIR / "verifyLiveGt3EditTriggersFreshPdf.spec.ts"
 GT_D = SPEC_DIR / "verifyLiveGt4SustainedTyping.spec.ts"
+GT_E = SPEC_DIR / "verifyLiveGt5EditUpdatesPreview.spec.ts"
 
 # Iter 183 consolidated the duplicated WS-frame capture and
 # bounded canvas-painted poll into these shared fixture modules.
@@ -33,8 +34,8 @@ PREVIEW_CANVAS = SPEC_DIR / "fixtures" / "previewCanvas.ts"
 
 
 class TestGoldSpecsExist(unittest.TestCase):
-    def test_all_four_files_present(self) -> None:
-        for p in (GT_A, GT_B, GT_C, GT_D):
+    def test_all_files_present(self) -> None:
+        for p in (GT_A, GT_B, GT_C, GT_D, GT_E):
             self.assertTrue(p.is_file(), f"missing gold spec: {p}")
 
 
@@ -70,6 +71,9 @@ class TestLiveGating(unittest.TestCase):
 
     def test_gt_d_gated(self) -> None:
         self._check_one(GT_D)
+
+    def test_gt_e_gated(self) -> None:
+        self._check_one(GT_E)
 
 
 class TestGtANoFlashLoad(unittest.TestCase):
@@ -216,6 +220,93 @@ class TestGtDSustainedTyping(unittest.TestCase):
         # delay the keystrokes batch into a single Yjs update and
         # the test no longer exercises the coalescer.
         self.assertRegex(self.text, r"delay:\s*30")
+
+
+class TestGtEEditUpdatesPreview(unittest.TestCase):
+    """Invariant (per `188_question.md` slice A): GT-5 snapshots
+    the preview canvas hash before an edit, types a visually
+    distinctive payload, then asserts the post-edit canvas hash
+    differs from the pre-edit hash. Catches the iter-188
+    regression class where `pdf-segment` frames arrive carrying
+    byte-identical PDF bytes (sidecar `assembleSegment` dir-scan
+    fallback re-emitting stale chunks).
+    """
+
+    def setUp(self) -> None:
+        self.text = GT_E.read_text()
+
+    def test_snapshots_canvas_before_edit(self) -> None:
+        # The pre-edit snapshot is the load-bearing primitive; if
+        # a future iter removes it the spec degenerates to "edit
+        # produced *some* frame", which the GT-C/D pair already
+        # covers.
+        self.assertIn("snapshotPreviewCanvasHash(", self.text)
+        self.assertIn("preEditHash", self.text)
+
+    def test_asserts_canvas_changed_after_edit(self) -> None:
+        # The change assertion. `expectPreviewCanvasChanged` is the
+        # bounded-poll primitive in `fixtures/previewCanvas.ts`.
+        self.assertIn("expectPreviewCanvasChanged(", self.text)
+
+    def test_types_distinctive_payload(self) -> None:
+        # A `\section{...}` payload forces a heading-sized block of
+        # ink in a different y-region than the seeded line — any
+        # non-broken re-render pixel-diffs against the original.
+        # If a future iter swaps in `keyboard.type("a")`, the spec
+        # could pass with a font-anti-aliasing-level diff but miss
+        # the regression class.
+        self.assertIn("\\\\section{", self.text)
+
+    def test_uses_shared_helpers(self) -> None:
+        self.assertIn(
+            'from "./fixtures/previewCanvas.js"',
+            self.text,
+        )
+        self.assertIn(
+            'from "./fixtures/wireFrames.js"',
+            self.text,
+        )
+
+
+class TestPreviewCanvasChangedHelper(unittest.TestCase):
+    """`fixtures/previewCanvas.ts` exposes the snapshot + change-
+    detection primitives consumed by GT-5. Lock the shape so a
+    future iter doesn't drift the helper to a weaker form (e.g.
+    single-shot evaluate, missing null-on-mid-render handling).
+    """
+
+    def setUp(self) -> None:
+        self.text = PREVIEW_CANVAS.read_text()
+
+    def test_exports_snapshot_hash(self) -> None:
+        self.assertRegex(
+            self.text,
+            r"export\s+async\s+function\s+snapshotPreviewCanvasHash\s*\(",
+        )
+
+    def test_exports_expect_changed(self) -> None:
+        self.assertRegex(
+            self.text,
+            r"export\s+async\s+function\s+expectPreviewCanvasChanged\s*\(",
+        )
+
+    def test_changed_uses_bounded_poll(self) -> None:
+        # Same anti-flake shape as expectPreviewCanvasPainted: the
+        # change check must re-snapshot inside the poll (handles
+        # incremental re-render replacing the canvas element) and
+        # tolerate per-tick nulls.
+        self.assertIn("expect", self.text)
+        self.assertRegex(
+            self.text,
+            r"expectPreviewCanvasChanged[\s\S]{0,2000}\.poll\(",
+        )
+
+    def test_snapshot_hash_is_sha256(self) -> None:
+        # The fingerprint shape. Documenting it here so a future
+        # iter can't quietly downgrade to a perceptual hash without
+        # tripping a regression-lock — that's a meaningful semantic
+        # change (188_answer.md Q1).
+        self.assertIn("sha256", self.text)
 
 
 class TestWireFramesHelper(unittest.TestCase):

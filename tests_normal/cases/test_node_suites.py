@@ -176,6 +176,15 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_ws_client_debug_events(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "wsClientDebugEvents.test.mjs")
 
+    def test_web_ws_client_pdf_segment_identity(self) -> None:
+        _run_tsx(
+            ROOT
+            / "apps"
+            / "web"
+            / "test"
+            / "wsClientPdfSegmentIdentity.test.mjs"
+        )
+
     def test_web_debug_toasts_toggle(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "debugToastsToggle.test.mjs")
 
