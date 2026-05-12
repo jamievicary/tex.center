@@ -50,6 +50,7 @@ import {
   defaultBlobStoreFromEnv,
   loadCheckpoint,
   persistCheckpoint,
+  type FileOpResult,
   type ProjectPersistence,
 } from "./persistence.js";
 
@@ -423,16 +424,15 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       function handleFileOp(
         op: FileOp,
         details: Record<string, unknown>,
-        promise: Promise<{ reason: string } | Record<string, unknown>>,
+        promise: Promise<FileOpResult>,
       ): void {
         void promise.then((res) => {
-          const reason = (res as { reason?: string }).reason;
-          if (reason !== undefined) {
+          if (!res.ok) {
             app.log.warn(
-              { ...details, reason, projectId: project.id },
+              { ...details, reason: res.reason, projectId: project.id },
               `${op} rejected`,
             );
-            client.send(encodeControl({ type: "file-op-error", op, reason }));
+            client.send(encodeControl({ type: "file-op-error", op, reason: res.reason }));
             return;
           }
           broadcast(

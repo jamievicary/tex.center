@@ -28,7 +28,6 @@
   from a GitHub Action and `curl` them in. Reproducibility goal:
   `sha256sum` the bin matches between a clean rebuild and
   what's in the repo.
-- **Unify file-op persistence return types** to `{ ok: true } | { ok: false; reason }` so `server.ts`'s `handleFileOp` (iter 70) drops its `Record<string, unknown>` cast.
 - **Session sweeper scheduling.** Storage primitive
   `deleteExpiredSessions(db, now)` landed iter 54; wire it to a
   periodic caller (cron, on-boot pass, or admin route) when one

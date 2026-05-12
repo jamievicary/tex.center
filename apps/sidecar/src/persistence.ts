@@ -136,6 +136,13 @@ export async function listProjectFiles(
   return out;
 }
 
+/**
+ * Result of a mutating file-op (`addFile` / `deleteFile` /
+ * `renameFile`). Uniform shape so `server.ts` can branch on
+ * `result.ok` without per-op casts.
+ */
+export type FileOpResult = { ok: true } | { ok: false; reason: string };
+
 export interface ProjectPersistence {
   /** Resolves once initial hydration has settled (success or failure). */
   awaitHydrated(): Promise<void>;
@@ -165,14 +172,11 @@ export interface ProjectPersistence {
    * Used by both the empty-create path (`create-file`) and the
    * upload-from-disk path (`upload-file`).
    *
-   * Returns `{ added: true }` on success, otherwise
-   * `{ added: false, reason }` with a short human-readable reason.
+   * Returns `{ ok: true }` on success, otherwise
+   * `{ ok: false, reason }` with a short human-readable reason.
    * The in-memory `knownFiles` set is only mutated on success.
    */
-  addFile(
-    name: string,
-    content?: string,
-  ): Promise<{ added: true } | { added: false; reason: string }>;
+  addFile(name: string, content?: string): Promise<FileOpResult>;
   /**
    * Delete a project file. Rejects `MAIN_DOC_NAME` (never removable;
    * the project always has a main entry) and any name not currently
@@ -182,11 +186,11 @@ export interface ProjectPersistence {
    * when the blob store is wired and hydration succeeded — deletes
    * the blob.
    *
-   * Returns `{ deleted: true }` on success, otherwise
-   * `{ deleted: false, reason }`. The in-memory state is only
-   * mutated on success.
+   * Returns `{ ok: true }` on success, otherwise
+   * `{ ok: false, reason }`. The in-memory state is only mutated
+   * on success.
    */
-  deleteFile(name: string): Promise<{ deleted: true } | { deleted: false; reason: string }>;
+  deleteFile(name: string): Promise<FileOpResult>;
   /**
    * Rename a project file. Rejects renaming `MAIN_DOC_NAME` (out)
    * and renaming any file to `MAIN_DOC_NAME` (in), any `oldName`
@@ -201,10 +205,7 @@ export interface ProjectPersistence {
    * (logged, but the rename still succeeds — the in-memory truth
    * has moved on).
    */
-  renameFile(
-    oldName: string,
-    newName: string,
-  ): Promise<{ renamed: true } | { renamed: false; reason: string }>;
+  renameFile(oldName: string, newName: string): Promise<FileOpResult>;
 }
 
 export function createProjectPersistence(args: {
@@ -225,8 +226,8 @@ export function createProjectPersistence(args: {
       files: () => Array.from(memFiles).sort(),
       async addFile(name, content) {
         const reason = validateProjectFileName(name);
-        if (reason) return { added: false, reason };
-        if (memFiles.has(name)) return { added: false, reason: "already exists" };
+        if (reason) return { ok: false, reason };
+        if (memFiles.has(name)) return { ok: false, reason: "already exists" };
         if (content && content.length > 0) {
           doc.transact(() => {
             const t = doc.getText(name);
@@ -234,23 +235,23 @@ export function createProjectPersistence(args: {
           });
         }
         memFiles.add(name);
-        return { added: true };
+        return { ok: true };
       },
       async deleteFile(name) {
-        if (name === MAIN_DOC_NAME) return { deleted: false, reason: "cannot delete main" };
-        if (!memFiles.has(name)) return { deleted: false, reason: "no such file" };
+        if (name === MAIN_DOC_NAME) return { ok: false, reason: "cannot delete main" };
+        if (!memFiles.has(name)) return { ok: false, reason: "no such file" };
         const t = doc.getText(name);
         if (t.length > 0) t.delete(0, t.length);
         memFiles.delete(name);
-        return { deleted: true };
+        return { ok: true };
       },
       async renameFile(oldName, newName) {
-        if (oldName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot rename main" };
-        if (newName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot overwrite main" };
-        if (!memFiles.has(oldName)) return { renamed: false, reason: "no such file" };
+        if (oldName === MAIN_DOC_NAME) return { ok: false, reason: "cannot rename main" };
+        if (newName === MAIN_DOC_NAME) return { ok: false, reason: "cannot overwrite main" };
+        if (!memFiles.has(oldName)) return { ok: false, reason: "no such file" };
         const reason = validateProjectFileName(newName);
-        if (reason) return { renamed: false, reason };
-        if (memFiles.has(newName)) return { renamed: false, reason: "already exists" };
+        if (reason) return { ok: false, reason };
+        if (memFiles.has(newName)) return { ok: false, reason: "already exists" };
         const oldText = doc.getText(oldName);
         const contents = oldText.toString();
         doc.transact(() => {
@@ -260,7 +261,7 @@ export function createProjectPersistence(args: {
         });
         memFiles.delete(oldName);
         memFiles.add(newName);
-        return { renamed: true };
+        return { ok: true };
       },
     };
   }
@@ -317,10 +318,10 @@ export function createProjectPersistence(args: {
   return {
     awaitHydrated: () => hydrated,
     files: () => Array.from(knownFiles).sort(),
-    async addFile(name, content): Promise<{ added: true } | { added: false; reason: string }> {
+    async addFile(name, content): Promise<FileOpResult> {
       const reason = validateProjectFileName(name);
-      if (reason) return { added: false, reason };
-      if (knownFiles.has(name)) return { added: false, reason: "already exists" };
+      if (reason) return { ok: false, reason };
+      if (knownFiles.has(name)) return { ok: false, reason: "already exists" };
       const body = content ?? "";
       if (canPersist) {
         try {
@@ -334,7 +335,7 @@ export function createProjectPersistence(args: {
             { err: e instanceof Error ? e.message : String(e), projectId },
             `blob create failed for ${name}`,
           );
-          return { added: false, reason: "blob create failed" };
+          return { ok: false, reason: "blob create failed" };
         }
       }
       if (body.length > 0) {
@@ -344,11 +345,11 @@ export function createProjectPersistence(args: {
         });
       }
       knownFiles.add(name);
-      return { added: true };
+      return { ok: true };
     },
-    async deleteFile(name): Promise<{ deleted: true } | { deleted: false; reason: string }> {
-      if (name === MAIN_DOC_NAME) return { deleted: false, reason: "cannot delete main" };
-      if (!knownFiles.has(name)) return { deleted: false, reason: "no such file" };
+    async deleteFile(name): Promise<FileOpResult> {
+      if (name === MAIN_DOC_NAME) return { ok: false, reason: "cannot delete main" };
+      if (!knownFiles.has(name)) return { ok: false, reason: "no such file" };
       if (canPersist) {
         try {
           await blobStore.delete(`${projectFilesDir(projectId)}/${name}`);
@@ -357,22 +358,22 @@ export function createProjectPersistence(args: {
             { err: e instanceof Error ? e.message : String(e), projectId },
             `blob delete failed for ${name}`,
           );
-          return { deleted: false, reason: "blob delete failed" };
+          return { ok: false, reason: "blob delete failed" };
         }
       }
       const t = doc.getText(name);
       if (t.length > 0) t.delete(0, t.length);
       knownFiles.delete(name);
       persistedByName.delete(name);
-      return { deleted: true };
+      return { ok: true };
     },
-    async renameFile(oldName, newName): Promise<{ renamed: true } | { renamed: false; reason: string }> {
-      if (oldName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot rename main" };
-      if (newName === MAIN_DOC_NAME) return { renamed: false, reason: "cannot overwrite main" };
-      if (!knownFiles.has(oldName)) return { renamed: false, reason: "no such file" };
+    async renameFile(oldName, newName): Promise<FileOpResult> {
+      if (oldName === MAIN_DOC_NAME) return { ok: false, reason: "cannot rename main" };
+      if (newName === MAIN_DOC_NAME) return { ok: false, reason: "cannot overwrite main" };
+      if (!knownFiles.has(oldName)) return { ok: false, reason: "no such file" };
       const reason = validateProjectFileName(newName);
-      if (reason) return { renamed: false, reason };
-      if (knownFiles.has(newName)) return { renamed: false, reason: "already exists" };
+      if (reason) return { ok: false, reason };
+      if (knownFiles.has(newName)) return { ok: false, reason: "already exists" };
       const oldText = doc.getText(oldName);
       const contents = oldText.toString();
       const dir = projectFilesDir(projectId);
@@ -384,7 +385,7 @@ export function createProjectPersistence(args: {
             { err: e instanceof Error ? e.message : String(e), projectId },
             `blob rename PUT failed for ${newName}`,
           );
-          return { renamed: false, reason: "blob create failed" };
+          return { ok: false, reason: "blob create failed" };
         }
         try {
           await blobStore.delete(`${dir}/${oldName}`);
@@ -408,7 +409,7 @@ export function createProjectPersistence(args: {
       });
       knownFiles.delete(oldName);
       knownFiles.add(newName);
-      return { renamed: true };
+      return { ok: true };
     },
     async maybePersist(): Promise<void> {
       if (!canPersist) return;
