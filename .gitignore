@@ -58,3 +58,10 @@ Thumbs.db
 # Autodev internal state — keep out of the product repo
 autodev/
 /autodev/
+
+# Operator-level stop signal: created (or removed) by the human to
+# pause/resume the loop. Kept out of git so it (a) survives the
+# harness's clean-on-timeout-revert path and (b) doesn't pollute
+# project history with ephemeral control state.
+/.autodev/finished.md
+/.autodev/iterate.out

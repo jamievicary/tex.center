@@ -64,14 +64,16 @@ Estimated iteration sequence (adjust as work unfolds):
   Case 4 asserts the 502 + the `upstream-error` event. **Live
   cutover deliberately deferred to iter 150** so the wallclock
   isn't at risk a second time.
-- **Iter 150 — Live cutover.** When this commit lands, the
-  paths-based CD trigger (`apps/sidecar/**`) will rebuild the
-  sidecar image and publish a fresh sha — the control plane will
-  not pick it up automatically because `SIDECAR_IMAGE` is still
-  pinned to the old sha. Steps:
-  (1) wait for / fetch the post-merge sidecar sha from the CD
-  workflow run (or `flyctl image show -a tex-center-sidecar`
-  after the workflow); (2) `flyctl secrets set
+- **Iter 150 — Discussion-mode (leaked-subprocess wedge from
+  iter 148).** *Done.* Answered `150_question.md`; no engineering.
+  Renumbered the cutover + activation slices below.
+- **Iter 151 — Live cutover.** When iter 149 landed, the
+  paths-based CD trigger (`apps/sidecar/**`) rebuilt the
+  sidecar image at a fresh sha — the control plane will not pick
+  it up automatically because `SIDECAR_IMAGE` is still pinned to
+  the old sha. Steps:
+  (1) `flyctl image show -a tex-center-sidecar` (one-shot) for
+  the latest sha; (2) `flyctl secrets set
   SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:<new>
   -a tex-center`; (3) `flyctl machines list -a
   tex-center-sidecar` and `flyctl machines destroy --force
@@ -83,13 +85,21 @@ Estimated iteration sequence (adjust as work unfolds):
   take ~80 s while the new Machine image pull + tsx warm-up
   complete (FUTURE_IDEAS: pre-warm or longer
   `connectTimeoutMs`).
-- **Iter 151 — Activate M8.pw.4 as a hard deploy gate.** Provision
+
+  **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
+  invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
+  or any daemon-style command via Bash without `timeout
+  --kill-after=2 Ns …` wrapping, or `run_in_background:true`
+  paired with an explicit kill before iteration end. Never pipe
+  such a command into a downstream that waits for EOF (`… | tail
+  -N`, `… | head`). That pipeline shape is what wedged iter 148.
+- **Iter 152 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 151 passes green automatically, the freezes above may
+After iter 152 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state
