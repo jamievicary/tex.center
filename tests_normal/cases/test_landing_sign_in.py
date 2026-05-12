@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PAGE = ROOT / "apps" / "web" / "src" / "routes" / "+page.svelte"
+PAGE_TS = ROOT / "apps" / "web" / "src" / "routes" / "+page.ts"
 START_ROUTE = ROOT / "apps" / "web" / "src" / "routes" / "auth" / "google" / "start" / "+server.ts"
 
 
@@ -56,6 +57,20 @@ class TestLandingSignIn(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", without_comments)
         visible = " ".join(text.split())
         self.assertEqual(visible, "Sign in with Google")
+
+    def test_prerender_disabled(self) -> None:
+        # `routeRedirect` in `hooks.server.ts` bounces authenticated
+        # GETs of `/` to `/projects`. A prerendered static HTML file
+        # is served by the edge without invoking the hook, so an
+        # authed user would land on the sign-in page in production
+        # (local Vite dev SSRs unconditionally and masks the bug).
+        # Guard: `apps/web/src/routes/+page.ts` must explicitly opt
+        # out of the layout's default.
+        self.assertTrue(PAGE_TS.is_file(), f"missing {PAGE_TS.relative_to(ROOT)}")
+        self.assertRegex(
+            PAGE_TS.read_text(),
+            r"export\s+const\s+prerender\s*=\s*false",
+        )
 
 
 if __name__ == "__main__":

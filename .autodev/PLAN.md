@@ -162,16 +162,16 @@ spawning, (D) auth + production polish.
                               path that destroys the spawned Machine (and
                               its `machine_assignments` row) at probe
                               end. Closes M7.0.3.3 tail.
-                        - [ ] M7.1.3.2.c — Prerender bug on `/`:
-                              `prerender = true; ssr = false` in
-                              `+layout.ts` causes the auth-aware redirect
-                              in `routeRedirect` for GET `/` to be
-                              bypassed in production (hook never runs
-                              for prerendered static file). Local Vite
-                              dev SSRs and masks the issue. Fix: drop
-                              prerender on `/`, or add a client-side
-                              redirect from `+layout.ts`. Surfaced iter
-                              109.
+                        - [x] M7.1.3.2.c — Prerender bug on `/`.
+                              `+layout.ts` no longer defaults
+                              `prerender = true`; every concrete page
+                              (`/`, `/projects`, `/editor/[projectId]`)
+                              owns its own `+page.ts` with
+                              `prerender = false`, so the
+                              `routeRedirect` hook fires on production
+                              GETs of `/`. Regression guarded by
+                              `test_landing_sign_in.test_prerender_disabled`.
+                              _(iter 112.)_
             - [ ] M7.1.4 — Idle-stop wiring on per-project Machine side;
                   closes M7.3.
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
@@ -232,12 +232,10 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.2.c (fix prerender bug on `/`) is
-the smaller pick (drop `prerender = true` on `/` so the
-session-redirect hook fires in production). M7.1.3.2.b
-(WS-upgrade-with-cookie probe + Machine cleanup) is the alternative.
-After that: M7.1.4 (idle-stop wiring on per-project Machine side),
-then M7.5.3 (`compile-status:error` wire frame on the heels of M7.5.2).
+**Next ordinary iteration:** M7.1.3.2.b (WS-upgrade-with-cookie probe
++ Machine cleanup at probe end). After that: M7.1.4 (idle-stop wiring
+on per-project Machine side), then M7.5.3 (`compile-status:error`
+wire frame on the heels of M7.5.2).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

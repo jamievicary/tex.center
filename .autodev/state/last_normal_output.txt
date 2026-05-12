@@ -7,21 +7,21 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.3s
+Done in 2.6s
 Scope: 6 of 7 workspace projects
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck: Done
 packages/blobs typecheck: Done
 packages/protocol typecheck: Done
-packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778550149558 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778550149562 COMPLETED 719 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778550548066 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778550548073 COMPLETED 720 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
@@ -43,6 +43,7 @@ test_prerender_disabled (test_healthz_route.TestHealthzRoute.test_prerender_disa
 test_does_not_link_to_editor (test_landing_sign_in.TestLandingSignIn.test_does_not_link_to_editor) ... ok
 test_no_marketing_copy (test_landing_sign_in.TestLandingSignIn.test_no_marketing_copy) ... ok
 test_oauth_start_route_exists (test_landing_sign_in.TestLandingSignIn.test_oauth_start_route_exists) ... ok
+test_prerender_disabled (test_landing_sign_in.TestLandingSignIn.test_prerender_disabled) ... ok
 test_sign_in_targets_oauth_start (test_landing_sign_in.TestLandingSignIn.test_sign_in_targets_oauth_start) ... ok
 test_auth (test_node_suites.TestNodeSuites.test_auth) ... ok
 test_auth_pkce (test_node_suites.TestNodeSuites.test_auth_pkce) ... ok
@@ -113,7 +114,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 88 tests in 50.652s
+Ran 89 tests in 59.647s
 
 OK
 tests_normal/run_tests.sh: PASS
