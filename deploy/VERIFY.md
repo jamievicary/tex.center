@@ -47,10 +47,25 @@ node -e 'fetch("https://tex.center/auth/google/start",{redirect:"manual"}).then(
   }
   console.log("oauth start ok: 302 client_id=", u.searchParams.get("client_id"));
 })'
+
+# 4. OAuth callback synthetic — must NOT be 500. The route's
+#    `?error=fake` branch should early-return 400 with the state
+#    cookie cleared. A 500 here means the callback module graph
+#    failed to evaluate (e.g. a runtime dep like `jose` missing
+#    from the image — discussion 129's latent-since-day-one bug,
+#    invisible to probes 1–3 because nothing else imports `jose`).
+node -e 'fetch("https://tex.center/auth/google/callback?error=fake",{redirect:"manual"}).then(async r=>{
+  if (r.status === 500) {
+    const t = await r.text();
+    throw new Error("callback 500 body "+t.slice(0,400));
+  }
+  if (r.status !== 400) throw new Error("callback status "+r.status);
+  console.log("callback synthetic ok: 400 (route reached)");
+})'
 ```
 
 A failing probe is a deploy failure. Do not declare the deploy done
-until all three pass.
+until all four pass.
 
 ## Playwright wrapper
 

@@ -90,11 +90,34 @@ completes an OAuth round-trip end-to-end.
    automated headlessly, but the `?error=fake` synthetic probe
    exercises everything up to (and including) the
    custom-Node-entry layer.
-7. **Carry forward as the canonical M8.pw.2 case.** Once M8
-   Playwright wires its `live`-target suite into deploys, an
-   `authedPage` fixture that asserts on the post-callback
-   `/projects` page will catch this exact class of regression.
-   Don't bundle that with this fix.
+7. **Acknowledge the Playwright coverage gap that allowed this
+   regression to ship.** The iter-77 design deliberately kept
+   real OAuth out of scope (`authedPage` injects a cookie
+   directly; the callback path is never exercised by any
+   authed spec). M8.pw.2 — wiring `live`-target specs into
+   deploy verification — was on the committed queue between
+   M7.0.2 and M7.0.3 but **got skipped** when iter 94 jumped
+   straight to M7.0.3.0. So today the live suite has exactly
+   one trivial DOM test and the callback is uncovered.
+   Two concrete additions belong in the M8.pw.2 slice when it
+   lands (after this incident is fixed — don't bundle):
+   - **Synthetic callback probe.** Hit
+     `/auth/google/callback?error=access_denied` (must 302
+     to `/`, per iter 49) and
+     `/auth/google/callback?code=invalid&state=ignored` (must
+     return a structured error, not a bare 500). Both
+     exercise the handler's plumbing without a real Google
+     round-trip. The latter would have caught this incident.
+   - **Real-callback shadow test.** Originally rejected on
+     cost grounds in `77_question.md`. Reconsider given the
+     cost of the current incident: a service-account-with-
+     consent-granted producing a real `code` is bounded work
+     and produces the only test that *actually* covers the
+     full path. Worth scoping as an M8.pw.3 explicitly.
+
+   Bring forward M8.pw.2 immediately after this incident is
+   resolved; that ordering reversal is the lesson of this
+   regression.
 
 ## On priority
 

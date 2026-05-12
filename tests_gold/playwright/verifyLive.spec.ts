@@ -20,9 +20,15 @@
 //   4. GET /auth/google/start        → 302 to accounts.google.com
 //                                       with client_id +
 //                                       redirect_uri=…/auth/google/callback.
-//   5. UPGRADE /ws/project/smoke     → 401 (auth fail-closed,
+//   5. GET /auth/google/callback     → 400 (NOT 500) on `?error=fake`.
+//      ?error=fake                     Catches the discussion-129
+//                                       class of bug where the callback
+//                                       module graph fails to load
+//                                       (e.g. `jose` missing from
+//                                       the runtime image).
+//   6. UPGRADE /ws/project/smoke     → 401 (auth fail-closed,
 //                                       no sidecar dial).
-//   6. UPGRADE /ws/nope               → 404 (unknown WS path).
+//   7. UPGRADE /ws/nope               → 404 (unknown WS path).
 
 import { request as httpsRequest } from "node:https";
 import { test, expect } from "@playwright/test";
@@ -79,6 +85,24 @@ test.describe("live deploy verification", () => {
     expect(u.searchParams.get("redirect_uri")).toBe(
       `https://${LIVE_HOST}/auth/google/callback`,
     );
+  });
+
+  test("/auth/google/callback?error=fake → 400 (module graph loads)", async ({
+    request,
+  }) => {
+    // The route's early-return branch on a Google-provided `?error=`
+    // is 400 with the state cookie cleared. A 500 here means the
+    // module graph failed to evaluate — the canonical symptom of a
+    // runtime npm dep (e.g. `jose`) missing from the image.
+    // See discussion/129.
+    const r = await request.get(
+      "/auth/google/callback?error=fake",
+      { maxRedirects: 0 },
+    );
+    expect(
+      r.status(),
+      "/auth/google/callback?error=fake status (500 ⇒ module load failure)",
+    ).toBe(400);
   });
 
   test("WS upgrade /ws/project/smoke without cookie → 401", async () => {

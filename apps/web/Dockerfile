@@ -5,9 +5,15 @@
 # We need the full pnpm workspace at install time so that the
 # `workspace:*` deps in apps/web (auth, db, protocol) resolve.
 #
-# adapter-node bundles all third-party deps into apps/web/build/, so
-# the runtime stage carries only that directory plus Node itself —
-# no node_modules, no pnpm.
+# adapter-node's Rollup pass keeps anything under `node_modules` as a
+# bare-specifier external (workspace deps are symlinks and get inlined,
+# regular npm deps like `jose` do not). The runtime stage therefore
+# needs a real `node_modules` containing the prod dep closure, or the
+# first import of e.g. `jose` from `googleTokens.ts` throws
+# `ERR_MODULE_NOT_FOUND` at request time. We produce that closure with
+# `pnpm deploy --prod` in the builder and copy it into the runtime
+# image. See discussion/129 for the latent-since-day-one incident
+# (callback 500ing on `Cannot find package 'jose'`).
 
 ARG NODE_VERSION=20.18.1
 ARG PNPM_VERSION=9.12.0
@@ -43,6 +49,12 @@ COPY packages/protocol/ packages/protocol/
 
 RUN pnpm --filter @tex-center/web build
 
+# Produce a self-contained prod-only dep closure. `pnpm deploy`
+# resolves `workspace:*` to copies, prunes devDeps, and respects the
+# lockfile. We only consume the resulting `node_modules` in the
+# runtime stage — the deploy's source-tree copy is discarded.
+RUN pnpm --filter @tex-center/web --prod deploy /prod
+
 # ---------- runtime ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 ENV NODE_ENV=production \
@@ -50,6 +62,7 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 WORKDIR /app
 COPY --from=builder /repo/apps/web/build ./build
+COPY --from=builder /prod/node_modules ./node_modules
 # Migrations are read at runtime by `runBootMigrations` (see
 # `src/lib/server/bootMigrations.ts`) when
 # `RUN_MIGRATIONS_ON_BOOT=1`. Path matches `DEFAULT_MIGRATIONS_DIR`;

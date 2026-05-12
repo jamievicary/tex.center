@@ -65,6 +65,26 @@ class TestWebDockerfile(unittest.TestCase):
         # build, not silently re-resolve.
         self.assertIn("pnpm install --frozen-lockfile", self.text)
 
+    def test_runtime_carries_prod_node_modules(self) -> None:
+        # adapter-node leaves bare-specifier imports (`jose`, etc.)
+        # external; without a real `node_modules` in the runtime image,
+        # the first transitive import of a non-workspace dep throws
+        # ERR_MODULE_NOT_FOUND at request time. The fix is `pnpm deploy
+        # --prod` producing a dep closure that gets COPYed into /app.
+        # See discussion/129 for the latent-since-day-one incident.
+        self.assertRegex(
+            self.text,
+            r"pnpm\s+(?:--filter\s+\S+\s+)?--prod\s+deploy\s+\S+",
+            "Builder must run `pnpm --filter @tex-center/web --prod deploy <dir>` "
+            "to produce a prod dep closure.",
+        )
+        self.assertRegex(
+            self.text,
+            r"COPY\s+--from=builder\s+\S*/node_modules\s+\./node_modules",
+            "Runtime stage must COPY the prod node_modules from the "
+            "deploy directory.",
+        )
+
     def test_pnpm_version_pinned_to_root(self) -> None:
         root_pkg = json.loads((ROOT / "package.json").read_text())
         pm = root_pkg.get("packageManager", "")
