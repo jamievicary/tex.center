@@ -116,6 +116,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_fly_machines(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "flyMachines.test.mjs")
 
+    def test_web_upstream_resolver(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "upstreamResolver.test.mjs")
+
     def test_web_logout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "logout.test.mjs")
 

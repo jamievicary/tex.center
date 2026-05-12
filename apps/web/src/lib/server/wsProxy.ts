@@ -95,8 +95,17 @@ export function renderForwardedHeaders(
   return lines.join("\r\n") + "\r\n";
 }
 
+export type UpstreamSource =
+  | SidecarUpstream
+  | ((projectId: string) => SidecarUpstream | Promise<SidecarUpstream>);
+
 export interface WsProxyOptions {
-  readonly upstream: SidecarUpstream;
+  // Either a static upstream (every project routes to the same
+  // host:port — the M7.0 shared-sidecar shape) or a resolver
+  // called with the validated `projectId` after the auth gate.
+  // A throw/rejection is reported via `onEvent` and surfaces as
+  // 502 to the client; the upstream is never dialled.
+  readonly upstream: UpstreamSource;
   // Bounded connect timeout for the upstream dial. If `null`, no
   // timeout (don't use in prod — Fly 6PN should answer fast).
   readonly connectTimeoutMs?: number;
@@ -117,6 +126,7 @@ export type WsProxyEvent =
   | { kind: "no-match"; pathname: string }
   | { kind: "unauthorised"; projectId: string }
   | { kind: "auth-error"; projectId: string; message: string }
+  | { kind: "resolve-error"; projectId: string; message: string }
   | { kind: "upstream-connect"; projectId: string; upstream: SidecarUpstream }
   | { kind: "upstream-connected"; projectId: string }
   | { kind: "upstream-error"; projectId: string; message: string }
@@ -165,12 +175,39 @@ export function attachWsProxy(
     }
 
     const proceed = (): void => {
-      options.onEvent?.({
-        kind: "upstream-connect",
-        projectId,
-        upstream: options.upstream,
-      });
-      dialAndPipe(req, clientSocket, head, rawUrl, projectId);
+      let resolved: SidecarUpstream | Promise<SidecarUpstream>;
+      try {
+        resolved =
+          typeof options.upstream === "function"
+            ? options.upstream(projectId)
+            : options.upstream;
+      } catch (err) {
+        options.onEvent?.({
+          kind: "resolve-error",
+          projectId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        writeStatusAndClose(clientSocket, "502 Bad Gateway");
+        return;
+      }
+      Promise.resolve(resolved).then(
+        (upstream) => {
+          options.onEvent?.({
+            kind: "upstream-connect",
+            projectId,
+            upstream,
+          });
+          dialAndPipe(req, clientSocket, head, rawUrl, projectId, upstream);
+        },
+        (err: unknown) => {
+          options.onEvent?.({
+            kind: "resolve-error",
+            projectId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          writeStatusAndClose(clientSocket, "502 Bad Gateway");
+        },
+      );
     };
 
     if (options.authoriseUpgrade === undefined) {
@@ -216,8 +253,9 @@ export function attachWsProxy(
     head: Buffer,
     rawUrl: string,
     projectId: string,
+    upstreamAddr: SidecarUpstream,
   ): void => {
-    const upstream = net.connect(options.upstream.port, options.upstream.host);
+    const upstream = net.connect(upstreamAddr.port, upstreamAddr.host);
     let settled = false;
     let connectTimer: NodeJS.Timeout | null = null;
 
@@ -254,7 +292,7 @@ export function attachWsProxy(
         const requestLine = `${req.method ?? "GET"} ${rawUrl} HTTP/${req.httpVersion ?? "1.1"}\r\n`;
         const headerBlock = renderForwardedHeaders(
           req.rawHeaders,
-          options.upstream,
+          upstreamAddr,
         );
         upstream.write(requestLine + headerBlock + "\r\n");
         if (head.length > 0) upstream.write(head);

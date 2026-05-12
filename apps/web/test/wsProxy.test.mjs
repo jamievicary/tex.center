@@ -386,4 +386,91 @@ assert.ok(events.some((e) => e.kind === "no-match"));
   await new Promise((res) => upstream2.close(res));
 }
 
+// ---- upstream as a resolver function ----
+//
+// `WsProxyOptions.upstream` accepts a `(projectId) => Promise<…>`
+// so per-project Machine routing (M7.1.2) can be wired without
+// touching the proxy. Two cases: happy resolve, and resolver
+// rejection → 502 (upstream never dialled).
+
+{
+  const upstreamConns = [];
+  const upstream = net.createServer((sock) => {
+    upstreamConns.push(sock);
+    sock.on("data", () => sock.write("HELLO\n"));
+  });
+  await new Promise((res) => upstream.listen(0, "127.0.0.1", res));
+  const upPort = upstream.address().port;
+
+  const seenIds = [];
+  const events = [];
+  const httpServer4 = http.createServer();
+  const detach4 = attachWsProxy(httpServer4, {
+    upstream: (projectId) => {
+      seenIds.push(projectId);
+      return Promise.resolve({ host: "127.0.0.1", port: upPort });
+    },
+    connectTimeoutMs: 2000,
+    onEvent: (e) => events.push(e),
+  });
+  await new Promise((res) => httpServer4.listen(0, "127.0.0.1", res));
+  const proxyPort4 = httpServer4.address().port;
+
+  const sock = net.connect(proxyPort4, "127.0.0.1");
+  await new Promise((res) => sock.once("connect", res));
+  sock.write(
+    `GET /ws/project/proj-resolve HTTP/1.1\r\n` +
+      `Host: localhost:${proxyPort4}\r\n` +
+      `Upgrade: websocket\r\n` +
+      `Connection: Upgrade\r\n` +
+      `Sec-WebSocket-Key: x\r\n` +
+      `Sec-WebSocket-Version: 13\r\n\r\n`,
+  );
+  const got = await readUntil(sock, (b) =>
+    b.toString("utf8").includes("HELLO"),
+  );
+  assert.ok(got.toString("utf8").includes("HELLO"));
+  sock.destroy();
+  assert.deepEqual(seenIds, ["proj-resolve"]);
+  assert.ok(events.some((e) => e.kind === "upstream-connected"));
+
+  detach4();
+  await new Promise((res) => httpServer4.close(res));
+  await new Promise((res) => upstream.close(res));
+}
+
+// Resolver rejects → 502, upstream never dialled.
+{
+  const events = [];
+  const httpServer5 = http.createServer();
+  const detach5 = attachWsProxy(httpServer5, {
+    upstream: () => Promise.reject(new Error("machines api down")),
+    connectTimeoutMs: 2000,
+    onEvent: (e) => events.push(e),
+  });
+  await new Promise((res) => httpServer5.listen(0, "127.0.0.1", res));
+  const proxyPort5 = httpServer5.address().port;
+  const sock = net.connect(proxyPort5, "127.0.0.1");
+  await new Promise((res) => sock.once("connect", res));
+  sock.write(
+    `GET /ws/project/proj-resolve-fail HTTP/1.1\r\n` +
+      `Host: localhost:${proxyPort5}\r\n` +
+      `Upgrade: websocket\r\n` +
+      `Connection: Upgrade\r\n` +
+      `Sec-WebSocket-Key: x\r\n` +
+      `Sec-WebSocket-Version: 13\r\n\r\n`,
+  );
+  const got = await readUntil(sock, (b) => b.toString("utf8").includes("502"));
+  assert.match(got.toString("utf8"), /HTTP\/1\.1 502/);
+  sock.destroy();
+  assert.ok(
+    events.some(
+      (e) => e.kind === "resolve-error" && e.message === "machines api down",
+    ),
+    `expected resolve-error event: ${JSON.stringify(events)}`,
+  );
+  detach5();
+  await new Promise((res) => httpServer5.close(res));
+}
+
 console.log("wsProxy ok");

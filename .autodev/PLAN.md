@@ -171,12 +171,32 @@ spawning, (D) auth + production polish.
                   the MVP runs a single sidecar app
                   (`tex-center-sidecar`); promote to a column if
                   multi-app routing lands.
-            - [ ] M7.1.2 — Per-project upstream resolver wired into
-                  `wsProxy.ts`. Hook in `boot.ts` replaces static
-                  `resolveSidecarUpstream` with
-                  `(projectId) → Promise<SidecarUpstream>` that
-                  consults the DB and `MachinesClient` (creates/
-                  starts if missing/stopped).
+            - [~] **M7.1.2** — Per-project upstream resolver.
+                  - [x] M7.1.2.0 — `upstreamResolver.ts`:
+                        `createUpstreamResolver({machines, store,
+                        sidecarPort, sidecarRegion, machineConfig})`
+                        returns
+                        `(projectId)→Promise<SidecarUpstream>`.
+                        State machine handles started / starting /
+                        stopped / suspended / created /
+                        stopping/suspending / terminal-recreate. In-
+                        process per-projectId promise dedup. Store
+                        adapter `dbMachineAssignmentStore(db)` wraps
+                        the iter-102 storage primitives.
+                        `WsProxyOptions.upstream` widened to
+                        `SidecarUpstream | (projectId)=>Promise<…>`;
+                        resolution runs *after* the auth gate.
+                        Resolver throw → 502 (new
+                        `resolve-error` event), upstream never
+                        dialled. `BootOptions.resolveUpstream`
+                        forwards to the proxy; fallback path is
+                        unchanged static envvar. _(iter 103.)_
+                  - [ ] M7.1.2.1 — Wire `createUpstreamResolver` in
+                        `server.ts` gated on `FLY_API_TOKEN` +
+                        `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`; falls
+                        back to static envvar if absent. Cover via
+                        a small integration test booting `boot()`
+                        with a stub `MachinesClient`.
             - [ ] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets
                   on the control plane; deploy; extend
                   `verifyLive.spec.ts` with a happy-path
@@ -259,13 +279,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.2 — per-project upstream
-resolver wired into `wsProxy.ts`. With the API client (M7.1.0 /
-iter 99) and the storage primitives (M7.1.1 / iter 102) both in
-place, the next slice replaces the static `resolveSidecarUpstream`
-in `boot.ts` with `(projectId) → Promise<SidecarUpstream>` that
-consults `machine_assignments` and the `MachinesClient` (creates/
-starts if missing/stopped, caches `state` + `lastSeenAt`). Then
+**Next ordinary iteration:** M7.1.2.1 — wire the resolver into
+`server.ts`. The pure resolver landed in iter 103
+(`upstreamResolver.ts`); the production entry still falls back to
+the static envvar upstream because the secrets (`FLY_API_TOKEN`,
+`SIDECAR_APP_NAME`, `SIDECAR_IMAGE`) aren't set on the control
+plane yet. M7.1.2.1 plumbs the construction conditional on env;
 M7.1.3 deploys + extends `verifyLive.spec.ts`, M7.1.4 closes
 idle-stop.
 

@@ -6,7 +6,11 @@
 import http from "node:http";
 import type { RequestListener, Server as HttpServer } from "node:http";
 
-import { attachWsProxy, resolveSidecarUpstream } from "./wsProxy.js";
+import {
+  attachWsProxy,
+  resolveSidecarUpstream,
+  type UpstreamSource,
+} from "./wsProxy.js";
 import type { UpgradeAuthoriser } from "./wsAuth.js";
 
 export interface BootOptions {
@@ -17,6 +21,11 @@ export interface BootOptions {
   // Optional. If absent, the WS proxy accepts all upgrades; the
   // production entry always supplies one (see `server.ts`).
   readonly authoriseUpgrade?: UpgradeAuthoriser;
+  // Optional per-project upstream resolver. If absent, all
+  // projects route to the static envvar-driven sidecar
+  // (`SIDECAR_HOST` / `SIDECAR_PORT`); this is the M7.0 path.
+  // M7.1.2 wires a real `createUpstreamResolver(...)` here.
+  readonly resolveUpstream?: UpstreamSource;
 }
 
 export interface BootResult {
@@ -25,7 +34,8 @@ export interface BootResult {
 }
 
 export function boot(opts: BootOptions): BootResult {
-  const upstream = resolveSidecarUpstream(opts.env);
+  const upstream: UpstreamSource =
+    opts.resolveUpstream ?? resolveSidecarUpstream(opts.env);
   const server = http.createServer(opts.handler);
   const detachProxy = attachWsProxy(server, {
     upstream,
