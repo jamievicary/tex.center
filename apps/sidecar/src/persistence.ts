@@ -220,78 +220,36 @@ export function createProjectPersistence(args: {
 }): ProjectPersistence {
   const { blobStore, projectId, doc, log } = args;
 
-  if (!blobStore) {
-    // In-memory only: still track created files so `files()` and
-    // the broadcast file-list reflect them within this session.
-    const memFiles = new Set<string>([MAIN_DOC_NAME]);
-    // Seed the hello-world template so a brand-new in-memory
-    // project opens onto a non-empty document and the first
-    // compile produces a meaningful PDF. Guard against re-seeding
-    // a doc that already has main.tex content (e.g. tests that
-    // pre-populate the Y.Doc).
-    {
-      const t = doc.getText(MAIN_DOC_NAME);
-      if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
-    }
-    return {
-      awaitHydrated: () => Promise.resolve(),
-      maybePersist: () => Promise.resolve(),
-      files: () => Array.from(memFiles).sort(),
-      async addFile(name, content) {
-        const reason = validateProjectFileName(name);
-        if (reason) return { ok: false, reason };
-        if (memFiles.has(name)) return { ok: false, reason: "already exists" };
-        if (content && content.length > 0) {
-          doc.transact(() => {
-            const t = doc.getText(name);
-            if (t.length === 0) t.insert(0, content);
-          });
-        }
-        memFiles.add(name);
-        return { ok: true };
-      },
-      async deleteFile(name) {
-        if (name === MAIN_DOC_NAME) return { ok: false, reason: "cannot delete main" };
-        if (!memFiles.has(name)) return { ok: false, reason: "no such file" };
-        const t = doc.getText(name);
-        if (t.length > 0) t.delete(0, t.length);
-        memFiles.delete(name);
-        return { ok: true };
-      },
-      async renameFile(oldName, newName) {
-        if (oldName === MAIN_DOC_NAME) return { ok: false, reason: "cannot rename main" };
-        if (newName === MAIN_DOC_NAME) return { ok: false, reason: "cannot overwrite main" };
-        if (!memFiles.has(oldName)) return { ok: false, reason: "no such file" };
-        const reason = validateProjectFileName(newName);
-        if (reason) return { ok: false, reason };
-        if (memFiles.has(newName)) return { ok: false, reason: "already exists" };
-        const oldText = doc.getText(oldName);
-        const contents = oldText.toString();
-        doc.transact(() => {
-          const newText = doc.getText(newName);
-          if (newText.length === 0 && contents.length > 0) newText.insert(0, contents);
-          if (oldText.length > 0) oldText.delete(0, oldText.length);
-        });
-        memFiles.delete(oldName);
-        memFiles.add(newName);
-        return { ok: true };
-      },
-    };
-  }
-
-  // Files we are willing to persist. Pre-seeded with `MAIN_DOC_NAME`
+  // Files we are willing to track. Pre-seeded with `MAIN_DOC_NAME`
   // so `files()` exposes a sensible list even if hydration fails;
-  // hydration adds every listed blob key. Not extended at runtime
-  // since today there's no protocol path to create a new file.
+  // hydration adds every listed blob key.
   const knownFiles = new Set<string>([MAIN_DOC_NAME]);
   // Last-persisted source per file. Absence means "no blob known
   // yet" — the next `maybePersist` will create one even if the
   // current `Y.Text` is empty, preserving the historical
-  // "first-compile establishes main.tex" semantics.
+  // "first-compile establishes main.tex" semantics. Unused when
+  // `blobStore` is undefined.
   const persistedByName = new Map<string, string>();
+  // `true` once blob hydration completed without throwing. Gates
+  // every blob-op path; in-memory mode (`blobStore === undefined`)
+  // leaves this false and skips all blob ops while still mutating
+  // `knownFiles` and the Y.Doc.
   let canPersist = false;
 
   const hydrated: Promise<void> = (async () => {
+    if (!blobStore) {
+      // In-memory mode: seed hello-world so a brand-new project
+      // opens onto a non-empty document. Guard against re-seeding
+      // a doc that already has main.tex content (tests sometimes
+      // pre-populate the Y.Doc).
+      const t = doc.getText(MAIN_DOC_NAME);
+      if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
+      // `canPersist` stays false: blob-op paths are gated on it,
+      // and there is no blob store to talk to. In-memory addFile
+      // / deleteFile / renameFile still mutate `knownFiles` and
+      // the Y.Doc, which is the entire contract here.
+      return;
+    }
     try {
       const files = await listProjectFiles(blobStore, projectId);
       // Bulk-load every file into its own Y.Text inside a single
@@ -370,7 +328,7 @@ export function createProjectPersistence(args: {
       if (reason) return { ok: false, reason };
       if (knownFiles.has(name)) return { ok: false, reason: "already exists" };
       const body = content ?? "";
-      if (canPersist) {
+      if (canPersist && blobStore) {
         try {
           await blobStore.put(
             `${projectFilesDir(projectId)}/${name}`,
@@ -397,7 +355,7 @@ export function createProjectPersistence(args: {
     async deleteFile(name): Promise<FileOpResult> {
       if (name === MAIN_DOC_NAME) return { ok: false, reason: "cannot delete main" };
       if (!knownFiles.has(name)) return { ok: false, reason: "no such file" };
-      if (canPersist) {
+      if (canPersist && blobStore) {
         try {
           await blobStore.delete(`${projectFilesDir(projectId)}/${name}`);
         } catch (e) {
@@ -424,7 +382,7 @@ export function createProjectPersistence(args: {
       const oldText = doc.getText(oldName);
       const contents = oldText.toString();
       const dir = projectFilesDir(projectId);
-      if (canPersist) {
+      if (canPersist && blobStore) {
         try {
           await blobStore.put(`${dir}/${newName}`, new TextEncoder().encode(contents));
         } catch (e) {
@@ -459,7 +417,7 @@ export function createProjectPersistence(args: {
       return { ok: true };
     },
     async maybePersist(): Promise<void> {
-      if (!canPersist) return;
+      if (!canPersist || !blobStore) return;
       const enc = new TextEncoder();
       const dir = projectFilesDir(projectId);
       for (const name of knownFiles) {
