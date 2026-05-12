@@ -1,180 +1,114 @@
 # tex.center — Plan
 
-Normal cron resumes: `N%10==0` refactor, `N%10==1` plan-review.
-Iter 183 took the deferred refactor cron (gold-spec helper
-extraction). Iter 190 deferred refactor cron again: fixed the
-iter-189 regression in `supertexDaemonReal.test.mjs` (identical-
-source second compile now correctly returns `{ segments: [] }`,
-so test edits source between rounds) and a co-located anti-flake
-fix in `serverBlobs.test.mjs` (the failing-compile path race'd
-between blob persistence and the `compile-status:error` frame).
-Refactor cron rolls onto iter 192 (iter 191 is plan-review).
+Cron: `N%10==0` refactor, `N%10==1` plan-review. Iter 192 owes a
+refactor cron (190 deferred to fix the iter-189 gold regression;
+no further defer budget without a separately-justified critical
+bug).
 
-## 1. Recent state
+## 1. Current state
 
 Live product (https://tex.center): core loop works end-to-end —
-login + project list + project open + edit → save → PDF render +
-refresh persistence. Sidecar runs per-project Fly Machines in
-`fra` with TCP-probe cold-start handling, 1024MB RAM, scale-to-zero
-idle-stop. Auth (OAuth allowlist), file CRUD, WS proxy with 6PN
-dial, control-plane → sidecar pin via `SIDECAR_IMAGE` secret all
-live and tested. M7.0.2 shared-sidecar pool
-(`tex-center-sidecar` app with two `app`-tagged deployment
-machines) exists alongside.
+login, project list, project open, edit → save → PDF render,
+refresh persistence. Per-project sidecar runs on Fly Machines in
+`fra` with TCP-probe cold-start, 1024MB RAM, scale-to-zero
+idle-stop. M7.0.2 shared-sidecar pool (`tex-center-sidecar` app
+with `app`-tagged deployment machines) exists alongside but isn't
+routed to. Iteration indicator wired through Dockerfile build-arg
+into the topbar (regression-locked).
 
-Recent inflection points (each maps to a discussion question):
-
-- **Editor UX gaps** (`172_question.md`): user-visible bugs the
-  green M8.pw.4 doesn't cover — no-flash initial load, broken
-  initial-PDF render, compile-coalescer overlap, missing save-
-  feedback affordance, no toast UX, logo doesn't navigate. Four
-  failing-on-purpose gold specs (GT-A through GT-D) landed at
-  iter 173 to lock in TDD. Logo (iter 177), no-flash (iter 177),
-  compile coalescer (iter 178), toast scaffold (iter 179) all
-  done. Toast consumers and save-feedback still pending.
-- **Resource hygiene** (`173b_question.md`): live specs leaked
-  per-project Fly Machines; idle-stop was broken for
-  never-connected machines. Spec teardown fixed iter 175;
-  idle-stop fixed iter 176 (timer arms at sidecar startup, not
-  only on `1→0` transition). Count guardrail live in gold.
-- **Debug protocol toasts** (`174_question.md`): folds into
-  the toast UX milestone as a follow-up slice on the scaffold.
-- **Topbar iter indicator** (`184_question.md`): landed iter
-  185. `TEXCENTER_ITER` build-arg → Dockerfile ENV → SvelteKit
-  `$env/dynamic/public` (deviation from 184_answer's static
-  preference: svelte-check needs the var present at sync time
-  for static, dynamic is least invasive). Regression-locked in
-  `tests_normal/cases/test_iter_indicator.py`.
-
-Operator-gated work still outstanding: M8.pw.3.3 real-OAuth
-callback spec (needs GCP test client + `TEST_OAUTH_BYPASS_KEY`
-secret on Fly).
+The remaining user-visible regression is **edit→preview**: live
+GT-3 and GT-5 are RED by design. Sidecar-side fallback that masked
+the bug was removed at iter 189; the live failure mode is now
+`compile-status running` → `idle` with **no** `pdf-segment` frame.
+Root cause is upstream: supertex `--daemon` `process_event`
+rollback is a no-op when it finds no usable checkpoint after a
+post-initial-compile edit.
 
 ## 2. Milestones
 
-### M9.editor-ux — live editor UX bugs (TDD'd via gold)
+### M9.editor-ux — live editor UX bugs (TDD via gold)
 
-Delivers: no flash, initial PDF, compile coalescer, sustained
-typing, save-feedback, clickable logo, toast widget with user +
-debug categories. See `172/174_question.md`+`_answer.md`.
-
-Done: logo→/projects (iter 177), no-flash editor (iter 177),
-compile coalescer (iter 178), toast store + component scaffold
-(iter 179), toast consumers for `file-op-error` + compile error
-(iter 186), debug-mode toggle + protocol fan-out (iter 187:
-`WsDebugEvent` hook on WsClient, `debugToasts.ts` helpers for
-URL/localStorage/Ctrl+Shift+D, `+page.svelte` gated subscription).
-Remaining slices:
-
-- **Save-success toast** lives with the **save-feedback
-  affordance** slice below — depends on a sidecar persistence-ack
-  signal that doesn't exist yet, so it is not part of the
-  toast-consumers slice.
-- **GT-E (local Playwright).** info/success/error spawn the
-  right toast; dedup by repeated `file-op-error` produces a
-  `×N` badge.
-- **GT-F (local Playwright).** `?debug=1` flips localStorage;
-  typing a single char produces a green Yjs-op toast and (after
-  compile) a blue pdf-segment toast; rapid typing aggregates
-  into one green `×N` toast; without the flag, no debug toasts.
-- **Save-feedback affordance.** `SyncStatus` indicator
-  (idle/in-flight/error) sourced from Yjs provider sync state
-  acked by sidecar persistence (NOT per-keystroke). Local +
-  live Playwright variants.
-
-**Edit→preview regression (iter 188).** User-visible bug: PDF
-preview never reflects source edits despite `pdf-segment` frames
-arriving over the wire. Root cause (188_answer.md, hypothesis-
-ranked): upstream supertex `--daemon` rollback no-ops when
-`process_event` finds no usable checkpoint, the sidecar's
-`assembleSegment` directory-scan fallback then re-ships stale
-chunks as a fresh segment. Iter 188 landed:
-- GT-5 (`verifyLiveGt5EditUpdatesPreview.spec.ts`) — pixel-hash
-  diff over the preview canvas, locked in
-  `test_editor_ux_gold_specs.py`.
-- `snapshotPreviewCanvasHash` + `expectPreviewCanvasChanged` in
-  `fixtures/previewCanvas.ts`.
-- `wsClientPdfSegmentIdentity.test.mjs` — locks the snapshot
-  identity invariant (closes hypothesis 3 by construction).
-Iter 189 landed:
-- **Sidecar fallback fix**: `assembleSegment`'s `maxShipout < 0`
-  directory-scan fallback removed. `compile()` short-circuits to
-  `{ ok: true, segments: [] }` on a no-op round (round-done with
-  no shipouts, no error); `assembleSegment` precondition is now
-  `maxShipout >= 0`. Regression-locked by two new cases in
-  `supertexDaemonCompiler.test.mjs` (FAKE mode `noop`, plus a
-  `noop-stale` case where pre-existing `*.out` files in
-  `chunksDir` must be ignored).
-Remaining (next iteration target):
-- **Upstream supertex fix** (M7.4.x): ensure `process_event`
-  finds a rollback target for the post-initial-compile edit
-  case. With the sidecar fallback gone, the live failure mode is
-  now: `compile-status running` → `compile-status idle`, no
-  `pdf-segment` frame. PR upstream once a minimal repro against
-  vendor/supertex's daemon harness is captured.
+Done and locked: clickable logo, no-flash editor load, compile
+coalescer, sustained-typing safety, toast store + component
+scaffold, toast consumers for `file-op-error` and compile errors,
+debug-mode toggle (URL/localStorage/Ctrl+Shift+D) with protocol
+fan-out via `WsDebugEvent`. Sidecar `assembleSegment` directory-
+scan fallback removed; `compile()` short-circuits to
+`{ segments: [] }` on a no-op round.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
 `aggregateKey` within 500ms re-arms TTL and bumps `count`.
 
+Remaining slices:
+
+- **M7.4.x — upstream supertex `process_event` rollback fix.**
+  Blocks live GT-3 and GT-5. Next step: capture a minimal repro
+  against `vendor/supertex`'s daemon harness (initial compile,
+  then edit, then observe `process_event` returns no rollback
+  target), then PR upstream. With the sidecar fallback gone, no
+  further client-side workaround is available — this is the only
+  remaining path to green GT-3/GT-5.
+- **GT-E (local Playwright).** info/success/error spawn the right
+  toast; repeated `file-op-error` produces a `×N` aggregated
+  badge.
+- **GT-F (local Playwright).** `?debug=1` flips localStorage; a
+  single keystroke produces a green Yjs-op toast and (after
+  compile) a blue pdf-segment toast; rapid typing aggregates into
+  one green `×N`; without the flag, no debug toasts.
+- **Save-feedback affordance.** `SyncStatus` indicator
+  (idle/in-flight/error) sourced from Yjs provider sync state
+  acked by a sidecar persistence signal (NOT per-keystroke). The
+  success toast lives here and depends on the same ack — gated on
+  a sidecar persistence-ack wire signal that doesn't exist yet.
+  Local + live Playwright variants.
+
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
-Delivers: `verifyLiveOauthCallback.spec.ts` runs against the
-live deploy. Operator step: create test OAuth client in GCP
+Code complete. Operator-gated: create test OAuth client in GCP
 (redirect `http://localhost:4567/oauth-callback`), run
 `scripts/google-refresh-token.mjs`, push `TEST_OAUTH_BYPASS_KEY`
-to Fly secrets. Code-side complete. Status: **operator-gated**.
+to Fly secrets. Then `verifyLiveOauthCallback.spec.ts` un-skips.
 
-### M7.4.2 — upstream supertex daemon serialise/restore
+### M7.4.2 — upstream supertex serialise/restore
 
-Delivers: PR against `github.com/jamievicary/supertex` adding
-state serialisation. Gates checkpoint persistence ever doing
-anything observable. Status: **deferred**, post-MVP hardening.
+PR against `github.com/jamievicary/supertex` adding state
+serialisation. Gates checkpoint persistence ever being observable.
+**Deferred**, post-MVP hardening. Distinct from M7.4.x above
+(which is the rollback-target bug, not serialisation).
 
 ### M7.5 — daemon-adoption hardening
 
-Remaining slices for the supertex daemon adoption — rate limits,
-observability surface, narrower deploy tokens. Status:
-**deferred**, post-MVP.
+Rate limits, observability surface, narrower deploy tokens.
+**Deferred**, post-MVP.
 
 ### Completed
 
-M0–M7.5.5, M8.smoke.0, M8.pw.0–M8.pw.3.2, M8.pw.4, M8.pw.4-reused,
-M9.observability (iter 163 ws-proxy + sidecar logging),
-M9.cold-start-retry (iter 164 + 168 TCP-probe), M9.resource-hygiene
-(iter 175 spec teardown + count guardrail; iter 176 idle-stop
-arm at startup; live regression deferred — unit test covers
-shape and count guardrail locks cleanup). See git log and
+M0–M7.5.5, M8.smoke.0, M8.pw.0–M8.pw.4-reused, M9.observability
+(iter 163), M9.cold-start-retry (iter 164 + 168 TCP-probe),
+M9.resource-hygiene (iter 175 spec teardown + count guardrail;
+iter 176 idle-stop arm at startup). See git log and
 `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 
-- **Cold-start fresh-project flakiness (iter 182 fix landed).**
-  M8.pw.4 / reused / GT-A all sampled the preview canvas with a
-  single-shot `evaluate` racing PDF.js's async paint, and GT-A's
-  `.cm-content` 60s timeout under-budgeted Fly cold-start (180
-  bumped M8.pw.4 to 120s for the same reason; GT-A was missed).
-  Iter 182 replaced the single-shot canvas check with a bounded
-  30s `expect.poll` (re-locating `.preview canvas` each tick to
-  handle re-render replacement, swallowing per-tick evaluate
-  errors), and bumped GT-A's `.cm-content` to 120s. If iter 183+
-  still sees red on these, root cause is hypothesis (a) Fly
-  cold-start tail >120s — next step there is `flyctl machine
-  logs` from a failing run (with leaked-subprocess hygiene per
-  150_answer).
-- **Per-project Fly Machines vs shared sidecar.** Current model
-  is per-project. Shared-pool exists as the app-tagged
-  deployment machines but isn't routed to. Decision deferred
-  to post-MVP.
-- **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. No
-  longer frozen; can be picked up by an iter when no
-  critical-path work is queued.
+- **Cold-start fresh-project flakiness.** Iter 182 replaced
+  single-shot canvas evaluates with a bounded 30s `expect.poll`
+  re-locating `.preview canvas` each tick and bumped GT-A's
+  `.cm-content` timeout to 120s. If recurrence appears, next step
+  is `flyctl machine logs` from a failing run under the
+  leaked-subprocess hygiene rules below.
+- **Per-project vs shared-sidecar routing.** Current model is
+  per-project Machine. Shared-pool app-tagged machines exist but
+  aren't routed to. Decision deferred to post-MVP.
+- **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. Can be
+  picked up by an iter when no critical-path work is queued.
 
 ## Leaked-subprocess hygiene (per `150_answer.md`)
 
 Do NOT invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`,
-`watch`, or any daemon-style command via Bash without `timeout
---kill-after=2 Ns …` wrapping, or `run_in_background:true`
+`watch`, or any daemon-style command via Bash without
+`timeout --kill-after=2 Ns …` wrapping, or `run_in_background:true`
 paired with an explicit kill before iteration end. Never pipe
 such a command into a downstream that waits for EOF (`… | tail
--N`, `… | head`). That pipeline shape is what wedged iter 148.
+-N`, `… | head`) — that pipeline shape wedged iter 148.
