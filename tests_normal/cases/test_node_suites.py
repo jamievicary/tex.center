@@ -92,6 +92,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_list_project_files(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "listProjectFiles.test.mjs")
 
+    def test_sidecar_checkpoint_blob(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "checkpointBlob.test.mjs")
+
     def test_web_pdf_buffer(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pdfBuffer.test.mjs")
 

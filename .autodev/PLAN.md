@@ -211,9 +211,35 @@ spawning, (D) auth + production polish.
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
       - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4
             iter 118; see above.)_
-      - [ ] **M7.4** — Checkpoint blob protocol on the compiler
+      - [~] **M7.4** — Checkpoint blob protocol on the compiler
             interface; persist on idle-stop, rehydrate on wake.
             Closes M4.3.2 tail.
+            - [x] M7.4.0 — Interface contract + no-op impls.
+                  `Compiler` gains `snapshot(): Promise<Uint8Array | null>`
+                  and `restore(blob): Promise<void>`. All three
+                  compilers implement as no-ops today (no upstream
+                  serialise wire). `persistence.ts`:
+                  `projectCheckpointKey` (lives at
+                  `projects/<id>/checkpoint.bin`, outside `files/`),
+                  `persistCheckpoint` (null/empty → no-op),
+                  `loadCheckpoint` (missing/empty → null).
+                  `checkpointBlob.test.mjs` pins the contract.
+                  _(iter 119.)_
+            - [ ] M7.4.1 — Sidecar wiring. `onIdle` walks projects
+                  and calls `persistCheckpoint(persist.snapshot())`
+                  before `app.close()`; first `compile()` per
+                  project reads `loadCheckpoint` and calls
+                  `compiler.restore()` before its first compile.
+                  Today every snapshot returns null so this is a
+                  no-op end-to-end — value is the wiring being
+                  ready when the upstream protocol lands.
+            - [ ] M7.4.2 — Upstream supertex daemon serialise/restore
+                  wire (PLAN candidate item 2), then real
+                  `SupertexDaemonCompiler.snapshot/restore`. M7.5.5
+                  end-to-end test gates flipping
+                  `SIDECAR_COMPILER=supertex-daemon` to default;
+                  M7.4.2 gates checkpoint persistence ever doing
+                  anything observable in prod.
       - [~] **M7.5** — Supertex `--daemon DIR` adoption. Upstream mode
             landed (discussion 71); slotted after M7.4 so checkpoint
             serialisation can ride the same channel.
@@ -284,10 +310,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.4 (checkpoint blob protocol on
-the compiler interface; persist on idle-stop, rehydrate on wake;
-closes M4.3.2 tail). The idle-stop path now landed (M7.1.4)
-makes "persist on idle-stop" a concrete hook to bind to.
+**Next ordinary iteration:** M7.4.1 — wire the M7.4.0 primitives
+into the sidecar idle-stop / first-compile path. End-to-end
+behaviour is still a no-op (every `snapshot()` returns null
+until upstream supertex gains a serialise wire), but the wiring
+needs to exist so the day the daemon-side lands, no further
+sidecar plumbing is needed.
 
 The `verifyLiveWsUpgrade` spec still needs
 `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`

@@ -12,7 +12,7 @@ test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright
 ok
 
 ----------------------------------------------------------------------
-Ran 11 tests in 46.406s
+Ran 11 tests in 44.200s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

@@ -77,6 +77,17 @@ export class SupertexOnceCompiler implements Compiler {
 
   async close(): Promise<void> {}
 
+  // Checkpoints are meaningless for the once-compiler: every
+  // compile is a clean spawn that rebuilds from the on-disk
+  // source. The no-op impls satisfy the interface so the sidecar
+  // can call snapshot/restore uniformly regardless of the
+  // configured engine.
+  async snapshot(): Promise<Uint8Array | null> {
+    return null;
+  }
+
+  async restore(_blob: Uint8Array): Promise<void> {}
+
   private runOnce(args: string[]): Promise<{ code: number; stderr: string }> {
     return new Promise((resolvePromise, rejectPromise) => {
       const child = this.spawnFn(this.supertexBin, args, {

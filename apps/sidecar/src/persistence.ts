@@ -66,6 +66,53 @@ export function mainTexKey(projectId: string): string {
 }
 
 /**
+ * Blob-store key for a project's serialised compiler checkpoint
+ * (M7.4). The bytes are produced by `Compiler.snapshot()` and
+ * consumed by `Compiler.restore()`; the sidecar treats the
+ * contents as opaque.
+ *
+ * Kept under `projects/<id>/` (not `files/`) so listing source
+ * files for the file-tree never surfaces the checkpoint, and so
+ * deleting source files can never accidentally invalidate a
+ * stored checkpoint key.
+ */
+export function projectCheckpointKey(projectId: string): string {
+  return `projects/${projectId}/checkpoint.bin`;
+}
+
+/**
+ * Persist a checkpoint blob produced by `Compiler.snapshot()`.
+ * No-op when `bytes` is `null` (compiler had no resumable state)
+ * or zero-length (defensive — equivalent to no checkpoint).
+ * Errors propagate to the caller, which decides whether to log
+ * or surface; the sidecar's idle-stop path logs and continues.
+ */
+export async function persistCheckpoint(
+  blobStore: BlobStore,
+  projectId: string,
+  bytes: Uint8Array | null,
+): Promise<void> {
+  if (bytes === null || bytes.length === 0) return;
+  await blobStore.put(projectCheckpointKey(projectId), bytes);
+}
+
+/**
+ * Load a previously persisted checkpoint blob. Returns `null`
+ * when no checkpoint exists for the project. A blob-store
+ * `get` failure propagates — callers in the cold-start path
+ * should catch and fall through to a clean rebuild rather than
+ * blocking the first compile on a transient outage.
+ */
+export async function loadCheckpoint(
+  blobStore: BlobStore,
+  projectId: string,
+): Promise<Uint8Array | null> {
+  const bytes = await blobStore.get(projectCheckpointKey(projectId));
+  if (!bytes || bytes.length === 0) return null;
+  return bytes;
+}
+
+/**
  * List the relative paths of a project's source files. Returns
  * project-relative paths (the `projects/<id>/files/` prefix is
  * stripped) in lex order. A sibling key whose name merely starts

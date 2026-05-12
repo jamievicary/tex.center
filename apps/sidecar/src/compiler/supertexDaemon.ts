@@ -156,6 +156,19 @@ export class SupertexDaemonCompiler implements Compiler {
     await waitForExit(child, this.killTimeoutMs);
   }
 
+  // Upstream supertex does not yet expose a checkpoint
+  // serialise/restore wire on the daemon protocol (PLAN.md
+  // "Candidate supertex (upstream) work" item 2). Until it does,
+  // these are deliberate no-ops: snapshot returns null so the
+  // sidecar's persist-on-idle path knows there is nothing to
+  // store, and restore accepts (and discards) any prior blob so
+  // an in-flight rollout against an older sidecar is safe.
+  async snapshot(): Promise<Uint8Array | null> {
+    return null;
+  }
+
+  async restore(_blob: Uint8Array): Promise<void> {}
+
   private ensureReady(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;
     this.readyPromise = this.spawnAndWaitReady();

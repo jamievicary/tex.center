@@ -38,4 +38,33 @@ export type CompileResult = CompileSuccess | CompileFailure;
 export interface Compiler {
   compile(req: CompileRequest): Promise<CompileResult>;
   close(): Promise<void>;
+  /**
+   * Serialise the compiler's current resumable state to an opaque
+   * byte blob, or `null` if there is no resumable state to capture
+   * (fresh compiler, or this implementation doesn't yet support
+   * checkpoints). The bytes are persisted by the sidecar to the
+   * project's blob store on idle-stop and fed back into
+   * `restore()` when the per-project Machine next wakes.
+   *
+   * `snapshot()` must not mutate observable state — it is safe to
+   * call between `compile()` rounds. Implementations that own
+   * subprocesses should leave them running; this is a read, not a
+   * teardown. Callers serialise externally; concurrent invocation
+   * during an in-flight `compile()` is implementation-defined.
+   */
+  snapshot(): Promise<Uint8Array | null>;
+  /**
+   * Rehydrate compiler state from a blob previously produced by
+   * `snapshot()`. Must be called before the first `compile()` to
+   * be effective; calling after a compile has run is permitted
+   * but implementation-defined.
+   *
+   * Implementations that don't yet support checkpoints accept any
+   * blob and behave as a no-op (the next `compile()` rebuilds
+   * from scratch). Implementations that do support checkpoints
+   * must tolerate a blob from any prior version of themselves —
+   * at worst falling back to a clean rebuild — so a sidecar
+   * upgrade never poisons a stored checkpoint.
+   */
+  restore(blob: Uint8Array): Promise<void>;
 }

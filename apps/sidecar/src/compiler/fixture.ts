@@ -27,6 +27,12 @@ export class FixtureCompiler implements Compiler {
     this.cached = null;
   }
 
+  async snapshot(): Promise<Uint8Array | null> {
+    return null;
+  }
+
+  async restore(_blob: Uint8Array): Promise<void> {}
+
   private async load(): Promise<Uint8Array> {
     if (this.cached) return this.cached;
     const buf = await readFile(this.fixturePath);
