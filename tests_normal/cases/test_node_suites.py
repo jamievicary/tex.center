@@ -83,9 +83,6 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_supertex_daemon_compiler(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "supertexDaemonCompiler.test.mjs")
 
-    def test_sidecar_pdf_stability_watcher(self) -> None:
-        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "pdfStabilityWatcher.test.mjs")
-
     def test_sidecar_workspace(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "workspace.test.mjs")
 

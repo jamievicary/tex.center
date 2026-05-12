@@ -30,8 +30,8 @@ spawning, (D) auth + production polish.
       `supertex --once --output-directory`). Streaming/daemon variant
       tracked as M7.5. `SIDECAR_COMPILER` env-var: `fixture` (dev/unit)
       vs `supertex` (production). `awaitPdfStable` watcher (iter 41)
-      stays unwired; subsumed by M7.5.4 (`[round-done]` = stability
-      signal).
+      deleted iter 115 — neither compile path needs it (once exits
+      cleanly, daemon emits `[round-done]`).
 
 - [~] **M4 — Persistence.** Postgres (Drizzle) for entities;
       Tigris (S3) for blobs.
@@ -207,8 +207,13 @@ spawning, (D) auth + production polish.
                   `serverCompileError.test.mjs` (iter 114); daemon half
                   by `supertexDaemonCompiler.test.mjs` "error+round-done"
                   (iter 113).
-            - [ ] M7.5.4 — Gate `PdfStabilityWatcher` on compiler kind
-                  (once-path keeps it; daemon uses `[round-done]`).
+            - [x] M7.5.4 — Resolved by deleting `pdfStabilityWatcher.ts`
+                  (iter 115). Neither compile path needs filesystem
+                  polling: `SupertexOnceCompiler` returns after the
+                  child exits with the PDF fully written;
+                  `SupertexDaemonCompiler` consumes `[round-done]` as
+                  the canonical stability signal. Recoverable from git
+                  if a future streaming shape ever needs it.
             - [~] M7.5.5 — Integration tests against the fake daemon
                   (`supertexDaemonCompiler.test.mjs`). Covered: initial
                   compile, targetPage clamp, persistent process across
@@ -246,11 +251,9 @@ spawning, (D) auth + production polish.
 
 **Next ordinary iteration:** M7.1.3.2.b (WS-upgrade-with-cookie probe
 + Machine cleanup at probe end). After that: M7.1.4 (idle-stop wiring
-on per-project Machine side), then M7.5.4 (gate `PdfStabilityWatcher`
-on compiler kind).
+on per-project Machine side).
 
 Smaller alternatives if M7.1 hits a blocker:
-- Wiring `awaitPdfStable` once a streaming compile path exists.
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
   blocked on docker-compose; checkpoint persistence on M7.4).
 
