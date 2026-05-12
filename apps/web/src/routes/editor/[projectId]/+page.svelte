@@ -11,6 +11,11 @@
 
   import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
   import { toasts } from "$lib/toastStore";
+  import {
+    debugEventToToast,
+    initDebugFlag,
+    onDebugKeyShortcut,
+  } from "$lib/debugToasts";
 
   let { data } = $props();
 
@@ -35,8 +40,22 @@
   });
 
   let client: WsClient | null = null;
+  let debug = $state(false);
+  let detachKey: (() => void) | null = null;
 
   onMount(() => {
+    debug = initDebugFlag(
+      new URLSearchParams(window.location.search),
+      window.localStorage,
+    );
+    detachKey = onDebugKeyShortcut(
+      window,
+      () => debug,
+      (next) => {
+        debug = next;
+        window.localStorage.setItem("debug", next ? "1" : "0");
+      },
+    );
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const projectId = data.project?.id ?? "default";
     const url = `${proto}//${window.location.host}/ws/project/${encodeURIComponent(projectId)}`;
@@ -59,6 +78,10 @@
           aggregateKey: `compile-error:${detail}`,
         });
       },
+      onDebugEvent: (event) => {
+        if (!debug) return;
+        toasts.push(debugEventToToast(event));
+      },
     });
     text = client.getText(selected);
     // Default until IntersectionObserver fires from PdfViewer.
@@ -77,6 +100,7 @@
   }
 
   onDestroy(() => {
+    detachKey?.();
     client?.destroy();
   });
 </script>

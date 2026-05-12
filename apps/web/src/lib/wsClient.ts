@@ -43,6 +43,25 @@ export interface WsClientSnapshot {
   hydrated: boolean;
 }
 
+/**
+ * Wire-level event surfaced for the debug-mode protocol fan-out
+ * (M9.editor-ux debug toasts; see `.autodev/discussion/
+ * 174_answer.md`). Fires once per observed frame irrespective of
+ * snapshot transitions, so toast aggregation keys can coalesce
+ * bursts without the WsClient deduping at the source.
+ */
+export type WsDebugEvent =
+  | { kind: "pdf-segment"; bytes: number }
+  | {
+      kind: "compile-status";
+      state: "idle" | "running" | "error" | "unknown";
+      detail?: string;
+    }
+  | { kind: "file-list"; count: number }
+  | { kind: "hello"; protocol: number }
+  | { kind: "file-op-error"; reason: string }
+  | { kind: "outgoing-doc-update"; bytes: number };
+
 export interface WsClientOptions {
   url: string;
   onChange?: (snap: WsClientSnapshot) => void;
@@ -60,6 +79,12 @@ export interface WsClientOptions {
    * `"compile error"` when the frame omits one.
    */
   onCompileError?: (detail: string) => void;
+  /**
+   * Fired once per observed wire event when the editor enables
+   * debug mode. Always fires when supplied; consumers gate
+   * subscription on the `?debug=1` flag.
+   */
+  onDebugEvent?: (event: WsDebugEvent) => void;
 }
 
 export class WsClient {
@@ -70,6 +95,7 @@ export class WsClient {
   private readonly onChange: ((snap: WsClientSnapshot) => void) | undefined;
   private readonly onFileOpError: ((reason: string) => void) | undefined;
   private readonly onCompileError: ((detail: string) => void) | undefined;
+  private readonly onDebugEvent: ((event: WsDebugEvent) => void) | undefined;
   private readonly url: string;
   private _status: ConnectionState = "connecting";
   private _pdfBytes: Uint8Array | null = null;
@@ -85,11 +111,18 @@ export class WsClient {
     this.onChange = opts.onChange;
     this.onFileOpError = opts.onFileOpError;
     this.onCompileError = opts.onCompileError;
+    this.onDebugEvent = opts.onDebugEvent;
     this.doc = new Y.Doc();
     this.text = this.doc.getText(MAIN_DOC_NAME);
     this.onDocUpdate = (update, origin) => {
       if (origin === this) return;
-      this.send(encodeDocUpdate(update));
+      const sent = this.send(encodeDocUpdate(update));
+      if (sent) {
+        this.onDebugEvent?.({
+          kind: "outgoing-doc-update",
+          bytes: update.byteLength,
+        });
+      }
     };
     this.doc.on("update", this.onDocUpdate);
     this.connect();
@@ -146,6 +179,10 @@ export class WsClient {
         break;
       case "pdf-segment":
         this._pdfBytes = this.pdf.applySegment(decoded.segment);
+        this.onDebugEvent?.({
+          kind: "pdf-segment",
+          bytes: decoded.segment.bytes.byteLength,
+        });
         this.emit();
         break;
       case "control":
@@ -156,16 +193,40 @@ export class WsClient {
             this._lastError = detail;
             this.onCompileError?.(detail);
           }
+          {
+            const ev: WsDebugEvent =
+              decoded.message.detail !== undefined
+                ? {
+                    kind: "compile-status",
+                    state: decoded.message.state,
+                    detail: decoded.message.detail,
+                  }
+                : { kind: "compile-status", state: decoded.message.state };
+            this.onDebugEvent?.(ev);
+          }
           this.emit();
         } else if (decoded.message.type === "file-list") {
           this._files = decoded.message.files;
           this._fileOpError = null;
           this._hydrated = true;
+          this.onDebugEvent?.({
+            kind: "file-list",
+            count: decoded.message.files.length,
+          });
           this.emit();
         } else if (decoded.message.type === "file-op-error") {
           this._fileOpError = decoded.message.reason;
           this.onFileOpError?.(decoded.message.reason);
+          this.onDebugEvent?.({
+            kind: "file-op-error",
+            reason: decoded.message.reason,
+          });
           this.emit();
+        } else if (decoded.message.type === "hello") {
+          this.onDebugEvent?.({
+            kind: "hello",
+            protocol: decoded.message.protocol,
+          });
         }
         break;
       case "awareness":
@@ -173,10 +234,11 @@ export class WsClient {
     }
   }
 
-  private send(frame: Uint8Array): void {
+  private send(frame: Uint8Array): boolean {
     const s = this.socket;
-    if (!s || s.readyState !== s.OPEN) return;
+    if (!s || s.readyState !== s.OPEN) return false;
     s.send(frame);
+    return true;
   }
 
   setViewingPage(page: number): void {

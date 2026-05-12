@@ -59,18 +59,15 @@ debug categories. See `172/174_question.md`+`_answer.md`.
 Done: logo→/projects (iter 177), no-flash editor (iter 177),
 compile coalescer (iter 178), toast store + component scaffold
 (iter 179), toast consumers for `file-op-error` + compile error
-(iter 186). Remaining slices:
+(iter 186), debug-mode toggle + protocol fan-out (iter 187:
+`WsDebugEvent` hook on WsClient, `debugToasts.ts` helpers for
+URL/localStorage/Ctrl+Shift+D, `+page.svelte` gated subscription).
+Remaining slices:
 
 - **Save-success toast** lives with the **save-feedback
   affordance** slice below — depends on a sidecar persistence-ack
   signal that doesn't exist yet, so it is not part of the
   toast-consumers slice.
-- **Debug-mode toggle + protocol fan-out.**
-  `localStorage.debug==="1"` or `?debug=1`; Ctrl+Shift+D
-  shortcut. Subscribe to `WsClient.onChange` + outgoing-send
-  hook and emit debug toasts: blue=`pdf-segment`, green=outgoing
-  Yjs op, orange=`compile-status`, grey=`hello`/`file-list`,
-  red=`file-op-error`.
 - **GT-E (local Playwright).** info/success/error spawn the
   right toast; dedup by repeated `file-op-error` produces a
   `×N` badge.
