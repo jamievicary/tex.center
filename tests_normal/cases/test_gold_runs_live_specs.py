@@ -73,6 +73,8 @@ class TestGoldRunsLiveSpecs(unittest.TestCase):
             "fly-postgres.txt",
             "session-signing-key.txt",
             "live-user-id.txt",
+            "fly.token",
+            "FLY_API_TOKEN",
         ):
             self.assertIn(
                 needle,

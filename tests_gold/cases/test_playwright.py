@@ -82,6 +82,16 @@ def _load_live_creds() -> dict[str, str]:
     fly_pg = _read_creds_file("fly-postgres.txt")
     signing = _read_creds_file("session-signing-key.txt")
     user = _read_creds_file("live-user-id.txt")
+    # `creds/fly.token` is a single-line `flyctl` auth token used
+    # to authorise the `flyctl proxy` invoked by the `authedPage`
+    # worker fixture against `tex-center-db`. Without it the proxy
+    # child exits immediately with "no access token available"
+    # before any test body runs.
+    fly_token = _read_creds_file("fly.token").strip()
+    if not fly_token:
+        raise AssertionError(
+            "live spec requires creds/fly.token but the file is empty."
+        )
 
     # `creds/fly-postgres.txt` lists the superuser block as
     #   Superuser:
@@ -117,6 +127,7 @@ def _load_live_creds() -> dict[str, str]:
         "TEXCENTER_LIVE_DB_PASSWORD": password,
         "SESSION_SIGNING_KEY": signing_key,
         "TEXCENTER_LIVE_USER_ID": user_id,
+        "FLY_API_TOKEN": fly_token,
     }
 
 
