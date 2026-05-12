@@ -42,11 +42,6 @@
   need a separate binary-blob channel and a way for the compile
   workspace to read them — design step deferred until the
   per-project Machine model (M7) is in place.
-- **Cloudflare token-file JSON support.** `creds/cloudflare.token`
-  is `{ token, zone_id, zone }` JSON, but
-  `scripts/cloudflare-dns.mjs --token-file` expects a raw bearer.
-  Iter 73 worked around it by extracting `.token` to a temp file.
-  Teach the script to JSON-decode when the file starts with `{`.
 - **Dedicated IPv4 for `tex-center`** once the org leaves trial:
   `flyctl ips allocate-v4 --yes` + rerun
   `scripts/cloudflare-dns.mjs` with the new address. Today the

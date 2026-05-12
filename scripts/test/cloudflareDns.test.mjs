@@ -13,7 +13,36 @@ import {
   createRecord,
   updateRecord,
   deleteRecord,
+  parseTokenFile,
 } from "../cloudflare-dns.mjs";
+
+// --- parseTokenFile -----------------------------------------------
+
+// Raw bearer string round-trips, with surrounding whitespace trimmed.
+assert.equal(parseTokenFile("abc123"), "abc123");
+assert.equal(parseTokenFile("  abc123\n"), "abc123");
+
+// JSON object with a .token field unwraps to the token.
+assert.equal(
+  parseTokenFile('{"token":"abc123","zone":"tex.center","zone_id":"z1"}'),
+  "abc123",
+);
+assert.equal(
+  parseTokenFile('\n  {"token": "  abc123  "}\n'),
+  "abc123",
+);
+
+// Empty body rejected.
+assert.throws(() => parseTokenFile(""), /empty token file/);
+assert.throws(() => parseTokenFile("   \n  "), /empty token file/);
+
+// JSON-shaped but malformed → "looks like JSON but failed to parse".
+assert.throws(() => parseTokenFile("{not json"), /failed to parse/);
+
+// JSON without a usable `token` field → explicit error.
+assert.throws(() => parseTokenFile('{"zone":"tex.center"}'), /missing a non-empty `token` field/);
+assert.throws(() => parseTokenFile('{"token":""}'), /missing a non-empty `token` field/);
+assert.throws(() => parseTokenFile('{"token":123}'), /missing a non-empty `token` field/);
 
 // --- buildDesired -------------------------------------------------
 

@@ -16,7 +16,9 @@
 //       [--dry-run]
 //
 // The token is read from `creds/cloudflare.token` (path can be
-// overridden with `--token-file`). The script only ever touches
+// overridden with `--token-file`). The file may be either a raw
+// bearer string or a JSON object with a `.token` field (see
+// `parseTokenFile`). The script only ever touches
 // records whose (type, name) appears in the desired set passed in —
 // it will not delete unrelated records in the zone.
 
@@ -152,6 +154,33 @@ function buildDesired(zone, { ipv4, ipv6, acmeName, acmeValue }) {
 
 export { buildDesired };
 
+/**
+ * Parse a token-file body. Accepts either a raw bearer string or a
+ * JSON object with a `.token` field (the shape `creds/cloudflare.token`
+ * actually uses — `{ token, zone_id, zone }`). Trims surrounding
+ * whitespace. Throws on empty / missing-token / malformed JSON.
+ *
+ * @param {string} body
+ * @returns {string}
+ */
+export function parseTokenFile(body) {
+  const trimmed = body.trim();
+  if (!trimmed) throw new Error("empty token file");
+  if (trimmed.startsWith("{")) {
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (err) {
+      throw new Error(`token file looks like JSON but failed to parse: ${err.message}`);
+    }
+    if (typeof parsed.token !== "string" || !parsed.token.trim()) {
+      throw new Error("token file JSON is missing a non-empty `token` field");
+    }
+    return parsed.token.trim();
+  }
+  return trimmed;
+}
+
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -170,8 +199,12 @@ async function main() {
     throw new Error("at least one of --ipv4 / --ipv6 / --acme-value is required");
   }
 
-  const token = readFileSync(values["token-file"], "utf8").trim();
-  if (!token) throw new Error(`empty token at ${values["token-file"]}`);
+  let token;
+  try {
+    token = parseTokenFile(readFileSync(values["token-file"], "utf8"));
+  } catch (err) {
+    throw new Error(`${values["token-file"]}: ${err.message}`);
+  }
 
   const desired = buildDesired(values.zone, {
     ipv4: values.ipv4,
