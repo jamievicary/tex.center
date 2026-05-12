@@ -73,7 +73,7 @@ export function resolveLiveDbConfig(
       remotePort,
       user: env.TEXCENTER_LIVE_DB_USER || "postgres",
       password,
-      database: env.TEXCENTER_LIVE_DB_NAME || "postgres",
+      database: env.TEXCENTER_LIVE_DB_NAME || "tex_center",
       userId: env.TEXCENTER_LIVE_USER_ID as string,
       signingKey: new Uint8Array(
         signingKey.buffer,

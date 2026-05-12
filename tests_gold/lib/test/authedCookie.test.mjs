@@ -48,7 +48,7 @@ function testResolveHappyDefaults() {
   assert.equal(r.config.localPort, 5433);
   assert.equal(r.config.remotePort, 5432);
   assert.equal(r.config.user, "postgres");
-  assert.equal(r.config.database, "postgres");
+  assert.equal(r.config.database, "tex_center");
   assert.equal(r.config.password, "s3cr3t");
   assert.equal(
     r.config.userId,
