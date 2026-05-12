@@ -13,13 +13,16 @@
 // Probes:
 //   1. GET /healthz                  → 200, body contains
 //                                       `tex-center-web-v1`.
-//   2. GET /                         → 200 (white sign-in page).
-//   3. GET /auth/google/start        → 302 to accounts.google.com
+//   2. GET /readyz                   → 200 with `ok: true`,
+//                                       `protocol: tex-center-web-v1`,
+//                                       `db.state: "up"`.
+//   3. GET /                         → 200 (white sign-in page).
+//   4. GET /auth/google/start        → 302 to accounts.google.com
 //                                       with client_id +
 //                                       redirect_uri=…/auth/google/callback.
-//   4. UPGRADE /ws/project/smoke     → 401 (auth fail-closed,
+//   5. UPGRADE /ws/project/smoke     → 401 (auth fail-closed,
 //                                       no sidecar dial).
-//   5. UPGRADE /ws/nope              → 404 (unknown WS path).
+//   6. UPGRADE /ws/nope               → 404 (unknown WS path).
 
 import { request as httpsRequest } from "node:https";
 import { test, expect } from "@playwright/test";
@@ -41,6 +44,19 @@ test.describe("live deploy verification", () => {
     expect(r.status(), "/healthz status").toBe(200);
     const body = await r.text();
     expect(body, "/healthz body").toContain("tex-center-web-v1");
+  });
+
+  test("readyz returns 200 with db up", async ({ request }) => {
+    const r = await request.get("/readyz");
+    expect(r.status(), "/readyz status").toBe(200);
+    const body = (await r.json()) as {
+      ok: boolean;
+      protocol: string;
+      db: { state: string; error?: string };
+    };
+    expect(body.ok, "/readyz ok").toBe(true);
+    expect(body.protocol, "/readyz protocol").toBe("tex-center-web-v1");
+    expect(body.db.state, "/readyz db.state").toBe("up");
   });
 
   test("/ returns 200 HTML (white sign-in page)", async ({ request }) => {
