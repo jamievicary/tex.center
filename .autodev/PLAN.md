@@ -220,6 +220,15 @@ spawning, (D) auth + production polish.
                         `packages/db/src/migrations/` to
                         `/app/migrations` (the default
                         `MIGRATIONS_DIR`). _(iter 105.)_
+                  - [x] M7.1.3.1.a — Sidecar redeploy (iter 108) to
+                        pick up the iter-107 Dockerfile fix
+                        (`make … all`, `SUPERTEX_BIN=…/supertex`); new
+                        digest `sha256:cf00052c…`, `SIDECAR_IMAGE` on
+                        control plane updated via `flyctl secrets
+                        set --stage` + `flyctl secrets deploy`.
+                        ssh-probe confirmed `supertex --once` on
+                        `\documentclass{article}…` produces a 56 KB
+                        `main.pdf` end-to-end.
                   - [x] M7.1.3.1 — Provision Fly Postgres (unmanaged,
                         single-node `shared-cpu-1x` in `fra`), attach
                         to `tex-center` (sets `DATABASE_URL`

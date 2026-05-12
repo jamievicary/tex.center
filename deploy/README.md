@@ -84,8 +84,11 @@ verified end-to-end at iteration 93.
 - **Region:** `fra`
 - **Topology:** 6PN-only, no public IPs. Reachable only at
   `tex-center-sidecar.internal:3001`.
-- **Image:** `tex-center-sidecar:deployment-01KRCEJJHCD0FZWFBWNM9KM5PC`
-  (sha256 `f31ef7bed0805cd999c188eb7fff542f06b1043e8add7fbbf6d7cb592a683853`)
+- **Image:** `tex-center-sidecar:deployment-01KRCV7CHZSCYDTGVPWEHKWEGH`
+  (sha256 `cf00052c1cda0633f08933cd757ae52450b7e25272b8c6801fa64089fa677f40`).
+  Redeployed iter 108 to pick up the iter-107 Dockerfile fix
+  (`make … all`, `SUPERTEX_BIN=/opt/supertex/build/supertex`). First
+  deploy was iter 93 (sha `f31ef7be…`).
 - **Machines:**
   - `d895e7ea479958` (primary)
   - `683437eb1e3378` (standby)
@@ -157,7 +160,7 @@ attach command.
 | `RUN_MIGRATIONS_ON_BOOT` | `1` — enables `runBootMigrations` (M7.1.3.0)                            |
 | `FLY_API_TOKEN`          | personal `creds/fly.token` (deploy-scoped token denied; see PLAN/IDEAS) |
 | `SIDECAR_APP_NAME`       | `tex-center-sidecar`                                                    |
-| `SIDECAR_IMAGE`          | `registry.fly.io/tex-center-sidecar@sha256:f31ef7be…`                   |
+| `SIDECAR_IMAGE`          | `registry.fly.io/tex-center-sidecar@sha256:cf00052c…` (iter 108)         |
 
 ## Verification
 
