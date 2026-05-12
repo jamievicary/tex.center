@@ -1,17 +1,13 @@
-// Unit test for `makeSessionAuthoriser` — wires Node IncomingMessage
-// `Cookie` parsing through `resolveSessionHook` to a boolean. The
-// session-hook layer is unit-tested separately; this test asserts
-// the adapter passes cookies through correctly and converts
-// (session !== null) into the boolean the WS proxy expects.
+// Unit test for `makeProjectAccessAuthoriser` — wires Node
+// IncomingMessage `Cookie` parsing through `resolveSessionHook` plus
+// a project-owner lookup, producing the discriminated upgrade-auth
+// decision the WS proxy maps to 101/401/403.
 
 import assert from "node:assert/strict";
 
 import { signSessionToken } from "@tex-center/auth";
 
-import {
-  makeProjectAccessAuthoriser,
-  makeSessionAuthoriser,
-} from "../src/lib/server/wsAuth.ts";
+import { makeProjectAccessAuthoriser } from "../src/lib/server/wsAuth.ts";
 
 const signingKey = new Uint8Array(32).fill(7);
 const NOW_MS = 1_700_000_000_000;
@@ -36,13 +32,6 @@ const lookupSession = async (sid) => {
   return null;
 };
 
-const authorise = makeSessionAuthoriser({
-  signingKey,
-  sessionCookieName: "tc_session",
-  lookupSession,
-  now: () => NOW_MS,
-});
-
 const reqWith = (cookie) => ({
   headers: cookie === null ? {} : { cookie },
 });
@@ -50,64 +39,6 @@ const reqWith = (cookie) => ({
 const allow = { kind: "allow" };
 const denyAnon = { kind: "deny-anon" };
 const denyAcl = { kind: "deny-acl" };
-
-// Valid cookie → allow.
-assert.deepEqual(
-  await authorise(reqWith(`tc_session=${validToken}`)),
-  allow,
-);
-
-// Valid cookie alongside unrelated cookies → allow.
-assert.deepEqual(
-  await authorise(reqWith(`foo=bar; tc_session=${validToken}; other=baz`)),
-  allow,
-);
-
-// No cookie header at all → deny-anon.
-assert.deepEqual(await authorise(reqWith(null)), denyAnon);
-
-// Wrong cookie name → deny-anon.
-assert.deepEqual(await authorise(reqWith(`other=${validToken}`)), denyAnon);
-
-// Tampered signature → deny-anon.
-{
-  const tampered = validToken.slice(0, -2) + "AA";
-  assert.deepEqual(
-    await authorise(reqWith(`tc_session=${tampered}`)),
-    denyAnon,
-  );
-}
-
-// Unknown sid (token verifies, but DB row missing) → deny-anon.
-{
-  const unknownSid = "deadbeef-0000-0000-0000-000000000000";
-  const tokenForUnknown = signSessionToken(
-    { sid: unknownSid, exp: nowSeconds + 3600 },
-    signingKey,
-  );
-  assert.deepEqual(
-    await authorise(reqWith(`tc_session=${tokenForUnknown}`)),
-    denyAnon,
-  );
-}
-
-// Lookup throws → swallowed inside resolveSessionHook → deny-anon.
-{
-  const throwing = makeSessionAuthoriser({
-    signingKey,
-    sessionCookieName: "tc_session",
-    lookupSession: async () => {
-      throw new Error("db down");
-    },
-    now: () => NOW_MS,
-  });
-  assert.deepEqual(
-    await throwing(reqWith(`tc_session=${validToken}`)),
-    denyAnon,
-  );
-}
-
-// ---- makeProjectAccessAuthoriser ----
 
 const ownedProject = "proj-owned";
 const otherProject = "proj-other";
