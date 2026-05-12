@@ -10,9 +10,10 @@ test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_live (test_playwright.TestPlaywrightLive.test_live) ... skipped 'skipped because TEXCENTER_LIVE_TESTS != 1'
 test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
 ok
+test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
 ----------------------------------------------------------------------
-Ran 11 tests in 51.104s
+Ran 12 tests in 36.965s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

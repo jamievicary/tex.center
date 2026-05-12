@@ -289,7 +289,7 @@ spawning, (D) auth + production polish.
                   `SupertexDaemonCompiler` consumes `[round-done]` as
                   the canonical stability signal. Recoverable from git
                   if a future streaming shape ever needs it.
-            - [~] M7.5.5 — Integration tests against the fake daemon
+            - [x] M7.5.5 — Integration tests against the fake daemon
                   (`supertexDaemonCompiler.test.mjs`). Covered: initial
                   compile, targetPage clamp, persistent process across
                   rounds, error+round-done, protocol violation, round
@@ -305,10 +305,20 @@ spawning, (D) auth + production polish.
                   `vendor/supertex/build/supertex --daemon` produces a
                   121 KB `%PDF` segment from a 3-page fixture,
                   deterministic across runs.
-                  Still pending before flipping `SIDECAR_COMPILER`
-                  default to `supertex-daemon`: a **standing** gold
-                  test that drives the real `supertex` ELF (not the
-                  fake) end-to-end. Smoke covered manually only.
+                  Iter 122 added the standing real-ELF gold test:
+                  `tests_gold/lib/test/supertexDaemonReal.test.mjs`
+                  + `tests_gold/cases/test_supertex_daemon_real.py`
+                  drive `vendor/supertex/build/supertex --daemon`
+                  against a 2-page `.tex` fixture, assert a `%PDF`
+                  segment > 1 KB, and exercise the persistent
+                  process across two compile rounds. Self-skips if
+                  the binary or system `lualatex` are absent
+                  (printed `SKIP`, exit 0) so a fresh checkout
+                  without the submodule built still passes. With
+                  this in place, flipping `SIDECAR_COMPILER=
+                  supertex-daemon` to the production default is no
+                  longer gated on M7.5.5 — only on the sidecar
+                  image actually building both binaries.
 
 - [~] **M8 — Acceptance pass + Playwright (pulled forward).**
       - [x] M8.pw.0 — Playwright skeleton. _(iter 78.)_
@@ -342,8 +352,11 @@ the day a real `snapshot()` returns non-null, persistence is
 automatic.
 
 Smaller alternatives if M7.4.2 is blocked on upstream:
-- M7.5.5 end-to-end test against the real `supertex` ELF (gates
-  flipping `SIDECAR_COMPILER=supertex-daemon` to default).
+- Flip `SIDECAR_COMPILER=supertex-daemon` to the production
+  default now that M7.5.5 has a standing real-ELF gold test
+  (iter 122). Requires the sidecar image to actually build
+  `supertex_daemon` alongside `supertex` and the runtime to wire
+  the env var.
 - M7.2 `/ws/project/<id>` routing-per-project plumbing.
 
 The `verifyLiveWsUpgrade` spec still needs
