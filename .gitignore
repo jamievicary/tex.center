@@ -15,7 +15,12 @@ test-results/
 playwright-report/
 
 # Node
-node_modules/
+# No trailing slash: pattern must match the working-tree symlink
+# that tests_normal/setup_node.sh creates at the repo root (a
+# symlink is not a directory, so `node_modules/` would not match
+# it and the harness's `git add -A` would re-stage it after
+# `git rm --cached node_modules` — see iter 160).
+node_modules
 .pnpm-store/
 dist/
 build/
