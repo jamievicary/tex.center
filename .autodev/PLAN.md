@@ -195,9 +195,29 @@ Estimated iteration sequence (adjust as work unfolds):
   missing `TEST_OAUTH_BYPASS_KEY` and remains operator-gated —
   but that no longer blocks M8.pw.4 or the FREEZE-lift gate.
 
-- **Iter 159+ — Confirm live-pipeline runs green automatically,**
-  then lift the FREEZE in this file's header. If the first live
-  run reveals a real regression, fix it (that is precisely the
+- **Iter 159 — First live-pipeline run revealed a 155-iter-old
+  bug.** *Done.* Iter 158's harness commit (`7a0263a`) triggered
+  the first ever `live-pipeline` execution. It failed at
+  `pnpm install --frozen-lockfile` with `ERR_PNPM_ENOENT` on
+  `node_modules`. Root cause: `node_modules` had been tracked as
+  a *symlink* in git since iter 4's commit `23513e5`; on the
+  maintainer's WSL2 working tree `setup_node.sh` retargets it at
+  `$HOME/.cache/tex-center-nm/<hash>/node_modules` to dodge DrvFs
+  handle races, but on a clean GH runner the target doesn't exist
+  so `checkout` lays down a dangling symlink and pnpm's
+  `mkdir node_modules` ENOENTs. Latent until iter 158 because the
+  previously-existing `smoke` and `deploy` jobs both build inside
+  Docker (smoke) or on Fly's remote builder (deploy) — neither
+  runs `pnpm install` directly on a runner. Fix:
+  `git rm --cached node_modules`. Lock:
+  `tests_normal/cases/test_no_tracked_node_modules.py` —
+  `test_no_node_modules_tracked` and
+  `test_no_tracked_symlinks_outside_vendor` (more general — any
+  tracked symlink outside `vendor/` fails, since they almost
+  always encode maintainer-local absolute paths).
+- **Iter 160+ — Confirm live-pipeline runs green automatically,**
+  then lift the FREEZE in this file's header. If the live run
+  reveals a real regression, fix it (that is precisely the
   protection the freeze exists to enforce); if it reveals a flake
   or env-shape mismatch in the wiring, fix the wiring and re-run.
   Operator-gated work that remains (M8.pw.3.3 activation: GCP
