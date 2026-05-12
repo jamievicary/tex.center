@@ -19,21 +19,16 @@
 //   1. A second pdf-segment arrives AFTER the first.
 //   2. No `compile-status state:error` control frame contains
 //      the substring "already in flight".
+//
+// Project + Machine are provided by the worker-scoped
+// `liveProject` fixture (shared with GT-A/B/D).
 
-import {
-  createProject,
-  type ProjectRow,
-} from "@tex-center/db";
-
-import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
-import { expect, test } from "./fixtures/authedPage.js";
+import { expect, test } from "./fixtures/sharedLiveProject.js";
 
 const TAG_PDF_SEGMENT = 0x20;
 const TAG_CONTROL = 0x10;
 
 test.describe("live edit triggers fresh PDF (GT-C)", () => {
-  let seeded: ProjectRow | null = null;
-
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "live",
@@ -45,32 +40,16 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     );
   });
 
-  test.afterEach(async ({ db }) => {
-    if (seeded !== null) {
-      await cleanupLiveProjectMachine({
-        projectId: seeded.id,
-        drizzle: db.db.db,
-      });
-      seeded = null;
-    }
-  });
-
   test("single keystroke produces a distinct second pdf-segment, no overlap error", async ({
     authedPage,
-    db,
+    liveProject,
   }) => {
     test.setTimeout(360_000);
-
-    const project = await createProject(db.db.db, {
-      ownerId: db.userId,
-      name: `pw-editfresh-${Date.now()}`,
-    });
-    seeded = project;
 
     const pdfSegmentFrames: Buffer[] = [];
     const overlapErrors: string[] = [];
     authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
       ws.on("framereceived", ({ payload }) => {
         if (typeof payload === "string") return;
         if (payload.length === 0) return;
@@ -91,7 +70,7 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
       });
     });
 
-    await authedPage.goto(`/editor/${project.id}`);
+    await authedPage.goto(`/editor/${liveProject.id}`);
 
     // Wait for the initial pdf-segment (the GT-B path). We need
     // this to be observed first so the keystroke below targets

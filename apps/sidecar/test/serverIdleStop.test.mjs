@@ -31,7 +31,7 @@ async function closeAndWait(ws) {
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 50,
+    idleTimeoutMs: 300,
     onIdle: () => {
       idleCalls += 1;
     },
@@ -39,9 +39,12 @@ async function closeAndWait(ws) {
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;
 
+  // Open the WS before the startup-armed timer can plausibly
+  // fire. Once viewerCount becomes 1, the startup timer is
+  // cleared; this case then measures the *disconnect-arm* path.
   const ws = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   await closeAndWait(ws);
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 600));
   assert.equal(idleCalls, 1, "onIdle should fire once after timeout");
 
   await app.close();
@@ -54,7 +57,7 @@ async function closeAndWait(ws) {
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 200,
+    idleTimeoutMs: 400,
     onIdle: () => {
       idleCalls += 1;
     },
@@ -64,16 +67,16 @@ async function closeAndWait(ws) {
 
   const ws1 = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   await closeAndWait(ws1);
-  // Re-connect well before the 200ms timeout.
-  await new Promise((r) => setTimeout(r, 30));
+  // Re-connect well before the 400ms disconnect-armed timeout.
+  await new Promise((r) => setTimeout(r, 50));
   const ws2 = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   // Wait past the original timeout — timer should have been cleared.
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 500));
   assert.equal(idleCalls, 0, "re-connection should cancel idle timer");
 
   await closeAndWait(ws2);
   // After this disconnect the timer arms again; verify it fires.
-  await new Promise((r) => setTimeout(r, 350));
+  await new Promise((r) => setTimeout(r, 700));
   assert.equal(idleCalls, 1, "onIdle should fire after final disconnect");
 
   await app.close();
@@ -109,7 +112,7 @@ async function closeAndWait(ws) {
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 80,
+    idleTimeoutMs: 300,
     onIdle: () => {
       idleCalls += 1;
     },
@@ -121,11 +124,36 @@ async function closeAndWait(ws) {
   const b = await open(`ws://127.0.0.1:${port}/ws/project/pB`);
   await closeAndWait(a);
   // One viewer remains → timer must not fire.
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 500));
   assert.equal(idleCalls, 0, "timer should not fire while viewers remain");
   await closeAndWait(b);
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 600));
   assert.equal(idleCalls, 1, "timer should fire after the last viewer leaves");
+
+  await app.close();
+}
+
+// Case 5 (regression for live-prod bug seen iter 176): if the
+// server boots but no viewer ever connects, the idle timer must
+// still arm and fire. Without this, Fly Machines whose
+// control-plane wake-probe lands but whose WS handshake never
+// completes would run forever, billed indefinitely.
+{
+  const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-5-"));
+  let idleCalls = 0;
+  const app = await buildServer({
+    logger: false,
+    scratchRoot,
+    idleTimeoutMs: 50,
+    onIdle: () => {
+      idleCalls += 1;
+    },
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+
+  // Never open a WebSocket. Wait past the timeout.
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(idleCalls, 1, "onIdle should fire when no viewer ever connects");
 
   await app.close();
 }

@@ -48,7 +48,15 @@ export function buildUpstreamFromEnv(
 
   const machineConfig: MachineConfig = {
     image,
-    auto_destroy: false,
+    // `auto_destroy: true` makes Fly destroy the VM whenever it
+    // transitions to `stopped` (idle, crash, OOM, signal — any
+    // termination). Per-project Machines are recreated lazily on
+    // the next viewer connect, so destroying on stop costs nothing
+    // and prevents leak accumulation across runs whose teardown
+    // path was interrupted (Playwright SIGTERM, harness OOM, etc).
+    // Idle-stop fires `state=stopped` first; auto-destroy then
+    // reaps the artefact without external cleanup.
+    auto_destroy: true,
     restart: { policy: "on-failure" },
     // Per-project Machines need ≥1GB to survive the runtime
     // total-vm footprint of the sidecar (Node + lualatex-incremental

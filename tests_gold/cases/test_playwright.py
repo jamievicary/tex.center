@@ -137,12 +137,14 @@ def _load_live_creds() -> dict[str, str]:
     }
 
 
-class TestPlaywrightLocal(unittest.TestCase):
-    def test_local(self) -> None:
-        # `pnpm --filter @tex-center/web dev` requires the SvelteKit
-        # toolchain to be present in node_modules; tests_normal has
-        # already run `pnpm install` before tests_gold fires, but
-        # guard against standalone invocations.
+class TestPlaywright(unittest.TestCase):
+    def test_playwright(self) -> None:
+        # Single Playwright invocation runs both `local` and `live`
+        # projects in one process: one globalSetup, one dev server
+        # boot, one Chromium download check. Live creds are loaded
+        # unconditionally and exported into the env; the live
+        # specs gate themselves on `TEXCENTER_FULL_PIPELINE=1` and
+        # `testInfo.project.name === "live"`.
         if not (ROOT / "node_modules").exists():
             raise unittest.SkipTest(
                 "node_modules missing; run tests_normal first"
@@ -154,50 +156,12 @@ class TestPlaywrightLocal(unittest.TestCase):
         ).exists():
             raise unittest.SkipTest("pnpm not on PATH")
 
-        _setup_playwright()
-
-        result = subprocess.run(
-            [
-                "pnpm",
-                "exec",
-                "playwright",
-                "test",
-                "--config",
-                str(CONFIG),
-                "--project=local",
-            ],
-            cwd=ROOT,
-            env=_env_with_node(),
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        # Always echo the Playwright list-reporter output so its
-        # per-spec ✓ / ✘ lines reach $GOLD_OUT and surface as
-        # individual pass/fail entries in the iteration log
-        # (autodev/iterate_one.sh's awk pattern matches them). Without
-        # this, ~15 Playwright tests collapse to one
-        # `test_local … ok|FAIL` line.
-        sys.stdout.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        sys.stdout.flush()
-        sys.stderr.flush()
-        if result.returncode != 0:
-            raise AssertionError(
-                f"playwright (local) failed (exit {result.returncode}) "
-                "— see ✓ / ✘ lines above for per-spec breakdown"
-            )
-
-
-class TestPlaywrightLive(unittest.TestCase):
-    def test_live(self) -> None:
-        # No skip-on-missing-creds: live verification is the per-iter
-        # readout of the GOAL.md product loop. If creds are absent,
-        # _load_live_creds raises AssertionError naming what's missing.
         env = _env_with_node()
+        # Live creds: missing/unparseable fails loudly per
+        # `166_question.md`. Absent creds are real configuration
+        # breakage that should surface as an iteration goal.
         env.update(_load_live_creds())
         env["TEXCENTER_FULL_PIPELINE"] = "1"
-        env["PLAYWRIGHT_SKIP_WEBSERVER"] = "1"
 
         _setup_playwright()
 
@@ -209,22 +173,23 @@ class TestPlaywrightLive(unittest.TestCase):
                 "test",
                 "--config",
                 str(CONFIG),
-                "--project=live",
             ],
             cwd=ROOT,
             env=env,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=900,
         )
-        # See test_local for why we always echo (per-spec ✓ / ✘ lines
-        # need to reach $GOLD_OUT for the iter log).
+        # Always echo the Playwright list-reporter output so its
+        # per-spec ✓ / ✘ lines reach $GOLD_OUT and surface as
+        # individual pass/fail entries in the iteration log
+        # (autodev/iterate_one.sh's awk pattern matches them).
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         sys.stdout.flush()
         sys.stderr.flush()
         if result.returncode != 0:
             raise AssertionError(
-                f"playwright (live) failed (exit {result.returncode}) "
+                f"playwright failed (exit {result.returncode}) "
                 "— see ✓ / ✘ lines above for per-spec breakdown"
             )

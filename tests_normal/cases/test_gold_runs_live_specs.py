@@ -37,8 +37,15 @@ class TestGoldRunsLiveSpecs(unittest.TestCase):
         self.text = GOLD_PLAYWRIGHT.read_text()
 
     def test_live_test_exists(self) -> None:
-        self.assertIn("class TestPlaywrightLive", self.text)
-        self.assertIn("def test_live", self.text)
+        # The local+live cases were merged into one
+        # `TestPlaywright.test_playwright` in the gold-suite
+        # infrastructure-reuse refactor: both projects run in a
+        # single Playwright invocation, sharing the dev server +
+        # globalSetup. Lock is now: the case still exists and is
+        # runnable; live creds and TEXCENTER_FULL_PIPELINE=1 are
+        # still set (covered by the other tests in this class).
+        self.assertIn("class TestPlaywright", self.text)
+        self.assertIn("def test_playwright", self.text)
 
     def test_no_texcenter_live_tests_gate(self) -> None:
         # The old shape was:

@@ -202,14 +202,14 @@ function testResolveLocalMissing() {
   assert.equal(r.ok, false);
   assert.deepEqual(
     [...r.missing].sort(),
-    ["DATABASE_URL", "SESSION_SIGNING_KEY", "TEXCENTER_LOCAL_USER_ID"],
+    ["DATABASE_URL", "TEXCENTER_LOCAL_SIGNING_KEY", "TEXCENTER_LOCAL_USER_ID"],
   );
 }
 
 function testResolveLocalHappy() {
   const r = resolveLocalDbEnv({
     DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54321/postgres",
-    SESSION_SIGNING_KEY: VALID_KEY_B64URL,
+    TEXCENTER_LOCAL_SIGNING_KEY: VALID_KEY_B64URL,
     TEXCENTER_LOCAL_USER_ID: "00000000-0000-0000-0000-000000000007",
   });
   assert.equal(r.ok, true);
@@ -226,7 +226,7 @@ function testResolveLocalRejectsBadKey() {
     () =>
       resolveLocalDbEnv({
         DATABASE_URL: "postgres://x@127.0.0.1:5432/db",
-        SESSION_SIGNING_KEY: "!!!not-base64url!!!",
+        TEXCENTER_LOCAL_SIGNING_KEY: "!!!not-base64url!!!",
         TEXCENTER_LOCAL_USER_ID: "u",
       }),
     /not valid base64url/,
@@ -239,7 +239,7 @@ function testResolveLocalRejectsShortKey() {
     () =>
       resolveLocalDbEnv({
         DATABASE_URL: "postgres://x@127.0.0.1:5432/db",
-        SESSION_SIGNING_KEY: shortKey,
+        TEXCENTER_LOCAL_SIGNING_KEY: shortKey,
         TEXCENTER_LOCAL_USER_ID: "u",
       }),
     /needs >=32/,

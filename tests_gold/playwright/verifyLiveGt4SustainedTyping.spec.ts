@@ -23,14 +23,12 @@
 // proxy. Yjs is bidirectional, so the editor's text reflects
 // the committed Y.Doc state; a divergence would be its own
 // (more dramatic) bug.
+//
+// Project + Machine are provided by the worker-scoped
+// `liveProject` fixture (shared with GT-A/B/C); this spec runs
+// last so its typed body is appended after GT-C's single char.
 
-import {
-  createProject,
-  type ProjectRow,
-} from "@tex-center/db";
-
-import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
-import { expect, test } from "./fixtures/authedPage.js";
+import { expect, test } from "./fixtures/sharedLiveProject.js";
 
 const TAG_PDF_SEGMENT = 0x20;
 const TAG_CONTROL = 0x10;
@@ -43,8 +41,6 @@ const TYPING_BODY =
   "Some more padding bytes to extend the typing window.";
 
 test.describe("live sustained typing (GT-D)", () => {
-  let seeded: ProjectRow | null = null;
-
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "live",
@@ -56,32 +52,16 @@ test.describe("live sustained typing (GT-D)", () => {
     );
   });
 
-  test.afterEach(async ({ db }) => {
-    if (seeded !== null) {
-      await cleanupLiveProjectMachine({
-        projectId: seeded.id,
-        drizzle: db.db.db,
-      });
-      seeded = null;
-    }
-  });
-
   test("sustained typing: no overlap error, final state matches, ≥1 pdf-segment", async ({
     authedPage,
-    db,
+    liveProject,
   }) => {
     test.setTimeout(420_000);
-
-    const project = await createProject(db.db.db, {
-      ownerId: db.userId,
-      name: `pw-sustained-${Date.now()}`,
-    });
-    seeded = project;
 
     const pdfSegmentFrames: Buffer[] = [];
     const overlapErrors: string[] = [];
     authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
       ws.on("framereceived", ({ payload }) => {
         if (typeof payload === "string") return;
         if (payload.length === 0) return;
@@ -98,7 +78,7 @@ test.describe("live sustained typing (GT-D)", () => {
       });
     });
 
-    await authedPage.goto(`/editor/${project.id}`);
+    await authedPage.goto(`/editor/${liveProject.id}`);
 
     // Wait for the initial pdf-segment (seeded-template compile)
     // so typing starts on the post-hydrate steady state. This

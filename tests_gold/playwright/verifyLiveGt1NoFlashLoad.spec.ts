@@ -23,28 +23,15 @@
 //
 // Live-only and gated on `TEXCENTER_FULL_PIPELINE=1` to match
 // the rest of the live full-pipeline specs.
+//
+// Project + Machine are provided by the worker-scoped
+// `liveProject` fixture; GT-A runs first (file sort order)
+// so it observes the project in its freshly-seeded state
+// before B/C/D mutate it.
 
-import {
-  createProject,
-  type ProjectRow,
-} from "@tex-center/db";
-
-import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
-import { expect, test } from "./fixtures/authedPage.js";
-
-// Authoritative source: `packages/protocol/src/index.ts:MAIN_DOC_HELLO_WORLD`.
-// Inlined here for the same reason as the sibling specs (avoids
-// pulling `@tex-center/protocol` into Playwright's transform path
-// through the root workspace devDeps).
-const MAIN_DOC_HELLO_WORLD =
-  "\\documentclass{article}\n" +
-  "\\begin{document}\n" +
-  "Hello, world!\n" +
-  "\\end{document}\n";
+import { expect, test } from "./fixtures/sharedLiveProject.js";
 
 test.describe("live no-flash editor load (GT-A)", () => {
-  let seeded: ProjectRow | null = null;
-
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "live",
@@ -56,29 +43,13 @@ test.describe("live no-flash editor load (GT-A)", () => {
     );
   });
 
-  test.afterEach(async ({ db }) => {
-    if (seeded !== null) {
-      await cleanupLiveProjectMachine({
-        projectId: seeded.id,
-        drizzle: db.db.db,
-      });
-      seeded = null;
-    }
-  });
-
   test("freshly-seeded project: .cm-content is never visible empty", async ({
     authedPage,
-    db,
+    liveProject,
   }) => {
     test.setTimeout(300_000);
 
-    const project = await createProject(db.db.db, {
-      ownerId: db.userId,
-      name: `pw-noflash-${Date.now()}`,
-    });
-    seeded = project;
-
-    await authedPage.goto(`/editor/${project.id}`);
+    await authedPage.goto(`/editor/${liveProject.id}`);
 
     // Wait for the editor element to become attached. After
     // iter 175 the skeleton placeholder will keep `.cm-content`

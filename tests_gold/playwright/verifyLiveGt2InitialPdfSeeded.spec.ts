@@ -17,20 +17,15 @@
 // iter 176 to absorb.
 //
 // Live-only, gated on `TEXCENTER_FULL_PIPELINE=1`.
+//
+// Project + Machine are provided by the worker-scoped
+// `liveProject` fixture (shared with GT-A/C/D).
 
-import {
-  createProject,
-  type ProjectRow,
-} from "@tex-center/db";
-
-import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
-import { expect, test } from "./fixtures/authedPage.js";
+import { expect, test } from "./fixtures/sharedLiveProject.js";
 
 const TAG_PDF_SEGMENT = 0x20;
 
 test.describe("live initial PDF for seeded content (GT-B)", () => {
-  let seeded: ProjectRow | null = null;
-
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "live",
@@ -42,31 +37,15 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
     );
   });
 
-  test.afterEach(async ({ db }) => {
-    if (seeded !== null) {
-      await cleanupLiveProjectMachine({
-        projectId: seeded.id,
-        drizzle: db.db.db,
-      });
-      seeded = null;
-    }
-  });
-
   test("seeded project: pdf-segment arrives without user input", async ({
     authedPage,
-    db,
+    liveProject,
   }) => {
     test.setTimeout(300_000);
 
-    const project = await createProject(db.db.db, {
-      ownerId: db.userId,
-      name: `pw-initialpdf-${Date.now()}`,
-    });
-    seeded = project;
-
     const pdfSegmentFrames: Buffer[] = [];
     authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
       ws.on("framereceived", ({ payload }) => {
         if (typeof payload === "string") return;
         if (payload.length === 0) return;
@@ -76,7 +55,7 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
       });
     });
 
-    await authedPage.goto(`/editor/${project.id}`);
+    await authedPage.goto(`/editor/${liveProject.id}`);
 
     // No typing — the sidecar should hydrate the seeded
     // `main.tex` template and ship a pdf-segment frame on its

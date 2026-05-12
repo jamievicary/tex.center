@@ -136,7 +136,12 @@ export type ResolveLocalDbEnvResult =
 
 const LOCAL_REQUIRED = [
   "DATABASE_URL",
-  "SESSION_SIGNING_KEY",
+  // `TEXCENTER_LOCAL_SIGNING_KEY` (not `SESSION_SIGNING_KEY`) so
+  // a combined local+live Playwright run can hold the live Fly
+  // secret in `SESSION_SIGNING_KEY` for the live worker while
+  // the pglite-generated key lives in this separate env var for
+  // the local worker. globalSetup.ts exports both.
+  "TEXCENTER_LOCAL_SIGNING_KEY",
   "TEXCENTER_LOCAL_USER_ID",
 ] as const;
 
@@ -150,14 +155,14 @@ export function resolveLocalDbEnv(
   }
   if (missing.length > 0) return { ok: false, missing };
 
-  const rawKey = env.SESSION_SIGNING_KEY as string;
+  const rawKey = env.TEXCENTER_LOCAL_SIGNING_KEY as string;
   if (!/^[A-Za-z0-9_-]+$/u.test(rawKey)) {
-    throw new Error("SESSION_SIGNING_KEY is not valid base64url");
+    throw new Error("TEXCENTER_LOCAL_SIGNING_KEY is not valid base64url");
   }
   const signingKey = Buffer.from(rawKey, "base64url");
   if (signingKey.byteLength < 32) {
     throw new Error(
-      `SESSION_SIGNING_KEY decodes to ${signingKey.byteLength} bytes; needs >=32`,
+      `TEXCENTER_LOCAL_SIGNING_KEY decodes to ${signingKey.byteLength} bytes; needs >=32`,
     );
   }
   return {

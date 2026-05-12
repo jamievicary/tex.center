@@ -18,10 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SPEC_DIR = ROOT / "tests_gold" / "playwright"
 
-GT_A = SPEC_DIR / "verifyLiveNoFlashLoad.spec.ts"
-GT_B = SPEC_DIR / "verifyLiveInitialPdfSeeded.spec.ts"
-GT_C = SPEC_DIR / "verifyLiveEditTriggersFreshPdf.spec.ts"
-GT_D = SPEC_DIR / "verifyLiveSustainedTyping.spec.ts"
+GT_A = SPEC_DIR / "verifyLiveGt1NoFlashLoad.spec.ts"
+GT_B = SPEC_DIR / "verifyLiveGt2InitialPdfSeeded.spec.ts"
+GT_C = SPEC_DIR / "verifyLiveGt3EditTriggersFreshPdf.spec.ts"
+GT_D = SPEC_DIR / "verifyLiveGt4SustainedTyping.spec.ts"
 
 
 class TestGoldSpecsExist(unittest.TestCase):

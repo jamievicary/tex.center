@@ -28,12 +28,12 @@ Most-recent inflection points (each maps to a discussion question):
   feedback affordance, no toast UX, logo doesn't navigate. Four
   failing-on-purpose gold specs (GT-A through GT-D) landed at
   iter 173 to lock in TDD.
-- **Resource hygiene** (`173b_question.md`): live specs leak
-  per-project Fly Machines because their `afterEach` only deletes
-  the DB row; idle-stop is also broken in prod. Five specs
-  affected. Orphan count was 27 at the question; currently 2 (all
-  legitimate app-pool) — auto-pruned by Fly between snapshots,
-  but the leak recurs on every live spec run until fixed.
+- **Resource hygiene** (`173b_question.md`): live specs leaked
+  per-project Fly Machines because their `afterEach` only
+  deleted the DB row, and idle-stop was broken for
+  never-connected machines. Spec teardown fixed iter 175;
+  idle-stop fixed iter 176 (timer now arms at sidecar startup,
+  not only on `1→0` transition).
 - **Debug protocol toasts** (`174_question.md`): augments the
   toast component design with debug-mode categories. Folds into
   the toast UX milestone.
@@ -66,14 +66,20 @@ Two slices:
   `tests_gold/cases/test_sidecar_machine_count.py` calls Fly
   Machines API, asserts ≤ `TEXCENTER_MAX_SIDECAR_MACHINES`
   (default 5), lists offenders on breach. Status: **done**.
-- **Idle-stop diagnosis + regression spec.** `flyctl secrets
-  list -a tex-center-sidecar` for `SIDECAR_IDLE_TIMEOUT_MS`,
-  `flyctl logs` for viewer-count zero-transition + idle-timer
-  fire + `Compiler.close()` completion. Fix the broken link.
-  Add gated regression spec under `TEXCENTER_VERIFY_IDLE_STOP=1`
-  (lower the timeout on the test project if a runtime override
-  exists; otherwise eat the 12-min wallclock). Status:
-  **next slice**.
+- **Idle-stop diagnosis + fix.** Landed iter 176. Bug: arm path
+  was only the `viewerCount: 1→0` transition in
+  `noteViewerRemoved`, so a Fly Machine that booted without ever
+  receiving a WS handshake never armed the timer and ran
+  forever (confirmed via `flyctl logs` on
+  `7815104f060d28`: only `Server listening`, no viewer-added).
+  Fix in `apps/sidecar/src/server.ts`: factored arm into
+  `armIdleTimer()` and called it once at `buildServer` init;
+  first viewer-add clears it. Regression unit test added as
+  case 5 in `apps/sidecar/test/serverIdleStop.test.mjs`. Status:
+  **done**. Live regression spec deferred — the unit test
+  covers the bug shape, and a 12-min wallclock live variant has
+  poor cost/benefit while the per-spec teardown (iter 175) and
+  count guardrail already lock the cleanup.
 
 ### M9.editor-ux — live editor UX bugs (TDD'd via gold)
 

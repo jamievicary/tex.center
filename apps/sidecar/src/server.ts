@@ -173,6 +173,38 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }
   }
 
+  function armIdleTimer(): void {
+    if (!idleEnabled) return;
+    clearIdleTimer();
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      // Persist checkpoints before handing off to the user's
+      // onIdle callback. The entry point's onIdle calls
+      // `app.close()` which destroys per-project state, so any
+      // snapshot/persist has to happen first.
+      void (async () => {
+        await persistAllCheckpoints();
+        try {
+          onIdle!();
+        } catch (e) {
+          app.log.error(
+            { err: e instanceof Error ? e.message : String(e) },
+            "onIdle threw",
+          );
+        }
+      })();
+    }, idleTimeoutMs!);
+    // Don't pin the event loop just to fire idle-stop.
+    idleTimer.unref?.();
+  }
+
+  // Arm at startup: a Fly Machine that boots without ever
+  // receiving a viewer connection (control-plane wake-probe
+  // followed by no WS handshake, or user navigates away
+  // mid-cold-start) would otherwise never transition 1→0 and
+  // never idle-stop. First viewer-add clears this.
+  armIdleTimer();
+
   function noteViewerAdded(): void {
     viewerCount += 1;
     clearIdleTimer();
@@ -181,28 +213,8 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   function noteViewerRemoved(): void {
     viewerCount -= 1;
     if (viewerCount < 0) viewerCount = 0;
-    if (viewerCount === 0 && idleEnabled) {
-      clearIdleTimer();
-      idleTimer = setTimeout(() => {
-        idleTimer = null;
-        // Persist checkpoints before handing off to the user's
-        // onIdle callback. The entry point's onIdle calls
-        // `app.close()` which destroys per-project state, so any
-        // snapshot/persist has to happen first.
-        void (async () => {
-          await persistAllCheckpoints();
-          try {
-            onIdle!();
-          } catch (e) {
-            app.log.error(
-              { err: e instanceof Error ? e.message : String(e) },
-              "onIdle threw",
-            );
-          }
-        })();
-      }, idleTimeoutMs!);
-      // Don't pin the event loop just to fire idle-stop.
-      idleTimer.unref?.();
+    if (viewerCount === 0) {
+      armIdleTimer();
     }
   }
 

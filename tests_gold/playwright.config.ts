@@ -64,6 +64,10 @@ export default defineConfig({
   projects: [
     {
       name: "local",
+      // `verifyLive*` specs only make sense against the live
+      // deployment; skip them here entirely instead of running +
+      // marking-skipped, which keeps the iter log clean.
+      testIgnore: ["**/verifyLive*.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         baseURL: `http://127.0.0.1:${LOCAL_PORT}`,
