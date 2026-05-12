@@ -2,6 +2,7 @@ test_authed_cookie (test_authed_cookie.TestAuthedCookie.test_authed_cookie) ... 
 test_cleanup_project_machine (test_cleanup_project_machine.TestCleanupProjectMachine.test_cleanup_project_machine) ... ok
 test_fly_proxy (test_fly_proxy.TestFlyProxy.test_fly_proxy) ... ok
 test_local_db (test_local_db.TestLocalDb.test_local_db) ... ok
+test_mint_google_id_token (test_mint_google_id_token.TestMintGoogleIdToken.test_mint_google_id_token) ... ok
 test_mint_session (test_mint_session.TestMintSession.test_mint_session) ... ok
 test_machine_assignments (test_pglite.TestPglite.test_machine_assignments) ... ok
 test_migrations (test_pglite.TestPglite.test_migrations) ... ok
@@ -13,7 +14,7 @@ ok
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
 ----------------------------------------------------------------------
-Ran 12 tests in 28.699s
+Ran 13 tests in 34.442s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

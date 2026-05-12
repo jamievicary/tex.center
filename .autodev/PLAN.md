@@ -402,14 +402,21 @@ until this block lands. One slice per iteration.
             happy, missing/malformed/wrong-key/wrong-body header,
             empty key, body-not-JSON, missing/empty idToken,
             verify-throws, finalize-passthrough). _(iter 134.)_
-      - [ ] M8.pw.3.2 — `scripts/google-refresh-token.mjs`: one-
+      - [x] M8.pw.3.2 — `scripts/google-refresh-token.mjs`: one-
             shot helper that runs the Authorization Code + PKCE
             flow with `access_type=offline&prompt=consent` against
-            a separate OAuth client, captures the refresh token,
-            writes `creds/google-refresh-token.txt`. Plus
+            a separate OAuth client (default
+            `creds/google-oauth-test.json`), captures the refresh
+            token, writes `creds/google-refresh-token.txt` (mode
+            0600). Local loopback on `--port` (default 4567);
+            redirect URI `http://localhost:<port>/oauth-callback`
+            must be registered with the test OAuth client. Plus
             `tests_gold/lib/src/mintGoogleIdToken.ts`: refresh-
             token-grant against `https://oauth2.googleapis.com/token`,
-            returns a real Google ID token.
+            returns a real Google ID token. Injectable `fetchFn` +
+            `tokenUrl`; stub-fetch unit test
+            (`mintGoogleIdToken.test.mjs`, gold case) covers
+            happy/non-2xx/missing-id_token/empty-input. _(iter 135.)_
       - [ ] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`: in
             `live` project, mint an ID token via .3.2, POST it to
             `/auth/google/test-callback` with the bypass header,
@@ -452,12 +459,17 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** M8.pw.3.2 — `scripts/google-refresh-
-token.mjs` one-shot helper + `tests_gold/lib/src/mintGoogleIdToken.ts`
-refresh-token-grant adapter. M8.pw.3.0/3.1 (pure `finalizeGoogleSession`
-extraction + `POST /auth/google/test-callback` route) landed iter 133–
-134. M7.4.2 and M7.2 still parked until the rest of the priority
-block lands.
+**Next ordinary iteration:** M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`:
+mint an ID token via `mintGoogleIdToken` (refresh token at
+`creds/google-refresh-token.txt`), POST it to
+`/auth/google/test-callback` with `X-Test-Bypass: HMAC-SHA256(body,
+TEST_OAUTH_BYPASS_KEY)`, assert 302 → `/projects` and that the
+returned `tc_session` cookie verifies via the session hook on
+`/projects`. Needs the Fly secret `TEST_OAUTH_BYPASS_KEY` set on
+`tex-center`. Gated by `TEXCENTER_LIVE_TESTS=1` + presence of
+`creds/google-refresh-token.txt`. M8.pw.3.0–3.2 landed iter 133–135;
+M7.4.2 and M7.2 still parked until the rest of the priority block
+lands.
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
