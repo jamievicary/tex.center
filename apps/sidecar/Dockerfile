@@ -76,7 +76,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOST=0.0.0.0 \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:/opt/engine/bin:$PATH \
-    SIDECAR_COMPILER=supertex \
+    SIDECAR_COMPILER=supertex-daemon \
     SUPERTEX_BIN=/opt/supertex/build/supertex
 RUN apt-get update && apt-get install -y --no-install-recommends \
         texlive-full \

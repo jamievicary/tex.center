@@ -74,10 +74,12 @@ class TestSidecarDockerfile(unittest.TestCase):
         self.assertRegex(self.text, r"(?m)^EXPOSE\s+3001\b")
 
     def test_runtime_selects_supertex_compiler(self) -> None:
-        # The image only makes sense with SIDECAR_COMPILER=supertex;
-        # falling back to the fixture compiler would silently mask a
-        # broken supertex install on prod.
-        self.assertRegex(self.text, r"SIDECAR_COMPILER=supertex\b")
+        # Production default is the persistent-daemon compiler
+        # (M7.5.5 closed iter 122; flipped iter 123). Falling back
+        # to the fixture compiler — or the per-edit `supertex`
+        # once-compiler — would silently mask a broken supertex
+        # install on prod or regress edit-to-preview latency.
+        self.assertRegex(self.text, r"SIDECAR_COMPILER=supertex-daemon\b")
         self.assertRegex(self.text, r"SUPERTEX_BIN=\S+")
 
     def test_install_layer_covers_every_workspace_package(self) -> None:

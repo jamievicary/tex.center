@@ -351,13 +351,19 @@ restore`. With M7.4.1 landed, the sidecar half is fully wired:
 the day a real `snapshot()` returns non-null, persistence is
 automatic.
 
+`SIDECAR_COMPILER=supertex-daemon` is now the production default
+(iter 123 flipped `apps/sidecar/Dockerfile`); the next sidecar
+redeploy moves the live site onto the persistent-daemon path.
+The deploy itself is manual (`flyctl deploy --remote-only
+--no-public-ips -a tex-center-sidecar --config
+apps/sidecar/fly.toml .`) — `.github/workflows/deploy.yml` only
+covers `tex-center` today.
+
 Smaller alternatives if M7.4.2 is blocked on upstream:
-- Flip `SIDECAR_COMPILER=supertex-daemon` to the production
-  default now that M7.5.5 has a standing real-ELF gold test
-  (iter 122). Requires the sidecar image to actually build
-  `supertex_daemon` alongside `supertex` and the runtime to wire
-  the env var.
 - M7.2 `/ws/project/<id>` routing-per-project plumbing.
+- Wire a sidecar deploy into CI (or a dedicated workflow file)
+  so the daemon flip — and future sidecar changes — reach prod
+  on push to `main` like the control plane already does.
 
 The `verifyLiveWsUpgrade` spec still needs
 `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`
@@ -366,8 +372,10 @@ iteration that does so will exercise it end-to-end.
 
 ## Live caveats
 
-- `SIDECAR_COMPILER=supertex` (once-compiler) is the only real engine
-  path today; daemon-mode (M7.5) gated on M7.5.5.
+- Production default is `SIDECAR_COMPILER=supertex-daemon` (iter
+  123); takes live effect on next sidecar deploy. Until that
+  redeploy, the running sidecar image still has the once-compiler
+  baked in.
 - `app.db` only powers `/healthz` (`SELECT 1`, reports `db: { state }`).
   Same endpoint reports `blobs: { state }` via `BlobStore.health()`;
   future S3 adapter must implement it. `/healthz` is intentionally a

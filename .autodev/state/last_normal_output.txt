@@ -7,21 +7,21 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.3s
+Done in 1.2s
 Scope: 6 of 7 workspace projects
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck: Done
+packages/blobs typecheck: Done
 packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778555124054 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778555124059 COMPLETED 720 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778555467218 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778555467231 COMPLETED 720 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
@@ -117,7 +117,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 92 tests in 48.069s
+Ran 92 tests in 50.791s
 
 OK
 tests_normal/run_tests.sh: PASS
