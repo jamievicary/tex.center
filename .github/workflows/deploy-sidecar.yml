@@ -54,6 +54,29 @@ jobs:
           # never reached production.
           token: ${{ secrets.SUBMODULE_TOKEN }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --no-public-ips -a tex-center-sidecar --config apps/sidecar/fly.toml .
+      - name: flyctl deploy (sidecar)
+        id: deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -o pipefail
+          flyctl deploy --remote-only --no-public-ips -a tex-center-sidecar --config apps/sidecar/fly.toml . 2>&1 | tee deploy.log
+          digest=$(grep -oE 'sha256:[a-f0-9]{64}' deploy.log | tail -1)
+          if [ -z "$digest" ]; then
+            echo "could not extract sha256 digest from deploy output" >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      # Per-project Machines on `tex-center` are created by the
+      # control-plane resolver using whatever digest `SIDECAR_IMAGE`
+      # is pinned to. Without this step every sidecar deploy lands
+      # in the registry but never reaches a running per-project
+      # Machine — that is exactly the iter-169 bug where every
+      # sidecar fix since iter 153 (observability, etc.) was silently
+      # invisible in prod despite green CD.
+      - name: Pin SIDECAR_IMAGE on tex-center to just-deployed digest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DIGEST: ${{ steps.deploy.outputs.digest }}
+        run: |
+          flyctl secrets set "SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@${DIGEST}" -a tex-center

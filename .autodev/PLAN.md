@@ -343,7 +343,38 @@ Estimated iteration sequence (adjust as work unfolds):
   `apps/web/test/upstreamResolver.test.mjs` case 10 (two
   ECONNREFUSEDs then ok) and case 11 (probe budget=0 → reject).
 
-- **Iter 169+ — Confirm M8.pw.4 result with the new gold-runner
+- **Iter 169 — Sidecar image pin drift: 14 iters of invisible
+  rollouts.** *Done.* Manual M8.pw.4 run after iter-168's deploy
+  showed `upstream-connected` now reached (TCP-probe fix worked)
+  AND sidecar `incoming request` for `/ws/project/<id>` arriving,
+  but no `client doc-update`, `compile start`, `compile ok` —
+  i.e. exactly the iter-163 observability lines, conspicuously
+  absent. Root cause: `SIDECAR_IMAGE` secret on `tex-center` has
+  been pinned to iter-153's digest
+  (`sha256:5513f7f3…`) since iter 153, while sidecar CD has
+  continued building/pushing new images that the resolver never
+  uses. Every sidecar-side fix from iter 154 onwards (including
+  iter 163's diagnostic logging) silently went missing in prod,
+  hidden behind a green `Deploy sidecar to Fly` workflow and a
+  green `Deploy to Fly` workflow.
+
+  Two-part fix:
+  1. *Operational:* `flyctl secrets set SIDECAR_IMAGE=…@sha256:56ee6e14…
+     -a tex-center` (iter-167's digest, the latest pushed; tex-center
+     rolled cleanly).
+  2. *Code:* extended `.github/workflows/deploy-sidecar.yml` to
+     capture the pushed digest from `flyctl deploy` stdout and run
+     `flyctl secrets set SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@<digest>
+     -a tex-center`. Lock-in:
+     `tests_normal/cases/test_deploy_sidecar_workflow.py::{test_pins_sidecar_image_secret_on_tex_center,test_deploy_step_captures_digest_output}`.
+
+  Did not re-run M8.pw.4 in-iteration (would have eaten the
+  wallclock budget twice over); harness gold run will read out the
+  result. With iter-163's logs now actually flowing, the next
+  failure (if any) is diagnosable end-to-end per the iter-169+
+  flowchart in the slot below.
+
+- **Iter 170+ — Confirm M8.pw.4 result with the new gold-runner
   arrangement.**
   Same shape as iter 164: read the deploy's live-pipeline result;
   if pdf-segment frames arrive, FREEZE-lift is ready (per `162_answer.md`

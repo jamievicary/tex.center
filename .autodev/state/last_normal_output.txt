@@ -5,13 +5,13 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 81, downloaded 0, added 0, done
+Progress: resolved 0, reused 75, downloaded 0, added 0, done
 
 Done in 1.1s
 Scope: 6 of 7 workspace projects
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
@@ -26,8 +26,10 @@ apps/web typecheck: svelte-check found 0 errors and 0 warnings
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
+test_deploy_step_captures_digest_output (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_deploy_step_captures_digest_output) ... ok
 test_fly_config_exists (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_fly_config_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
+test_pins_sidecar_image_secret_on_tex_center (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_pins_sidecar_image_secret_on_tex_center) ... ok
 test_runs_flyctl_deploy_with_canonical_flags (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_runs_flyctl_deploy_with_canonical_flags) ... ok
 test_supports_manual_dispatch (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_supports_manual_dispatch) ... ok
 test_triggers_on_push_to_main_with_paths (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_triggers_on_push_to_main_with_paths) ... ok
@@ -150,7 +152,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 124 tests in 44.425s
+Ran 126 tests in 45.895s
 
 OK
 tests_normal/run_tests.sh: PASS

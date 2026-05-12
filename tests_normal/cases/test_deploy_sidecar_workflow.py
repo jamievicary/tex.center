@@ -116,6 +116,52 @@ class TestSidecarDeployWorkflow(unittest.TestCase):
         # actually exist or `flyctl deploy` errors out on the runner.
         self.assertTrue((ROOT / "apps/sidecar/fly.toml").is_file())
 
+    def test_pins_sidecar_image_secret_on_tex_center(self) -> None:
+        # Per-project Machines on `tex-center` are spawned by the
+        # control-plane resolver using the digest pinned in the
+        # `SIDECAR_IMAGE` secret. Sidecar CD landing in the registry
+        # without updating that pin is a silent rollout failure —
+        # discovered iter 169 after iter 153's hand-pinned digest had
+        # kept every subsequent sidecar fix (incl. iter-163
+        # observability, used to diagnose M8.pw.4) out of prod for
+        # 14 iterations.
+        steps = self.doc["jobs"]["deploy"]["steps"]
+        pin_steps = [
+            s for s in steps
+            if "SIDECAR_IMAGE=" in (s.get("run") or "")
+            and "flyctl secrets set" in (s.get("run") or "")
+            and "tex-center" in (s.get("run") or "")
+        ]
+        self.assertEqual(
+            len(pin_steps), 1,
+            "expected exactly one `flyctl secrets set SIDECAR_IMAGE=... "
+            "-a tex-center` step that pins the just-deployed digest",
+        )
+        # The pinned value must reference the digest captured from
+        # the deploy step, not a hard-coded literal.
+        run = pin_steps[0]["run"]
+        self.assertIn("${DIGEST}", run, run)
+        env = pin_steps[0].get("env", {})
+        self.assertEqual(
+            env.get("FLY_API_TOKEN"), "${{ secrets.FLY_API_TOKEN }}",
+        )
+        self.assertEqual(
+            env.get("DIGEST"), "${{ steps.deploy.outputs.digest }}",
+        )
+
+    def test_deploy_step_captures_digest_output(self) -> None:
+        # The pin step above depends on `steps.deploy.outputs.digest`;
+        # the deploy step must have id=deploy and must write the
+        # digest line to $GITHUB_OUTPUT.
+        steps = self.doc["jobs"]["deploy"]["steps"]
+        deploy_steps = [s for s in steps if "flyctl deploy" in (s.get("run") or "")]
+        self.assertEqual(len(deploy_steps), 1)
+        self.assertEqual(deploy_steps[0].get("id"), "deploy")
+        run = deploy_steps[0]["run"]
+        self.assertIn("digest=", run)
+        self.assertIn("GITHUB_OUTPUT", run)
+        self.assertIn("sha256:", run)
+
 
 if __name__ == "__main__":
     unittest.main()
