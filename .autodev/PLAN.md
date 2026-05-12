@@ -42,13 +42,35 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — upstream supertex `process_event` rollback fix.**
-  Blocks live GT-3 and GT-5. Next step: capture a minimal repro
-  against `vendor/supertex`'s daemon harness (initial compile,
-  then edit, then observe `process_event` returns no rollback
-  target), then PR upstream. With the sidecar fallback gone, no
-  further client-side workaround is available — this is the only
-  remaining path to green GT-3/GT-5.
+- **M7.4.x — sidecar adapts to iter-724 daemon protocol.**
+  Blocks live GT-3 and GT-5. The iter-189 "upstream `process_event`
+  no-rollback fix" framing is superseded: per
+  `.autodev/discussion/195_question.md` + `195_answer.md`, the
+  upstream protocol now signals rollback explicitly via
+  `[rollback I]` followed by `[I+1.out]…[K.out]`, and the submodule
+  has been advanced 702→724. `apps/sidecar/Dockerfile` already
+  rebuilds `supertex` from the submodule on every image build, so
+  no binary bump is needed — shipping a fresh image picks up the
+  new daemon. Iter-194 `targetPage` / edit-byte-distribution
+  hypotheses are also superseded. Next-iteration goal:
+  (1) build verification — `make -C vendor/supertex` locally and
+  spawn `--daemon` against a fixture to capture one recompile-
+  after-edit round; (2) diagnose which of the three gates in
+  `vendor/supertex/tools/supertex_daemon.c:1100-1260` (no-edit /
+  `run_process_event` no rollback target / `wait_for_resumed`
+  failure) the live failure hits, by running gold against the
+  rebuilt binary and inspecting daemon stderr. The iter-after-next
+  either tightens `collectRound` in `apps/sidecar/src/compiler/
+  supertexDaemon.ts:283-307` (a `[rollback K]` followed by
+  `[round-done]` with no chunks currently still trips the empty-
+  segments short-circuit, the one new failure mode the iter-189
+  logic doesn't model) or re-opens an upstream PR if a gate is
+  genuinely the live cause. Two prior question claims NOT to carry
+  into the fix: (a) `assembleSegment` already concatenates
+  `1..maxShipout`, not just the highest chunk, so it doesn't need
+  rewriting; (b) there is no baked supertex ELF to pin —
+  `vendor/engine/` carries the patched lualatex, not the supertex
+  CLI.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated
   badge.
