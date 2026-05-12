@@ -2,9 +2,11 @@
 
 Three observations from the user, all true:
 
-1. **PLAN.md is 588 lines.** The `147_question.md` directive set a
-   ~80-line target with a critical-path top section and per-area
-   state below. The file has accreted past that bound because…
+1. **PLAN.md is 588 lines, but length isn't the symptom.** Most
+   of those lines are accreted past-iter narratives that belong
+   in the iter logs, not a forward-looking plan. The size matters
+   only insofar as it makes the live forward path unfindable.
+   The cause is that…
 2. **the `N % 10 == 1` plan-review cron is frozen by the FREEZE
    block** at the top of PLAN. It hasn't run since iter 147.
    Without it, every iter's narrative lands and stays.
@@ -42,14 +44,21 @@ items:
 
 ### 2. Rewrite PLAN.md
 
-Target shape (~80–100 lines), three sections:
+Three sections. Use line counts as a *soft target* not a hard
+constraint — when there are genuinely many open milestones or
+known gaps, a longer doc is appropriate. The previous 588-line
+state was wrong not because it was long, but because it had
+accreted closed-work narratives that belong in the iter logs.
+A 200-line forward-looking PLAN with real surface area is fine.
 
-- **§1 Recent state** (~10 lines). What's working live, what's
-  the most recent product gap surfaced (with pointer to its
-  discussion question if one exists). No iteration numbers
-  beyond pointing to discussion files.
-- **§2 Milestones** (~40 lines). Feature-based, not
-  iter-numbered. Each milestone is a one-paragraph block:
+- **§1 Recent state.** What's working live, what's the most
+  recent product gap surfaced (with pointer to its discussion
+  question if one exists). No iteration numbers beyond pointing
+  to discussion files. Aim for ~10 lines; longer if the live
+  state genuinely has multiple recent inflection points worth
+  capturing.
+- **§2 Milestones.** Feature-based, not iter-numbered. Each
+  milestone is a one-paragraph block:
   - Name.
   - What it delivers (concrete user-visible capability).
   - Pointer to the load-bearing discussion question(s), e.g.
@@ -57,11 +66,16 @@ Target shape (~80–100 lines), three sections:
   - Status: not started / in progress / done.
   No "Iter X: …" lines anywhere. If you want to record what's
   next, say "next slice" or "next milestone", not a number.
-- **§3 Open questions / known gaps** (~10 lines). Brief.
+  Length here scales naturally with the active surface area —
+  use as much as needed, no more.
+- **§3 Open questions / known gaps.** Brief one-liners. Keep
+  resolved items out — when something stops being open, move it
+  into a milestone or delete it.
 
 Closed milestones collapse to one line: "Completed: M0–M7.5.5,
 M8.pw.0–pw.4 (see git log)". History lives in the iter logs,
-not in PLAN.
+not in PLAN. The compression discipline matters more than any
+specific line target.
 
 ### 3. Discussion-question pointers
 
@@ -91,7 +105,9 @@ iters use the corrected plan as their goal-selection input.
 Same reasoning as `147_question.md`: PLAN is the steering
 input; fix the steering before turning the wheel.
 
-If the agent judges any of these directives wrong (e.g. the
-target line count is too aggressive given the surface area), say
-so in the answer and propose an alternative — but don't ship a
-mid-rewrite that's bigger than the present 588 lines.
+If the agent judges any of these directives wrong, say so in
+the answer and propose an alternative. The principle: **PLAN
+should be forward-looking — every line earns its place by
+informing the next iteration's goal-selection**. Lines that
+just narrate past iters' work belong in the iter logs, not
+PLAN. Compression by that test, not by line count.
