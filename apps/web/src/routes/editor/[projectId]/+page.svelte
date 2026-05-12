@@ -7,6 +7,7 @@
   import Editor from "$lib/Editor.svelte";
   import FileTree from "$lib/FileTree.svelte";
   import PdfViewer from "$lib/PdfViewer.svelte";
+  import linearLogo from "$lib/logos/linear.svg?raw";
   import { MAIN_DOC_NAME } from "@tex-center/protocol";
 
   import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
@@ -108,7 +109,7 @@
 <div class="shell">
   <header class="topbar">
     <div class="brand-group">
-      <a href="/projects" class="brand">tex.center</a>
+      <a href="/projects" class="brand" aria-label="tex.center">{@html linearLogo}</a>
       <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
     </div>
     {#if data.user}
@@ -183,12 +184,19 @@
     gap: 0.4rem;
   }
   .brand {
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
     color: inherit;
     text-decoration: none;
   }
+  .brand :global(svg) {
+    height: 1.1rem;
+    width: auto;
+    display: block;
+  }
   .brand:hover {
-    text-decoration: underline;
+    opacity: 0.75;
   }
   .iter {
     font-size: 0.75rem;

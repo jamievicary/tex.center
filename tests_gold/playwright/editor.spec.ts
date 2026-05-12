@@ -35,7 +35,7 @@ test.describe("editor route", () => {
     expect(response?.status()).toBe(200);
 
     // Topbar.
-    await expect(authedPage.getByText("tex.center", { exact: true })).toBeVisible();
+    await expect(authedPage.getByRole("img", { name: "tex.center" })).toBeVisible();
     await expect(
       authedPage.locator('form[action="/auth/logout"] button[type="submit"]'),
     ).toBeVisible();

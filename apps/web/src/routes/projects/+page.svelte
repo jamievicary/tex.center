@@ -1,5 +1,7 @@
 <script lang="ts">
   import { env as publicEnv } from "$env/dynamic/public";
+  import linearLogo from "$lib/logos/linear.svg?raw";
+  import stackedLogo from "$lib/logos/stacked.svg?raw";
   const PUBLIC_TEXCENTER_ITER = publicEnv.PUBLIC_TEXCENTER_ITER ?? "dev";
   let { data, form } = $props();
 </script>
@@ -7,7 +9,7 @@
 <div class="wrap">
   <header class="topbar">
     <div class="brand-group">
-      <div class="brand">tex.center</div>
+      <span class="brand" aria-label="tex.center" role="img">{@html linearLogo}</span>
       <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
     </div>
     <form method="POST" action="/auth/logout">
@@ -16,6 +18,7 @@
   </header>
 
   <main>
+    <div class="mark" aria-hidden="true">{@html stackedLogo}</div>
     <h1>Projects</h1>
 
     {#if data.projects.length === 0}
@@ -67,7 +70,24 @@
     gap: 0.4rem;
   }
   .brand {
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+  }
+  .brand :global(svg) {
+    height: 1.1rem;
+    width: auto;
+    display: block;
+  }
+  .mark {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 1rem;
+  }
+  .mark :global(svg) {
+    height: 4rem;
+    width: auto;
+    display: block;
   }
   .iter {
     font-size: 0.75rem;

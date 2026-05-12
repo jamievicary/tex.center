@@ -63,16 +63,20 @@ Remaining slices:
   a sidecar persistence-ack wire signal that doesn't exist yet.
   Local + live Playwright variants.
 
-### M10.branding — logo assets (post-MVP UX)
+### M10.branding — logo assets (post-MVP UX) — DONE (iter 194)
 
-`assets/logo_stacked.svg` and `assets/logo_linear.svg` are in tree.
-Inline via Vite `?raw` import (no static fetch; enables
-`currentColor` theming). `/projects` page: stacked mark above the
-project list. Topbar: replace `tex.center` wordmark with linear
-mark, preserving the iter-177 `<a href="/projects">` wrapper and
-the iter-185 indicator slot. Existing topbar/landing/projects gold
-specs need to swap wordmark-text assertions for image/SVG
-aria-label assertions. Single iteration. See `discussion/191_answer.md`.
+Logo SVGs live in `apps/web/src/lib/logos/{linear,stacked}.svg`
+(copied from `assets/`; the originals remain there as source-of-
+truth). Inlined into both topbars and the `/projects` page header
+via Vite `?raw` import + `{@html}`. Brand wrapper is
+`<span role="img" aria-label="tex.center">` (the editor route uses
+`<a class="brand" aria-label="tex.center">` preserving the iter-177
+project-list link). `editor.spec.ts` swapped its
+`getByText("tex.center")` for `getByRole("img", { name: "tex.center" })`.
+Iter-185 indicator slot unchanged. `currentColor` theming is not
+yet wired (SVGs ship Inkscape-authored fills); the wrapper-based
+aria-label assertion is the contract gold tests anchor on, so a
+later cleanup pass that strips inline fills won't break tests.
 
 ### M11.file-tree — tree component + CRUD UX (post-MVP UX)
 
@@ -109,10 +113,10 @@ Single iteration. Local gold: drag → reload → widths persist.
   dominates; in that case M13.2 may collapse into M7.0.2
   sequencing rather than ship separately.
 
-Default sequencing (M10–M13 all post-MVP, ordered after MVP-gap
-M7.4.x and the GT-E/GT-F/save-feedback work): M10 → M13.1 →
-M12 → M11.1–M11.4 → M13.2. M11.5 gated on binary-asset wire
-work.
+Default sequencing (M11–M13 all post-MVP, ordered after MVP-gap
+M7.4.x and the GT-E/GT-F/save-feedback work): M13.1 → M12 →
+M11.1–M11.4 → M13.2. M11.5 gated on binary-asset wire work.
+M10 landed iter 194.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
