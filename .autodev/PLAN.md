@@ -102,25 +102,32 @@ Estimated iteration sequence (adjust as work unfolds):
   lock: `tests_normal/cases/test_sidecar_dockerfile.py::test_engine_binary_is_executable_in_git`.
   Cutover slides to iter 153, M8.pw.4 activation to iter 154.
 
-- **Iter 153 — Live cutover (was 152).** Once the sidecar CD
-  triggered by iter 152's commit completes successfully (gh run
-  for `Deploy sidecar to Fly` on the iter-152 commit, expected
-  ~10–14 min — first ever non-CACHED runtime-stage build, so
-  may take longer if the texlive-full layer rebuilds), do the
-  cutover. Steps:
-  (1) `flyctl image show -a tex-center-sidecar` (one-shot) for
-  the latest sha; (2) `flyctl secrets set
-  SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:<new>
-  -a tex-center`; (3) `flyctl machines list -a
-  tex-center-sidecar` and `flyctl machines destroy --force
-  <id>` for every stale per-project Machine (the resolver will
-  recreate them at the new sha on next dial); (4) run
-  `pnpm exec tsx scripts/probe-live-ws.mjs` against an owned
-  project id and expect `kind: "upgrade", status: 101`. Use a
-  generous cold-start window — first dial after destroy can
-  take ~80 s while the new Machine image pull + tsx warm-up
-  complete (FUTURE_IDEAS: pre-warm or longer
-  `connectTimeoutMs`).
+- **Iter 153 — Live cutover.** *Done.* Sidecar CD (run
+  25732884801, iter-152 commit) succeeded — first ever green
+  `Deploy sidecar to Fly`. Pinned
+  `SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:5513f7f38b57e3badf0429ba1f319486ad1b44f5ef9c1ea09c91da9f8d4fc0a9`
+  on `tex-center`, destroyed two stale per-project Machines
+  (185432ef5d9038, 0803d24b6d1e48) that had been OOM-rebooting on
+  the old image, ran `scripts/probe-live-ws.mjs` against an owned
+  project: **`kind: "upgrade", status: 101`** via TWO `via` hops
+  (real upstream response, not Fly-edge synthesis). Iter-147
+  WS-502 incident class is **closed**. New per-project Machine
+  `d8d545df11d078` running the new image.
+
+- **Iter 154 — Bump per-project Machine memory.** The probe
+  succeeded on the upgrade *handshake*, but per-project Machines
+  still come up at the Fly Machines API default (~256MB). The
+  earlier OOM-reboot loop on the old image happened on first WS
+  request at 256MB (anon-rss tiny, total-vm 1.26GB → cgroup kill);
+  the new image will hit the same wall once real Yjs traffic
+  arrives. Add `guest: { memory_mb: 1024, cpu_kind: "shared",
+  cpus: 1 }` to `machineConfig` in
+  `apps/web/src/lib/server/upstreamFromEnv.ts`, lock with a unit
+  test asserting `memory_mb >= 1024`, let web CD redeploy the
+  control plane, destroy stale per-project Machines, re-probe with
+  a payload-bearing path if feasible (extending
+  `probe-live-ws.mjs` to send a Yjs sync-step-1 frame after
+  upgrade is the natural shape). Cheap and surgical.
 
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
@@ -129,13 +136,14 @@ Estimated iteration sequence (adjust as work unfolds):
   paired with an explicit kill before iteration end. Never pipe
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
-- **Iter 154 — Activate M8.pw.4 as a hard deploy gate.** Provision
+
+- **Iter 155 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 154 passes green automatically, the freezes above may
+After iter 155 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state
