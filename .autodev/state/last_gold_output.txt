@@ -9,72 +9,13 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_live (test_playwright.TestPlaywrightLive.test_live) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-FAIL
+ok
 test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
 ok
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
-======================================================================
-FAIL: test_live (test_playwright.TestPlaywrightLive.test_live)
 ----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 206, in test_live
-    raise AssertionError(
-AssertionError: playwright (live) failed (exit 1)
---- stdout ---
+Ran 13 tests in 78.915s
 
-Running 18 tests using 1 worker
-
-  ✓  1 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.9s)
-  ✓  2 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (567ms)
-  ✓  3 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (493ms)
-  ✘  4 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (5.2s)
-  ✓  5 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (1.9s)
-  ✓  6 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (222ms)
-  ✓  7 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (119ms)
-  ✓  8 [live] › verifyLiveFullPipeline.spec.ts:65:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (14.9s)
-  -  9 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
-  -  10 [live] › verifyLiveWsUpgrade.spec.ts:60:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  11 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (279ms)
-  ✓  12 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (149ms)
-  ✓  13 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (91ms)
-  ✓  14 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (35ms)
-  ✓  15 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (51ms)
-  ✓  16 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (168ms)
-  ✓  17 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (92ms)
-  ✓  18 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (80ms)
-
-
-  1) [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects 
-
-    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
-
-    Locator: getByText('No projects yet.')
-    Expected: visible
-    Received: <element(s) not found>
-    Call log:
-    [2m  - expect.toBeVisible with timeout 5000ms[22m
-    [2m  - waiting for getByText('No projects yet.')[22m
-
-
-      52 |   }) => {
-      53 |     await authedPage.goto("/projects");
-    > 54 |     await expect(authedPage.getByText("No projects yet.")).toBeVisible();
-         |                                                            ^
-      55 |   });
-      56 | });
-      57 |
-        at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/projects.spec.ts:54:60
-
-  1 failed
-    [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects 
-  2 skipped
-  15 passed (31.3s)
-
---- stderr ---
-
-
-----------------------------------------------------------------------
-Ran 13 tests in 74.711s
-
-FAILED (failures=1)
+OK
+tests_gold/run_tests.sh: PASS

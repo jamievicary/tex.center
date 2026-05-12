@@ -49,7 +49,16 @@ test.describe("projects dashboard", () => {
 
   test("shows empty-state when the user has no projects", async ({
     authedPage,
-  }) => {
+  }, testInfo) => {
+    // The live test user (`jamievicary@gmail.com`) accumulates real
+    // projects from manual use and spec runs, so a true empty-state
+    // can never be asserted there without destroying real data. The
+    // empty-state markup is the same on both targets and is fully
+    // covered by the local run.
+    test.skip(
+      testInfo.project.name === "live",
+      "empty-state can't be asserted against the shared live user",
+    );
     await authedPage.goto("/projects");
     await expect(authedPage.getByText("No projects yet.")).toBeVisible();
   });

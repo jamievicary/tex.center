@@ -374,13 +374,34 @@ Estimated iteration sequence (adjust as work unfolds):
   failure (if any) is diagnosable end-to-end per the iter-169+
   flowchart in the slot below.
 
-- **Iter 170+ — Confirm M8.pw.4 result with the new gold-runner
-  arrangement.**
-  Same shape as iter 164: read the deploy's live-pipeline result;
-  if pdf-segment frames arrive, FREEZE-lift is ready (per `162_answer.md`
-  criterion, also requires the pre-existing-project edit variant).
-  If a different failure surfaces, diagnose with the now-richer log
-  trail (web ws_proxy + sidecar doc-update/compile lines). The cause separates into:
+- **Iter 170 — M8.pw.4 is GREEN; skip empty-state on live.** *Done.*
+  Iter 169's harness gold pass was the first ever automatic M8.pw.4
+  green (`edit → pdf-segment frame → non-blank preview canvas` 14.9s).
+  Only red was unrelated: `projects.spec.ts:50` empty-state asserts
+  `No projects yet.` for the live user, but the shared live user
+  accumulates real projects and the UI behaviour is fully covered by
+  `local`. Added `test.skip` on `testInfo.project.name === "live"`
+  with a comment naming the reason; lock-in
+  `tests_normal/cases/test_projects_empty_state_skips_live.py`.
+  FREEZE-lift criterion (a) [M8.pw.4 green auto] now holds; criterion
+  (b) [reused pre-existing project variant] still open, scheduled
+  for iter 171.
+
+- **Iter 171+ — Reused-existing-project variant of M8.pw.4.**
+  Per FREEZE-lift criterion (b) in `162_answer.md`. Concrete shape:
+  pre-seed (idempotently, in a migration or fixture row) a project
+  with a fixed UUID owned by the live test user, then add an
+  M8.pw.4 sibling spec that opens that project (does **not** create
+  one in `beforeEach`), types into the editor, and asserts a
+  `pdf-segment` frame arrives. Don't delete the project in
+  `afterEach`. The known coverage hole is that fresh-seed vs
+  reused-existing project lifecycles diverge — iter 162's user
+  report demonstrated edit→preview can be broken in the reused path
+  while M8.pw.4's seeded-fresh path stays green.
+
+- **Iter 170+ — Old slot, kept for the diagnostic flowchart.**
+  If a future M8.pw.4 regresses, diagnose with the iter-163 ws_proxy
+  + sidecar log trail. The cause separates into:
   - **No `upstream-connect` event** for the project's WS:
     auth deny / resolver failed before producing an upstream.
     Look for `auth-error` / `resolve-error` / `unauthorised`.
@@ -414,7 +435,7 @@ Estimated iteration sequence (adjust as work unfolds):
   the three transitions including server-side WS drop for the
   error state, live variant under `TEXCENTER_LIVE_TESTS=1`
   asserting "Saved" reached within a generous window after
-  typing on the live site. Blocked on iter 164's green.
+  typing on the live site. Unblocked as of iter 170 (M8.pw.4 green).
 
 **FREEZE-lift criterion refined (per `162_answer.md`):** the
 freeze now lifts only when (a) M8.pw.4 runs green automatically
