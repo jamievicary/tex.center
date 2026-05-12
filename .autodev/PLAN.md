@@ -208,10 +208,32 @@ spawning, (D) auth + production polish.
                         not constructed when env is incomplete
                         (otherwise missing `DATABASE_URL` would
                         crash the fallback path at boot).
-            - [ ] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets
+            - [~] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets
                   on the control plane; deploy; extend
                   `verifyLive.spec.ts` with a happy-path
                   authed-upgrade probe (closes the M7.0.3.3 tail).
+                  - [x] M7.1.3.0 — Migration-on-boot helper.
+                        `apps/web/src/lib/server/bootMigrations.ts`
+                        applies pending migrations during `server.ts`
+                        boot when `DATABASE_URL` is set and
+                        `RUN_MIGRATIONS_ON_BOOT=1`. Dockerfile copies
+                        `packages/db/src/migrations/` to
+                        `/app/migrations` (the default
+                        `MIGRATIONS_DIR`). _(iter 105.)_
+                  - [ ] M7.1.3.1 — Provision Fly Postgres (unmanaged,
+                        single-node `shared-cpu-1x` in `fra`), attach
+                        to `tex-center` (sets `DATABASE_URL`
+                        automatically), set
+                        `RUN_MIGRATIONS_ON_BOOT=1`, `FLY_API_TOKEN`
+                        (deploy token), `SIDECAR_APP_NAME=tex-center-
+                        sidecar`, `SIDECAR_IMAGE=<digest>`, deploy,
+                        verify `/healthz` reports `db.state: ok`.
+                  - [ ] M7.1.3.2 — Authed-upgrade happy-path probe in
+                        `verifyLive.spec.ts` (mint session via
+                        `mintSession` against the live DB through
+                        `flyctl proxy`; assert WS upgrade → 101 from
+                        a real per-project Machine). Closes M7.0.3.3
+                        tail.
             - [ ] M7.1.4 — Idle-stop wiring on per-project Machine
                   side; closes M7.3.
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
@@ -290,14 +312,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3 — set `DATABASE_URL` and the
-sidecar/Fly env vars (`FLY_API_TOKEN`, `SIDECAR_APP_NAME`,
-`SIDECAR_IMAGE`) as Fly secrets on the control plane; deploy;
-extend `verifyLive.spec.ts` with an authed-upgrade happy-path
-probe. M7.1.2 / M7.1.2.1 are landed: the production entry now
-builds a per-project resolver when those vars are present and
-falls back to the static envvar upstream otherwise. M7.1.4
-(idle-stop) follows once a real Machine has been waked end-to-end.
+**Next ordinary iteration:** M7.1.3.1 — provision Fly Postgres,
+attach to `tex-center` (sets `DATABASE_URL`), set
+`RUN_MIGRATIONS_ON_BOOT=1`, `FLY_API_TOKEN` (deploy token),
+`SIDECAR_APP_NAME=tex-center-sidecar`, `SIDECAR_IMAGE=<latest
+digest>`, deploy, verify `/healthz`. The migration-on-boot helper
+(M7.1.3.0, iter 105) means a fresh DB attaches without an
+out-of-band migration step. M7.1.3.2 (authed-upgrade probe) and
+M7.1.4 (idle-stop) follow once a real Machine has been waked.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

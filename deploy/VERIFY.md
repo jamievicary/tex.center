@@ -146,3 +146,13 @@ applies all of them):
 Postgres on the live control plane (sessions are stateless; project
 storage is not yet wired through the live deploy). When M7 wiring
 lands, add it here.
+
+### Migration-on-boot (M7.1.3 prep)
+
+When `DATABASE_URL` is set, also set `RUN_MIGRATIONS_ON_BOOT=1` so
+the control plane applies pending migrations before serving traffic.
+The Dockerfile copies `packages/db/src/migrations/` into
+`/app/migrations`, matching `bootMigrations.ts`'s default. Override
+with `MIGRATIONS_DIR=<path>` if needed. Without the flag, boot is a
+no-op against migrations and ops can apply them out-of-band via
+`pnpm --filter @tex-center/db db:migrate` against `flyctl proxy`.

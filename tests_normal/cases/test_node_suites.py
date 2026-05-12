@@ -113,6 +113,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_boot(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "boot.test.mjs")
 
+    def test_web_boot_migrations(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "bootMigrations.test.mjs")
+
     def test_web_fly_machines(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "flyMachines.test.mjs")
 

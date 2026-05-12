@@ -50,6 +50,11 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 WORKDIR /app
 COPY --from=builder /repo/apps/web/build ./build
+# Migrations are read at runtime by `runBootMigrations` (see
+# `src/lib/server/bootMigrations.ts`) when
+# `RUN_MIGRATIONS_ON_BOOT=1`. Path matches `DEFAULT_MIGRATIONS_DIR`;
+# override with `MIGRATIONS_DIR` if needed.
+COPY --from=builder /repo/packages/db/src/migrations ./migrations
 # adapter-node emits ESM; Node treats files as CJS unless a sibling
 # package.json declares `"type": "module"`. Stub one in /app.
 RUN echo '{"type":"module"}' > package.json

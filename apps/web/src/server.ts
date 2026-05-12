@@ -15,6 +15,10 @@
 import { handler } from "./handler.js";
 
 import { boot, parsePort } from "./lib/server/boot.js";
+import {
+  describeBootMigrationsStatus,
+  runBootMigrations,
+} from "./lib/server/bootMigrations.js";
 import { getDb } from "./lib/server/db.js";
 import { MachinesClient } from "./lib/server/flyMachines.js";
 import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
@@ -61,6 +65,12 @@ const resolveUpstream = buildUpstreamFromEnv(process.env, {
     new MachinesClient({ token, appName }),
   makeStore: () => dbMachineAssignmentStore(getDb().db),
 });
+
+// Apply pending DB migrations before accepting traffic. Gated by
+// `DATABASE_URL` + `RUN_MIGRATIONS_ON_BOOT=1`; any other state is a
+// no-op so the existing stateless path keeps working.
+const migrationsStatus = await runBootMigrations(process.env);
+console.log(describeBootMigrationsStatus(migrationsStatus));
 
 const { server } = boot({
   handler,
