@@ -39,7 +39,7 @@ mkdirSync(dir, { recursive: true });
 for (const e of readdirSync(dir)) unlinkSync(join(dir, e));
 
 const total = parseInt(process.env.FAKE_TOTAL ?? "3", 10);
-const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid | rollback | error-then-ok
+const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid | rollback | error-then-ok | noop
 const exitOn = process.env.FAKE_EXIT_AFTER ?? ""; // count of rounds before exit
 const errorRounds = parseInt(process.env.FAKE_ERROR_ROUNDS ?? "1", 10);
 const rollbackK = parseInt(process.env.FAKE_ROLLBACK_K ?? "0", 10);
@@ -75,6 +75,13 @@ function handleLine(line) {
     process.exit(7);
   }
   const target = m[1] === "end" ? total : Math.min(parseInt(m[1], 10), total);
+  if (mode === "noop") {
+    // Round-done with no shipout events and no error. Mirrors the
+    // upstream rollback path when process_event finds no usable
+    // rollback target. No chunk files written.
+    process.stdout.write("[round-done]\\n");
+    return;
+  }
   for (let i = 1; i <= target; i++) {
     writeFileSync(join(dir, i + ".out"), "CHUNK-" + i + "\\n");
     process.stdout.write("[" + i + ".out]\\n");
@@ -329,6 +336,61 @@ const require = createRequire(import.meta.url);
   assert.equal(r2.ok, true, "recovery compile ok");
   const text = Buffer.from(r2.segments[0].bytes).toString("utf8");
   assert.match(text, /^CHUNK-1\nCHUNK-2\n$/);
+  await c.close();
+}
+
+// 12. No-op round (iter 188/189 regression): round-done with no
+//     `[N.out]` events and no error → `{ ok: true, segments: [] }`.
+//     The sidecar must NOT synthesise a fresh segment by scanning
+//     leftover chunk files on disk; doing so masks the upstream
+//     rollback no-op as a byte-identical "fresh" PDF and is the
+//     edit→preview regression iter 188 diagnosed.
+{
+  const workDir = await makeWorkDir("noop");
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({ FAKE_TOTAL: "0", FAKE_MODE: "noop" }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+  });
+  const r = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r.ok, true, "noop compile ok");
+  assert.deepEqual(r.segments, [], "noop emits no segments");
+  assert.equal(r.shipoutPage, undefined, "noop has no shipoutPage");
+  await c.close();
+}
+
+// 13. No-op round with STALE chunks on disk (regression-shape lock
+//     for the iter 188/189 directory-scan fallback removal). If
+//     `*.out` files left over from a prior compile are present in
+//     `chunksDir`, a no-op round MUST still emit zero segments —
+//     the previous fallback would have re-shipped these as a fresh
+//     PDF.
+{
+  const workDir = await makeWorkDir("noop-stale");
+  const chunksDir = join(workDir, "chunks");
+  await mkdir(chunksDir, { recursive: true });
+  await writeFile(join(chunksDir, "1.out"), "STALE-1\n");
+  await writeFile(join(chunksDir, "2.out"), "STALE-2\n");
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({ FAKE_TOTAL: "0", FAKE_MODE: "noop" }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+  });
+  // The fake daemon clears DIR on startup, mirroring upstream, so
+  // pre-seed stale chunks AFTER the daemon has spawned. Easiest
+  // way: run one noop round first to force the spawn, then drop
+  // stale files in and run another noop round.
+  const r0 = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r0.ok, true);
+  await writeFile(join(chunksDir, "1.out"), "STALE-1\n");
+  await writeFile(join(chunksDir, "2.out"), "STALE-2\n");
+  const r = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r.ok, true, "noop-stale compile ok");
+  assert.deepEqual(r.segments, [], "noop-stale emits no segments despite chunks on disk");
   await c.close();
 }
 

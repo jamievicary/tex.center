@@ -21,7 +21,7 @@
 // SIGKILL. Idempotent.
 
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -120,18 +120,18 @@ export class SupertexDaemonCompiler implements Compiler {
           error: `supertex daemon error: ${events.errorReason}`,
         };
       }
+      // No-op compile: round-done arrived with no `[N.out]` events
+      // and no error. The upstream `--daemon` rollback path emits
+      // exactly this shape when `process_event` finds no usable
+      // rollback target — silently no-op'ing the round. We must NOT
+      // synthesise a segment from stale chunks on disk: that hides
+      // the upstream no-op behind a byte-identical "fresh" PDF and
+      // is the iter 188 edit→preview regression. See 188_answer.md.
+      if (events.maxShipout < 0) {
+        return { ok: true, segments: [] };
+      }
       const segment = await this.assembleSegment(events.maxShipout);
-      if (!segment) {
-        return {
-          ok: false,
-          error:
-            "supertex-daemon: round-done arrived but no chunk files found",
-        };
-      }
-      if (events.maxShipout >= 0) {
-        return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
-      }
-      return { ok: true, segments: [segment] };
+      return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
     } catch (e) {
       return {
         ok: false,
@@ -307,19 +307,12 @@ export class SupertexDaemonCompiler implements Compiler {
     }
   }
 
-  private async assembleSegment(maxShipout: number): Promise<PdfSegment | null> {
-    if (maxShipout < 0) {
-      // No `[N.out]` events: see if chunks are on disk from a
-      // prior round we didn't witness (e.g. caller passed
-      // recompile,N where N ≤ last_shipped_page and the daemon
-      // short-circuited). Fall through to a directory scan.
-      const ns = await listChunkIndices(this.chunksDir);
-      if (ns.length === 0) return null;
-      maxShipout = ns[ns.length - 1]!;
-    }
-    // Chunk indices are 1-based per the upstream `--daemon DIR`
-    // protocol: shipouts are announced as `[1.out]`, `[2.out]`, …
-    // and the files on disk match.
+  private async assembleSegment(maxShipout: number): Promise<PdfSegment> {
+    // Caller guarantees `maxShipout >= 0` (i.e. at least one
+    // `[N.out]` event was observed in the round). Chunk indices
+    // are 1-based per the upstream `--daemon DIR` protocol:
+    // shipouts are announced as `[1.out]`, `[2.out]`, … and the
+    // files on disk match.
     const parts: Uint8Array[] = [];
     let total = 0;
     for (let n = 1; n <= maxShipout; n++) {
@@ -384,17 +377,6 @@ export class SupertexDaemonCompiler implements Compiler {
     if (!c || this.childExited) return;
     c.kill("SIGKILL");
   }
-}
-
-async function listChunkIndices(dir: string): Promise<number[]> {
-  const entries = await readdir(dir).catch(() => [] as string[]);
-  const ns: number[] = [];
-  for (const e of entries) {
-    const m = /^(\d+)\.out$/.exec(e);
-    if (m) ns.push(Number(m[1]));
-  }
-  ns.sort((a, b) => a - b);
-  return ns;
 }
 
 function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {

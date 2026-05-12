@@ -94,16 +94,22 @@ chunks as a fresh segment. Iter 188 landed:
   `fixtures/previewCanvas.ts`.
 - `wsClientPdfSegmentIdentity.test.mjs` — locks the snapshot
   identity invariant (closes hypothesis 3 by construction).
+Iter 189 landed:
+- **Sidecar fallback fix**: `assembleSegment`'s `maxShipout < 0`
+  directory-scan fallback removed. `compile()` short-circuits to
+  `{ ok: true, segments: [] }` on a no-op round (round-done with
+  no shipouts, no error); `assembleSegment` precondition is now
+  `maxShipout >= 0`. Regression-locked by two new cases in
+  `supertexDaemonCompiler.test.mjs` (FAKE mode `noop`, plus a
+  `noop-stale` case where pre-existing `*.out` files in
+  `chunksDir` must be ignored).
 Remaining (next iteration target):
-- **Sidecar fallback fix**: remove or guard
-  `assembleSegment`'s `maxShipout < 0` directory-scan fallback so
-  a no-op recompile emits no `pdf-segment` frame. Makes the
-  upstream bug visible to the user (`compiling…` toast resolves
-  without a preview update) instead of papering over it.
 - **Upstream supertex fix** (M7.4.x): ensure `process_event`
   finds a rollback target for the post-initial-compile edit
-  case. PR upstream once sidecar diagnostics make the failure
-  mode reproducible against the live deploy.
+  case. With the sidecar fallback gone, the live failure mode is
+  now: `compile-status running` → `compile-status idle`, no
+  `pdf-segment` frame. PR upstream once a minimal repro against
+  vendor/supertex's daemon harness is captured.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
