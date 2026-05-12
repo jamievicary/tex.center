@@ -26,6 +26,8 @@ in-tree iteration work: pick it up, execute it against the live services
 using the credentials provided, and commit any resulting state (issued IPs,
 machine IDs, app IDs, etc.) back into the repo.
 
+To achieve this, it's critical that the gold test suite contains full realistic tests of all aspects of this user experience. If the system breaks, we need to know through the gold tests which run each iteration, we don't want to wait for the human to discover the problem.
+
 A working deployment at https://tex.center where:
 
 1. **Unauthenticated visitors see a plain white page with a single "Sign in with
