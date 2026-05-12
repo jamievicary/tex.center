@@ -354,16 +354,18 @@ automatic.
 `SIDECAR_COMPILER=supertex-daemon` is now the production default
 (iter 123 flipped `apps/sidecar/Dockerfile`); the next sidecar
 redeploy moves the live site onto the persistent-daemon path.
-The deploy itself is manual (`flyctl deploy --remote-only
---no-public-ips -a tex-center-sidecar --config
-apps/sidecar/fly.toml .`) — `.github/workflows/deploy.yml` only
-covers `tex-center` today.
+Iter 124 added `.github/workflows/deploy-sidecar.yml` — path-gated
+on `apps/sidecar/**`, `vendor/supertex`, `vendor/engine/**`, the
+shared `packages/*` the sidecar depends on, lockfile, workspace,
+and the workflow file itself; plus `workflow_dispatch` for
+manual reruns. First push to `main` touching a gated path
+deploys automatically. To force the daemon-default cutover
+sooner without a code change, `gh workflow run
+deploy-sidecar.yml`. Structural invariants pinned by
+`tests_normal/cases/test_deploy_sidecar_workflow.py`.
 
 Smaller alternatives if M7.4.2 is blocked on upstream:
 - M7.2 `/ws/project/<id>` routing-per-project plumbing.
-- Wire a sidecar deploy into CI (or a dedicated workflow file)
-  so the daemon flip — and future sidecar changes — reach prod
-  on push to `main` like the control plane already does.
 
 The `verifyLiveWsUpgrade` spec still needs
 `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` + `SIDECAR_APP_NAME`

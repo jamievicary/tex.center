@@ -1,0 +1,52 @@
+name: Deploy sidecar to Fly
+
+# Continuous deployment for the per-project sidecar app
+# `tex-center-sidecar` (Fastify + ws + supertex + texlive-full).
+#
+# The sidecar image is huge (~5 GB) and almost all its inputs are
+# orthogonal to the control-plane app, so we gate on path filters
+# rather than redeploying on every push. Manual redeploys go via
+# `workflow_dispatch`.
+#
+# Prerequisites (one-shot, manual):
+#   - `flyctl apps create tex-center-sidecar` (uses
+#     apps/sidecar/fly.toml).
+#   - `FLY_API_TOKEN` already exists as a repo Actions secret (set
+#     up for the control-plane deploy workflow).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/sidecar/**'
+      - 'packages/blobs/**'
+      - 'packages/db/**'
+      - 'packages/protocol/**'
+      - 'vendor/supertex'
+      - 'vendor/engine/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/deploy-sidecar.yml'
+  workflow_dispatch:
+
+# Serialise sidecar deploys among themselves (a fast follow-up
+# push shouldn't strand a half-rolled-out Machine), but keep them
+# independent of the control-plane `fly-deploy` group so the two
+# apps can roll out in parallel.
+concurrency:
+  group: fly-deploy-sidecar
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: flyctl deploy (sidecar)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --no-public-ips -a tex-center-sidecar --config apps/sidecar/fly.toml .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
