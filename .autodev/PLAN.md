@@ -42,9 +42,29 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — sidecar adapts to iter-724 daemon protocol.**
-  Blocks live GT-3 and GT-5. The iter-189 "upstream `process_event`
-  no-rollback fix" framing is superseded: per
+- **M9.gold-restructure — warm-up vs per-spec timeouts (iter 197).**
+  Per `.autodev/discussion/196_question.md` + `196_answer.md`. The
+  gold suite has regressed from ~2 min to ~10–13 min because GT-3
+  and GT-5 (both RED on live) sit out their full 240s/60s polls
+  on every run — the polls were sized as cold-start absorbers,
+  not as feature assertions. Decouple: extend
+  `tests_gold/playwright/fixtures/sharedLiveProject.ts` to run a
+  one-shot warm-up after `createProject`, opening an authed
+  context and waiting up to 180_000 for an initial `pdf-segment`
+  frame on the project's WS using the existing wire-frame helper.
+  Then drop initial-frame polls in GT-1..5 to ~5_000 and
+  post-edit polls (GT-3, GT-5) to ~10_000. GT-2 stays; it now
+  re-verifies the client-side hydrate path on a fresh page after
+  warm-up has proved the server-side compile. Acceptance:
+  (a) warm-up completes inside 180s on a cold Fly Machine;
+  (b) green specs run in seconds; (c) GT-3, GT-5 still RED but
+  fail in ~10s, not ~5min.
+- **M7.4.x — sidecar adapts to iter-724 daemon protocol (iter 198).**
+  Deferred one iteration behind M9.gold-restructure because the
+  diagnostic loop here is dominated by gold-suite wallclock; with
+  fast failure in place this work becomes ~10× cheaper to
+  iterate on. Blocks live GT-3 and GT-5. The iter-189 "upstream
+  `process_event` no-rollback fix" framing is superseded: per
   `.autodev/discussion/195_question.md` + `195_answer.md`, the
   upstream protocol now signals rollback explicitly via
   `[rollback I]` followed by `[I+1.out]…[K.out]`, and the submodule
@@ -52,14 +72,14 @@ Remaining slices:
   rebuilds `supertex` from the submodule on every image build, so
   no binary bump is needed — shipping a fresh image picks up the
   new daemon. Iter-194 `targetPage` / edit-byte-distribution
-  hypotheses are also superseded. Next-iteration goal:
+  hypotheses are also superseded. Iter-198 goal:
   (1) build verification — `make -C vendor/supertex` locally and
   spawn `--daemon` against a fixture to capture one recompile-
   after-edit round; (2) diagnose which of the three gates in
   `vendor/supertex/tools/supertex_daemon.c:1100-1260` (no-edit /
   `run_process_event` no rollback target / `wait_for_resumed`
   failure) the live failure hits, by running gold against the
-  rebuilt binary and inspecting daemon stderr. The iter-after-next
+  rebuilt binary and inspecting daemon stderr. The iter-after
   either tightens `collectRound` in `apps/sidecar/src/compiler/
   supertexDaemon.ts:283-307` (a `[rollback K]` followed by
   `[round-done]` with no chunks currently still trips the empty-

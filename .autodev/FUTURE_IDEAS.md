@@ -1,5 +1,14 @@
 # Future ideas
 
+- **`--cold` gold flag to exercise the cold-start path explicitly.**
+  Once M9.gold-restructure (iter 197) separates warm-up from
+  per-spec assertions, the warm path becomes the default and
+  cold-start regressions only show up implicitly in the warm-up
+  budget. A `--cold` flag that skips the shared warm-up and
+  forces each spec to pay first-compile latency would let CI
+  measure cold-start as an explicit, named signal. Per
+  `.autodev/discussion/196_question.md` final paragraph and
+  `196_answer.md` follow-ups.
 - **Narrower deploy-scoped `FLY_API_TOKEN` for the control plane.**
   Iter 106 fell back to the personal `creds/fly.token` because
   `flyctl tokens create deploy` is denied for that token's own
