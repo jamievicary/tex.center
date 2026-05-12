@@ -267,6 +267,7 @@ export function attachWsProxy(
   ): void => {
     const upstream = net.connect(upstreamAddr.port, upstreamAddr.host);
     let settled = false;
+    let upstreamConnected = false;
     let connectTimer: NodeJS.Timeout | null = null;
 
     const cleanup = (reason: WsProxyEvent): void => {
@@ -274,6 +275,24 @@ export function attachWsProxy(
       settled = true;
       if (connectTimer !== null) clearTimeout(connectTimer);
       options.onEvent?.(reason);
+      // Pre-connect upstream failures: write a real 502 to the
+      // client. Without this the socket is just destroyed and the
+      // Fly edge synthesises its own 502 (one `via` hop, opaque to
+      // our logs). See INCIDENT-147. Post-connect errors mid-pipe
+      // can't write a 502 — the WS handshake response has already
+      // been forwarded, so the client socket is now framed traffic.
+      if (
+        reason.kind === "upstream-error" &&
+        !upstreamConnected
+      ) {
+        try {
+          clientSocket.write(
+            "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+          );
+        } catch {
+          // Socket may already be dead.
+        }
+      }
       try {
         upstream.destroy();
       } catch {}
@@ -297,6 +316,7 @@ export function attachWsProxy(
         clearTimeout(connectTimer);
         connectTimer = null;
       }
+      upstreamConnected = true;
       options.onEvent?.({ kind: "upstream-connected", projectId });
       try {
         const requestLine = `${req.method ?? "GET"} ${rawUrl} HTTP/${req.httpVersion ?? "1.1"}\r\n`;

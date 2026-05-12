@@ -226,9 +226,11 @@ async function readUntil(sock, predicate, timeoutMs = 2000) {
   await new Promise((res) => closedServer.close(res));
 
   const localHttp = http.createServer();
+  const case4Events = [];
   attachWsProxy(localHttp, {
     upstream: { host: "127.0.0.1", port: closedPort },
     connectTimeoutMs: 500,
+    onEvent: (e) => case4Events.push(e),
   });
   await new Promise((res) => localHttp.listen(0, "127.0.0.1", res));
   const port = localHttp.address().port;
@@ -243,7 +245,23 @@ async function readUntil(sock, predicate, timeoutMs = 2000) {
       `Sec-WebSocket-Key: x\r\n` +
       `Sec-WebSocket-Version: 13\r\n\r\n`,
   );
+  // INCIDENT-147 regression: pre-connect upstream errors must be
+  // observable as our own 502 to the caller, not a silent close
+  // (which Fly's edge then papered over with its own synthetic
+  // 502, hiding the cause).
+  const responded = await readUntil(sock, (b) =>
+    b.toString("utf8").includes("\r\n\r\n"),
+  );
+  assert.match(
+    responded.toString("utf8"),
+    /^HTTP\/1\.1 502 Bad Gateway\r\n/,
+    "pre-connect upstream-error must reply 502",
+  );
   await new Promise((res, rej) => {
+    if (sock.destroyed) {
+      res();
+      return;
+    }
     const timer = setTimeout(
       () => rej(new Error("client socket not closed")),
       2000,
@@ -253,6 +271,10 @@ async function readUntil(sock, predicate, timeoutMs = 2000) {
       res();
     });
   });
+  assert.ok(
+    case4Events.some((e) => e.kind === "upstream-error"),
+    `expected upstream-error event: ${JSON.stringify(case4Events)}`,
+  );
   await new Promise((res) => localHttp.close(res));
 }
 

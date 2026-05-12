@@ -41,6 +41,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_protocol_codec(self) -> None:
         _run_tsx(ROOT / "packages" / "protocol" / "test" / "codec.test.mjs")
 
+    def test_sidecar_bind_host(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "bindHost.test.mjs")
+
     def test_sidecar_server(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "server.test.mjs")
 

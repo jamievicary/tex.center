@@ -63,9 +63,13 @@ class TestSidecarDockerfile(unittest.TestCase):
         )
 
     def test_runtime_listens_on_all_interfaces(self) -> None:
-        # Fly's HTTP health checks come from inside the Machine; the
-        # sidecar must bind 0.0.0.0 or it 502s.
-        self.assertRegex(self.text, r"HOST=0\.0\.0\.0")
+        # Fly's 6PN private network is IPv6; if the sidecar binds
+        # IPv4-only (`0.0.0.0`) cross-Machine dials from the control
+        # plane refuse instantly. Bind the dual-stack wildcard
+        # (`::`) so both IPv6 6PN and IPv4 health checks work.
+        # See deploy/INCIDENT-147.md.
+        self.assertRegex(self.text, r"(?m)^\s*HOST=::\s*\\\s*$")
+        self.assertNotRegex(self.text, r"HOST=0\.0\.0\.0")
 
     def test_runtime_port_matches_sidecar_default(self) -> None:
         # apps/sidecar/src/index.ts defaults PORT=3001; the EXPOSE

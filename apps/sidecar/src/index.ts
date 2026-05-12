@@ -14,9 +14,24 @@ export function describe(): string {
   return `tex-center sidecar (protocol v${PROTOCOL_VERSION})`;
 }
 
+// Default WS bind address. `"::"` is the IPv6 dual-stack
+// wildcard on Linux (Node binds v4 + v6), required for Fly 6PN
+// which uses IPv6. `0.0.0.0` is IPv4-only and silently breaks
+// the cross-Machine dial from the control plane (see
+// deploy/INCIDENT-147.md).
+export const DEFAULT_BIND_HOST = "::";
+
+export function resolveBindHost(
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const raw = env.HOST;
+  if (raw === undefined || raw === "") return DEFAULT_BIND_HOST;
+  return raw;
+}
+
 export async function main(): Promise<void> {
   const port = Number(process.env.PORT ?? 3001);
-  const host = process.env.HOST ?? "127.0.0.1";
+  const host = resolveBindHost(process.env);
   // Idle-stop: 0 disables, anything >0 arms the timer. Default
   // 10 min matches the architecture note in GOAL.md. The Fly
   // Machine `restart: on-failure` policy turns a clean exit

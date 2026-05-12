@@ -73,7 +73,7 @@ ARG PNPM_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     PORT=3001 \
-    HOST=0.0.0.0 \
+    HOST=:: \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:/opt/engine/bin:$PATH \
     SIDECAR_COMPILER=supertex-daemon \

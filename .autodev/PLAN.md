@@ -44,23 +44,52 @@ Estimated iteration sequence (adjust as work unfolds):
   (Fly-edge synthesised; one `via` hop). Root cause: sidecar
   binds 127.0.0.1 only, 6PN dial refused. Probe script:
   `scripts/probe-live-ws.mjs`. Findings: `deploy/INCIDENT-147.md`.
-- **Iter 148 — Fix the broken layer.** Change sidecar default
-  host to `"::"` (dual-stack IPv6) in `apps/sidecar/src/index.ts`,
-  add a regression test asserting that default, deploy the new
-  sidecar image, roll `SIDECAR_IMAGE` on `tex-center`, destroy
-  the two stale per-project Machines so the next upgrade
-  re-creates them at the new sha, re-run the probe and expect
-  `kind: "upgrade", status: 101`. Also land the wsProxy 502-on-
-  dial-error fix (`apps/web/src/lib/server/wsProxy.ts`
-  `upstream.on("error")` path: write `HTTP/1.1 502` before
-  `clientSocket.destroy()`) so future dial failures show up as
-  our 502 with two via hops rather than Fly's synthetic one.
-- **Iter 149 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 148 — Fix the broken layer (code).** *Reverted by wallclock
+  timeout — re-landed iter 149.* Original plan bundled the
+  remote-only sidecar Docker rebuild (≈14 min) plus several
+  re-probes inside one iteration; total exceeded 45 min and the
+  harness reverted the whole thing.
+- **Iter 149 — Re-land iter 148's code-side changes only.**
+  *Done.* `apps/sidecar/src/index.ts` `DEFAULT_BIND_HOST = "::"`
+  + `resolveBindHost(env)` helper, `apps/sidecar/Dockerfile`
+  `HOST=::`, regression locks in
+  `apps/sidecar/test/bindHost.test.mjs` (wired via
+  `tests_normal/cases/test_node_suites.py::test_sidecar_bind_host`)
+  and `tests_normal/cases/test_sidecar_dockerfile.py::test_runtime_listens_on_all_interfaces`
+  (flipped to require `HOST=::` and forbid `HOST=0.0.0.0`).
+  `apps/web/src/lib/server/wsProxy.ts` writes `HTTP/1.1 502 Bad
+  Gateway` to the client on pre-connect `upstream-error` (post-
+  connect errors mid-pipe still destroy silently — by then the
+  client socket is framed traffic, not HTTP). `apps/web/test/wsProxy.test.mjs`
+  Case 4 asserts the 502 + the `upstream-error` event. **Live
+  cutover deliberately deferred to iter 150** so the wallclock
+  isn't at risk a second time.
+- **Iter 150 — Live cutover.** When this commit lands, the
+  paths-based CD trigger (`apps/sidecar/**`) will rebuild the
+  sidecar image and publish a fresh sha — the control plane will
+  not pick it up automatically because `SIDECAR_IMAGE` is still
+  pinned to the old sha. Steps:
+  (1) wait for / fetch the post-merge sidecar sha from the CD
+  workflow run (or `flyctl image show -a tex-center-sidecar`
+  after the workflow); (2) `flyctl secrets set
+  SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:<new>
+  -a tex-center`; (3) `flyctl machines list -a
+  tex-center-sidecar` and `flyctl machines destroy --force
+  <id>` for every stale per-project Machine (the resolver will
+  recreate them at the new sha on next dial); (4) run
+  `pnpm exec tsx scripts/probe-live-ws.mjs` against an owned
+  project id and expect `kind: "upgrade", status: 101`. Use a
+  generous cold-start window — first dial after destroy can
+  take ~80 s while the new Machine image pull + tsx warm-up
+  complete (FUTURE_IDEAS: pre-warm or longer
+  `connectTimeoutMs`).
+- **Iter 151 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
-  console), export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
+  console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
+  set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 149 passes green automatically, the freezes above may
+After iter 151 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state
