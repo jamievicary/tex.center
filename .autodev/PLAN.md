@@ -6,6 +6,13 @@ landed at iter 171. The "no other work proceeds until live spec
 green" gate the FREEZE block enforced is satisfied. Normal cron
 behaviour (`N%10==0` refactor, `N%10==1` plan-review) resumes.
 
+Iter 180 deferred the refactor cron to fix a two-iter regression
+in `verifyLiveFullPipeline.spec.ts` (`.cm-content` wait was sized
+for the pre-no-flash world; bumped 30s → 120s to match cold-start
+TCP-probe budget). Refactor cron rolls onto iter 181 alongside the
+N%10==1 plan-review; if that compounds, one of them gets deferred
+one more iter with log notation.
+
 ## 1. Recent state
 
 Live product (https://tex.center): core loop works end-to-end —

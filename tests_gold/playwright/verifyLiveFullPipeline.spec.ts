@@ -101,9 +101,16 @@ test.describe("live full pipeline (M8.pw.4)", () => {
 
     await authedPage.goto(`/editor/${project.id}`);
 
-    // Wait for the editor's contenteditable to mount.
+    // Wait for the editor's contenteditable to mount. Since iter
+    // 177's no-flash fix, `.cm-content` is gated on the first Yjs
+    // initial-sync / `file-list` frame arriving from the sidecar,
+    // which for a freshly-seeded project requires cold-starting
+    // the per-project Fly Machine. 30s was the pre-fix budget
+    // (CodeMirror always mounted immediately) and is now too
+    // tight — GT-A uses 60s on the same code path. Use the same
+    // 120s budget the cold-start TCP-probe path already assumes.
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+    await cmContent.waitFor({ state: "visible", timeout: 120_000 });
     await cmContent.click();
 
     // Minimal compilable LaTeX. CodeMirror's `closeBrackets`
