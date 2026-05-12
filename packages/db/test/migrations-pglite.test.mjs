@@ -10,33 +10,9 @@ import { fileURLToPath } from 'node:url';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import {
-  MIGRATIONS_TABLE_SQL,
-  allTables,
-  applyMigrations,
-  loadMigrations,
-} from '../src/index.js';
+import { allTables, applyMigrations, loadMigrations } from '../src/index.js';
 
-function pgliteDriver(pg) {
-  return {
-    async ensureMigrationsTable() {
-      await pg.exec(MIGRATIONS_TABLE_SQL);
-    },
-    async loadAppliedRows() {
-      const res = await pg.query('SELECT name, sha256 FROM schema_migrations');
-      return res.rows;
-    },
-    async applyOne(m) {
-      await pg.transaction(async (tx) => {
-        await tx.exec(m.sql);
-        await tx.query(
-          'INSERT INTO schema_migrations (name, sha256) VALUES ($1, $2)',
-          [m.name, m.sha256],
-        );
-      });
-    },
-  };
-}
+import { pgliteDriver } from './_pgliteHarness.mjs';
 
 // PGlite reports the SQL type via `information_schema.columns.data_type`
 // (or, for arrays, `udt_name`). Our spec ColumnType set is small.

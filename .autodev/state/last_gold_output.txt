@@ -2,15 +2,15 @@ test_authed_cookie (test_authed_cookie.TestAuthedCookie.test_authed_cookie) ... 
 test_fly_proxy (test_fly_proxy.TestFlyProxy.test_fly_proxy) ... ok
 test_local_db (test_local_db.TestLocalDb.test_local_db) ... ok
 test_mint_session (test_mint_session.TestMintSession.test_mint_session) ... ok
-test_apply_against_pglite (test_pglite_migrations.TestPgliteMigrations.test_apply_against_pglite) ... ok
-test_projects (test_pglite_projects.TestPgliteProjects.test_projects) ... ok
-test_users_and_sessions (test_pglite_users_sessions.TestPgliteUsersSessions.test_users_and_sessions) ... ok
+test_migrations (test_pglite.TestPglite.test_migrations) ... ok
+test_projects (test_pglite.TestPglite.test_projects) ... ok
+test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_live (test_playwright.TestPlaywrightLive.test_live) ... skipped 'skipped because TEXCENTER_LIVE_TESTS != 1'
 test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
 ok
 
 ----------------------------------------------------------------------
-Ran 9 tests in 32.260s
+Ran 9 tests in 31.442s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

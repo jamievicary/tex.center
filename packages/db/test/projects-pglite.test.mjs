@@ -3,49 +3,21 @@
 // Same pattern as users-sessions-pglite.test.mjs.
 
 import assert from 'node:assert/strict';
-import { fileURLToPath } from 'node:url';
 
-import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 
 import {
-  applyMigrations,
   createProject,
   findOrCreateUserByGoogleSub,
   getProjectById,
   listProjectsByOwnerId,
-  loadMigrations,
-  MIGRATIONS_TABLE_SQL,
   schema,
 } from '../src/index.ts';
 
-function pgliteDriver(pg) {
-  return {
-    async ensureMigrationsTable() {
-      await pg.exec(MIGRATIONS_TABLE_SQL);
-    },
-    async loadAppliedRows() {
-      const res = await pg.query('SELECT name, sha256 FROM schema_migrations');
-      return res.rows;
-    },
-    async applyOne(m) {
-      await pg.transaction(async (tx) => {
-        await tx.exec(m.sql);
-        await tx.query(
-          'INSERT INTO schema_migrations (name, sha256) VALUES ($1, $2)',
-          [m.name, m.sha256],
-        );
-      });
-    },
-  };
-}
+import { freshMigratedPglite } from './_pgliteHarness.mjs';
 
-const migrationsDir = fileURLToPath(new URL('../src/migrations/', import.meta.url));
-const migrations = await loadMigrations(migrationsDir);
-
-const pg = new PGlite();
+const { pg } = await freshMigratedPglite();
 try {
-  await applyMigrations(pgliteDriver(pg), migrations);
   const db = /** @type {any} */ (drizzle(pg, { schema }));
 
   const owner = await findOrCreateUserByGoogleSub(db, {
