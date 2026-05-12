@@ -24,6 +24,20 @@ export const PROTOCOL_VERSION = 1;
 // file in the project tree, keyed by filename.
 export const MAIN_DOC_NAME = "main.tex";
 
+// Seed contents for a fresh project's `main.tex` — the canonical
+// 4-line LaTeX hello-world. A newborn project has no source blob;
+// the sidecar writes this into `Y.Text("main.tex")` (and persists
+// it, if a blob store is wired) on first hydration so the first
+// compile produces a meaningful PDF and the editor opens onto a
+// non-empty document rather than a blinking cursor. Exact bytes
+// are part of the wire contract — see test
+// `apps/sidecar/test/persistenceSeed.test.mjs`.
+export const MAIN_DOC_HELLO_WORLD =
+  "\\documentclass{article}\n" +
+  "\\begin{document}\n" +
+  "Hello, world!\n" +
+  "\\end{document}\n";
+
 // Allowed characters for a project-relative file name. Single
 // segment (no `/`), reasonably URL-safe, no whitespace. The sidecar
 // is the authority here (defence-in-depth); the rule lives in the

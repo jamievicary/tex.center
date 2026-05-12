@@ -40,7 +40,11 @@ import * as Y from "yjs";
 import type { BlobStore } from "@tex-center/blobs";
 import { LocalFsBlobStore } from "@tex-center/blobs";
 
-import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
+import {
+  MAIN_DOC_HELLO_WORLD,
+  MAIN_DOC_NAME,
+  validateProjectFileName,
+} from "@tex-center/protocol";
 
 export { validateProjectFileName };
 
@@ -220,6 +224,15 @@ export function createProjectPersistence(args: {
     // In-memory only: still track created files so `files()` and
     // the broadcast file-list reflect them within this session.
     const memFiles = new Set<string>([MAIN_DOC_NAME]);
+    // Seed the hello-world template so a brand-new in-memory
+    // project opens onto a non-empty document and the first
+    // compile produces a meaningful PDF. Guard against re-seeding
+    // a doc that already has main.tex content (e.g. tests that
+    // pre-populate the Y.Doc).
+    {
+      const t = doc.getText(MAIN_DOC_NAME);
+      if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
+    }
     return {
       awaitHydrated: () => Promise.resolve(),
       maybePersist: () => Promise.resolve(),
@@ -291,11 +304,25 @@ export function createProjectPersistence(args: {
           bytes: await blobStore.get(`${projectFilesDir(projectId)}/${name}`),
         })),
       );
+      // A brand-new project has no `main.tex` blob; seed the
+      // canonical 4-line hello-world template so the editor opens
+      // onto something meaningful and the first compile produces
+      // a non-empty PDF. We do this only when *no* main.tex blob
+      // exists at all — an existing-but-empty blob is a legitimate
+      // user state ("I cleared the document") and must not be
+      // clobbered.
+      const hasMainBlob = loaded.some(
+        ({ name, bytes }) => name === MAIN_DOC_NAME && bytes !== null,
+      );
       doc.transact(() => {
         for (const { name, bytes } of loaded) {
           if (!bytes || bytes.length === 0) continue;
           const t = doc.getText(name);
           if (t.length === 0) t.insert(0, dec.decode(bytes));
+        }
+        if (!hasMainBlob) {
+          const t = doc.getText(MAIN_DOC_NAME);
+          if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
         }
       });
       for (const { name, bytes } of loaded) {
@@ -305,6 +332,26 @@ export function createProjectPersistence(args: {
         // tolerated) leaves the entry unset so the next compile
         // re-establishes it.
         if (bytes) persistedByName.set(name, dec.decode(bytes));
+      }
+      if (!hasMainBlob) {
+        // Persist the seed immediately so subsequent hydrations
+        // (after process restart, machine bounce) see the same
+        // bytes rather than re-seeding from scratch. `persistedByName`
+        // is left unset so `maybePersist` correctly mirrors any
+        // user edit on top of the seed; the blob is already
+        // authoritative for the seed-only state.
+        try {
+          await blobStore.put(
+            mainTexKey(projectId),
+            new TextEncoder().encode(MAIN_DOC_HELLO_WORLD),
+          );
+          persistedByName.set(MAIN_DOC_NAME, MAIN_DOC_HELLO_WORLD);
+        } catch (e) {
+          log.warn(
+            { err: e instanceof Error ? e.message : String(e), projectId },
+            "main.tex seed PUT failed; in-memory seed only this session",
+          );
+        }
       }
       canPersist = true;
     } catch (e) {

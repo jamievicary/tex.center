@@ -9,16 +9,16 @@ Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck: Done
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
-packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -79,6 +79,7 @@ test_sidecar_checkpoint_wiring (test_node_suites.TestNodeSuites.test_sidecar_che
 test_sidecar_daemon_protocol (test_node_suites.TestNodeSuites.test_sidecar_daemon_protocol) ... ok
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_list_project_files (test_node_suites.TestNodeSuites.test_sidecar_list_project_files) ... ok
+test_sidecar_persistence_seed (test_node_suites.TestNodeSuites.test_sidecar_persistence_seed) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
 test_sidecar_server_blobs (test_node_suites.TestNodeSuites.test_sidecar_server_blobs) ... ok
 test_sidecar_server_compile_error (test_node_suites.TestNodeSuites.test_sidecar_server_compile_error) ... ok
@@ -149,7 +150,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 123 tests in 41.072s
+Ran 124 tests in 41.457s
 
 OK
 tests_normal/run_tests.sh: PASS

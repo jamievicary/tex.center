@@ -10,7 +10,12 @@ import { join } from "node:path";
 import { WebSocket } from "ws";
 import * as Y from "yjs";
 
-import { MAIN_DOC_NAME, decodeFrame, encodeDocUpdate } from "../../../packages/protocol/src/index.ts";
+import {
+  MAIN_DOC_HELLO_WORLD,
+  MAIN_DOC_NAME,
+  decodeFrame,
+  encodeDocUpdate,
+} from "../../../packages/protocol/src/index.ts";
 import { buildServer } from "../src/server.ts";
 
 const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-srv-test-"));
@@ -79,19 +84,40 @@ assert.equal(pdfFrame.segment.offset, 0);
 assert.equal(pdfFrame.segment.bytes.length, pdfFrame.segment.totalLength);
 assert.equal(String.fromCharCode(...pdfFrame.segment.bytes.slice(0, 4)), "%PDF");
 
-// The initial compile mirrored an empty Y.Text to disk.
+// The initial compile mirrored the seeded hello-world template
+// (iter 167) to disk — a brand-new in-memory project opens onto
+// the canonical 4-line LaTeX boilerplate rather than an empty
+// buffer.
 const mainTexPath = join(scratchRoot, projectId, "main.tex");
 await waitForCondition(() => existsSync(mainTexPath), "main.tex creation");
-assert.equal(readFileSync(mainTexPath, "utf8"), "");
+await waitForCondition(
+  () => readFileSync(mainTexPath, "utf8") === MAIN_DOC_HELLO_WORLD,
+  "main.tex initial seed",
+);
 
 // Drive an edit through Yjs and confirm the mirrored file picks it up.
+// First sync the client doc by applying every doc-update frame the
+// server has sent so far (these carry the seeded template), then
+// append a user edit. Without the sync step the client's insert
+// would race the server's seed insert as a concurrent operation
+// and the merged order would be clientID-dependent.
 const clientDoc = new Y.Doc();
-clientDoc.getText(MAIN_DOC_NAME).insert(0, "hello from the client");
+for (const f of frames) {
+  if (f.kind === "doc-update") Y.applyUpdate(clientDoc, f.update);
+}
+assert.equal(
+  clientDoc.getText(MAIN_DOC_NAME).toString(),
+  MAIN_DOC_HELLO_WORLD,
+  "client doc should have synced the seeded template",
+);
+const appended = " % user note";
+clientDoc.getText(MAIN_DOC_NAME).insert(MAIN_DOC_HELLO_WORLD.length, appended);
 const update = Y.encodeStateAsUpdate(clientDoc);
 ws.send(encodeDocUpdate(update));
 
+const expectedAfter = MAIN_DOC_HELLO_WORLD + appended;
 await waitForCondition(
-  () => readFileSync(mainTexPath, "utf8") === "hello from the client",
+  () => readFileSync(mainTexPath, "utf8") === expectedAfter,
   "main.tex mirror update",
 );
 
