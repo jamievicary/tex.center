@@ -225,6 +225,58 @@ Estimated iteration sequence (adjust as work unfolds):
   `TEST_OAUTH_BYPASS_KEY` Fly secret) is *not* on the
   FREEZE-lift critical path.
 
+- **Iter 162 — Discussion mode (live user-flow gaps).** *Done.*
+  Answered `162_question.md`. Human report: typing into the
+  editor on https://tex.center produces no PDF preview, and no
+  save-state affordance exists. Corrected the question's premise:
+  M8.pw.4 has never run green automatically (158/159/160 failed at
+  infra layers, 161 in flight at answer-time), and iter-157's
+  manual probe only exercised the **read-only** half of the pipe
+  (hello + file-list + initial state). The "edit → pdf-segment"
+  path has never been confirmed live. Sequencing for next slices
+  below.
+
+- **Iter 163 — Read iter-162's live-pipeline result + diagnose.**
+  Three branches:
+  - (a) M8.pw.4 passes green: gap is between fresh-project seed
+    (spec) and reused-existing-project (user). Write a
+    write-bearing probe (extension of
+    `scripts/probe-live-ws-payload.mjs`) that opens an existing
+    project's WS, sends a Yjs insert, waits for `pdf-segment`,
+    and reads `flyctl logs -a tex-center-sidecar` during the
+    run. Goal: reproduce the user failure with a script.
+  - (b) M8.pw.4 fails on the `pdf-segment` poll: write path is
+    broken in CI too. Read CI failure + sidecar logs to find the
+    layer (sidecar not reacting to Yjs updates / compile error /
+    response not routed back).
+  - (c) M8.pw.4 fails on the canvas-pixel check: PDF.js client-
+    side. Browser console in trace identifies it.
+- **Iter 164 — Fix the diagnosed layer + lock a regression.**
+  Whatever 163 finds, fix it. Add a regression spec/probe that
+  covers the precise failure shape. For branch (a) specifically,
+  add an "existing-project edit" variant of M8.pw.4 (or a
+  separate spec) that does NOT call `createProject` — uses a
+  pre-seeded fixture project owned by the live test user — so
+  the reuse path is automatically locked.
+- **Iter 165 — Save-feedback affordance.** New `SyncStatus`
+  indicator in `apps/web`. Three visual states (idle/"Saved",
+  in-flight/"Saving…" with 250ms tail debounce, error/"Save
+  failed" persistent). Source of truth: Yjs provider sync state
+  acked by sidecar persistence layer, NOT per-keystroke. Tests:
+  pure state-machine unit test, local Playwright spec covering
+  the three transitions including server-side WS drop for the
+  error state, live variant under `TEXCENTER_LIVE_TESTS=1`
+  asserting "Saved" reached within a generous window after
+  typing on the live site. Blocked on iter 164's green.
+
+**FREEZE-lift criterion refined (per `162_answer.md`):** the
+freeze now lifts only when (a) M8.pw.4 runs green automatically
+AND (b) the edit→pdf-segment path has been exercised against a
+**reused pre-existing project**, not just a fresh seed. The
+iter-162 user report demonstrated that spec-green alone can
+co-exist with a broken user flow if the spec's project-lifecycle
+assumptions diverge from real usage.
+
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
   or any daemon-style command via Bash without `timeout
