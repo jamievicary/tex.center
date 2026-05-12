@@ -7,21 +7,21 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.9s
+Done in 1.6s
 Scope: 6 of 7 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
-packages/auth typecheck: Done
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
+packages/auth typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778550968827 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778550968833 COMPLETED 720 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778551369897 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778551369904 COMPLETED 720 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
@@ -60,6 +60,7 @@ test_sidecar_list_project_files (test_node_suites.TestNodeSuites.test_sidecar_li
 test_sidecar_pdf_stability_watcher (test_node_suites.TestNodeSuites.test_sidecar_pdf_stability_watcher) ... ok
 test_sidecar_server (test_node_suites.TestNodeSuites.test_sidecar_server) ... ok
 test_sidecar_server_blobs (test_node_suites.TestNodeSuites.test_sidecar_server_blobs) ... ok
+test_sidecar_server_compile_error (test_node_suites.TestNodeSuites.test_sidecar_server_compile_error) ... ok
 test_sidecar_server_create_file (test_node_suites.TestNodeSuites.test_sidecar_server_create_file) ... ok
 test_sidecar_server_db (test_node_suites.TestNodeSuites.test_sidecar_server_db) ... ok
 test_sidecar_server_delete_file (test_node_suites.TestNodeSuites.test_sidecar_server_delete_file) ... ok
@@ -114,7 +115,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 89 tests in 52.290s
+Ran 90 tests in 45.820s
 
 OK
 tests_normal/run_tests.sh: PASS

@@ -68,6 +68,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_health(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverHealth.test.mjs")
 
+    def test_sidecar_server_compile_error(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverCompileError.test.mjs")
+
     def test_sidecar_fixture_compiler(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "fixtureCompiler.test.mjs")
 

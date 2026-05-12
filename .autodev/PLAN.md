@@ -199,8 +199,14 @@ spawning, (D) auth + production polish.
                   (2s) → SIGKILL. Concurrent `compile()` calls reject.
                   Gated behind `SIDECAR_COMPILER=supertex-daemon`;
                   production default `supertex` unchanged. _(iter 107.)_
-            - [ ] M7.5.3 — `[error <reason>]` → new `compile-status:error`
-                  wire frame in `packages/protocol`; surface in editor UI.
+            - [x] M7.5.3 — `[error <reason>]` → `compile-status` with
+                  `state: "error", detail: <reason>` (already present in
+                  `packages/protocol/src/index.ts:57`); surfaced in
+                  `apps/web/src/lib/wsClient.ts:121-126` as `lastError`.
+                  Sidecar wire path covered by
+                  `serverCompileError.test.mjs` (iter 114); daemon half
+                  by `supertexDaemonCompiler.test.mjs` "error+round-done"
+                  (iter 113).
             - [ ] M7.5.4 — Gate `PdfStabilityWatcher` on compiler kind
                   (once-path keeps it; daemon uses `[round-done]`).
             - [~] M7.5.5 — Integration tests against the fake daemon
@@ -240,8 +246,8 @@ spawning, (D) auth + production polish.
 
 **Next ordinary iteration:** M7.1.3.2.b (WS-upgrade-with-cookie probe
 + Machine cleanup at probe end). After that: M7.1.4 (idle-stop wiring
-on per-project Machine side), then M7.5.3 (`compile-status:error`
-wire frame on the heels of M7.5.2).
+on per-project Machine side), then M7.5.4 (gate `PdfStabilityWatcher`
+on compiler kind).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
