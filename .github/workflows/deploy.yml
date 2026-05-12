@@ -43,3 +43,33 @@ jobs:
       - run: flyctl deploy --remote-only --config fly.toml --dockerfile apps/web/Dockerfile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # M8.pw.4 — full product-loop spec against the live deployment.
+  # Runs after `deploy` succeeds. The freeze in PLAN.md is lifted
+  # only when this job runs green automatically on every push, so
+  # any regression that breaks the type-→-pdf loop fails CI before
+  # the maintainer hits it manually.
+  live-pipeline:
+    name: live full pipeline (M8.pw.4)
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: run live full-pipeline spec
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          TEXCENTER_LIVE_TESTS: '1'
+          TEXCENTER_FULL_PIPELINE: '1'
+          PLAYWRIGHT_SKIP_WEBSERVER: '1'
+          TEXCENTER_LIVE_DB_PASSWORD: ${{ secrets.TEXCENTER_LIVE_DB_PASSWORD }}
+          SESSION_SIGNING_KEY: ${{ secrets.SESSION_SIGNING_KEY }}
+          TEXCENTER_LIVE_USER_ID: ${{ secrets.TEXCENTER_LIVE_USER_ID }}
+        run: pnpm exec playwright test --config tests_gold/playwright.config.ts --project=live

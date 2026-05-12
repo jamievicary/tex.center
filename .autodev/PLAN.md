@@ -169,15 +169,41 @@ Estimated iteration sequence (adjust as work unfolds):
   floor. Project: `ae011b9e-e287-4d62-98ff-d0187ac44dd1` (existing,
   owned by live user). Proxy PID killed cleanly, port 5435 closed.
 
-- **Iter 158+ — Activate M8.pw.4 (stretch 2 of original iter-157).**
-  Provision the test OAuth client (operator step — needs human in
-  GCP console at `console.cloud.google.com`: create OAuth 2.0
-  Client ID with redirect `http://localhost:4567/oauth-callback`,
-  download client JSON), run `scripts/google-refresh-token.mjs`,
-  push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets set -a
-  tex-center`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec
-  into the deploy workflow so no operator-gated tests remain.
-  M8.pw.4 then runs green automatically on every deploy.
+- **Iter 158 — Wire M8.pw.4 into the deploy workflow.** *Done.*
+  Pushed three GitHub Actions secrets to
+  `jamievicary/tex.center` via `gh secret set`:
+  `TEXCENTER_LIVE_DB_PASSWORD` (Fly Postgres superuser, from
+  `creds/fly-postgres.txt`), `SESSION_SIGNING_KEY` (from
+  `creds/session-signing-key.txt`), `TEXCENTER_LIVE_USER_ID`
+  (from `creds/live-user-id.txt`). Added a `live-pipeline` job to
+  `.github/workflows/deploy.yml` that `needs: deploy`, sets up
+  Node 20 + pnpm via corepack + flyctl, installs Playwright
+  chromium, and runs `pnpm exec playwright test --config
+  tests_gold/playwright.config.ts --project=live` with
+  `TEXCENTER_LIVE_TESTS=1`, `TEXCENTER_FULL_PIPELINE=1`,
+  `PLAYWRIGHT_SKIP_WEBSERVER=1`, and the three new live env vars
+  + `FLY_API_TOKEN` threaded through. Regression lock:
+  `tests_normal/cases/test_deploy_workflow.py::test_live_pipeline_job_runs_full_pipeline_spec`.
+  The harness commit will trigger CD and the new
+  `live-pipeline` job will run M8.pw.4 against the live
+  deployment for the first time. **Note on operator-gated specs:**
+  The PLAN had previously conflated M8.pw.4 activation with
+  M8.pw.3.3's TEST_OAUTH_BYPASS_KEY operator step; they are
+  unrelated. M8.pw.4 uses cookie injection via `authedPage`, no
+  OAuth round-trip; M8.pw.3.3 (real-OAuth callback,
+  `verifyLiveOauthCallback.spec.ts`) still self-skips on
+  missing `TEST_OAUTH_BYPASS_KEY` and remains operator-gated —
+  but that no longer blocks M8.pw.4 or the FREEZE-lift gate.
+
+- **Iter 159+ — Confirm live-pipeline runs green automatically,**
+  then lift the FREEZE in this file's header. If the first live
+  run reveals a real regression, fix it (that is precisely the
+  protection the freeze exists to enforce); if it reveals a flake
+  or env-shape mismatch in the wiring, fix the wiring and re-run.
+  Operator-gated work that remains (M8.pw.3.3 activation: GCP
+  console + `scripts/google-refresh-token.mjs` +
+  `TEST_OAUTH_BYPASS_KEY` Fly secret) is *not* on the
+  FREEZE-lift critical path.
 
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
