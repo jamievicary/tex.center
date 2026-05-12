@@ -10,6 +10,7 @@
   import { MAIN_DOC_NAME } from "@tex-center/protocol";
 
   import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
+  import { toasts } from "$lib/toastStore";
 
   let { data } = $props();
 
@@ -43,6 +44,20 @@
       url,
       onChange: (s) => {
         snapshot = s;
+      },
+      onFileOpError: (reason) => {
+        toasts.push({
+          category: "error",
+          text: `File error: ${reason}`,
+          aggregateKey: `file-op-error:${reason}`,
+        });
+      },
+      onCompileError: (detail) => {
+        toasts.push({
+          category: "error",
+          text: `Compile error: ${detail}`,
+          aggregateKey: `compile-error:${detail}`,
+        });
       },
     });
     text = client.getText(selected);

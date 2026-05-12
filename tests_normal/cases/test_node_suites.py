@@ -170,6 +170,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_toast_store(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "toastStore.test.mjs")
 
+    def test_web_ws_client_toast_events(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "wsClientToastEvents.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 

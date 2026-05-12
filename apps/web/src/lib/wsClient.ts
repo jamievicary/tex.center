@@ -46,6 +46,20 @@ export interface WsClientSnapshot {
 export interface WsClientOptions {
   url: string;
   onChange?: (snap: WsClientSnapshot) => void;
+  /**
+   * Fired on every `file-op-error` control frame, regardless of
+   * whether the reason matches a previous one. Toast consumers
+   * dedup repeats via the toast store's aggregateKey rather than
+   * by snapshot-transition edge detection, so back-to-back
+   * identical errors must each surface here.
+   */
+  onFileOpError?: (reason: string) => void;
+  /**
+   * Fired on every `compile-status` control frame whose `state`
+   * is `"error"`. `detail` is the server-supplied diagnostic, or
+   * `"compile error"` when the frame omits one.
+   */
+  onCompileError?: (detail: string) => void;
 }
 
 export class WsClient {
@@ -54,6 +68,8 @@ export class WsClient {
   private socket: WebSocket | null = null;
   private readonly pdf = new PdfBuffer();
   private readonly onChange: ((snap: WsClientSnapshot) => void) | undefined;
+  private readonly onFileOpError: ((reason: string) => void) | undefined;
+  private readonly onCompileError: ((detail: string) => void) | undefined;
   private readonly url: string;
   private _status: ConnectionState = "connecting";
   private _pdfBytes: Uint8Array | null = null;
@@ -67,6 +83,8 @@ export class WsClient {
   constructor(opts: WsClientOptions) {
     this.url = opts.url;
     this.onChange = opts.onChange;
+    this.onFileOpError = opts.onFileOpError;
+    this.onCompileError = opts.onCompileError;
     this.doc = new Y.Doc();
     this.text = this.doc.getText(MAIN_DOC_NAME);
     this.onDocUpdate = (update, origin) => {
@@ -134,7 +152,9 @@ export class WsClient {
         if (decoded.message.type === "compile-status") {
           this._compileState = decoded.message.state;
           if (decoded.message.state === "error") {
-            this._lastError = decoded.message.detail ?? "compile error";
+            const detail = decoded.message.detail ?? "compile error";
+            this._lastError = detail;
+            this.onCompileError?.(detail);
           }
           this.emit();
         } else if (decoded.message.type === "file-list") {
@@ -144,6 +164,7 @@ export class WsClient {
           this.emit();
         } else if (decoded.message.type === "file-op-error") {
           this._fileOpError = decoded.message.reason;
+          this.onFileOpError?.(decoded.message.reason);
           this.emit();
         }
         break;

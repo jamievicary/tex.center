@@ -58,12 +58,13 @@ debug categories. See `172/174_question.md`+`_answer.md`.
 
 Done: logo→/projects (iter 177), no-flash editor (iter 177),
 compile coalescer (iter 178), toast store + component scaffold
-(iter 179). Remaining slices:
+(iter 179), toast consumers for `file-op-error` + compile error
+(iter 186). Remaining slices:
 
-- **Toast consumers.** `file-op-error` → red toast (dedup by
-  reason), compile error → error toast (dedup by detail),
-  successful save → success toast (post-debounce). User-facing
-  only — no `?debug=1` yet.
+- **Save-success toast** lives with the **save-feedback
+  affordance** slice below — depends on a sidecar persistence-ack
+  signal that doesn't exist yet, so it is not part of the
+  toast-consumers slice.
 - **Debug-mode toggle + protocol fan-out.**
   `localStorage.debug==="1"` or `?debug=1`; Ctrl+Shift+D
   shortcut. Subscribe to `WsClient.onChange` + outgoing-send

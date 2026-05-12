@@ -5,23 +5,23 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778616695911 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778616695919 COMPLETED 728 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778617201181 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778617201185 COMPLETED 728 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -150,6 +150,7 @@ test_web_upstream_from_env (test_node_suites.TestNodeSuites.test_web_upstream_fr
 test_web_upstream_resolver (test_node_suites.TestNodeSuites.test_web_upstream_resolver) ... ok
 test_web_ws_auth (test_node_suites.TestNodeSuites.test_web_ws_auth) ... ok
 test_web_ws_client_hydrated (test_node_suites.TestNodeSuites.test_web_ws_client_hydrated) ... ok
+test_web_ws_client_toast_events (test_node_suites.TestNodeSuites.test_web_ws_client_toast_events) ... ok
 test_web_ws_proxy (test_node_suites.TestNodeSuites.test_web_ws_proxy) ... ok
 test_empty_state_test_skips_on_live (test_projects_empty_state_skips_live.TestProjectsEmptyStateSkipsLive.test_empty_state_test_skips_on_live) ... ok
 test_exports_get_handler (test_readyz_route.TestReadyzRoute.test_exports_get_handler) ... ok
@@ -195,7 +196,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 170 tests in 47.027s
+Ran 171 tests in 48.481s
 
 OK
 tests_normal/run_tests.sh: PASS
