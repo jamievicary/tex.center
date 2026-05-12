@@ -365,15 +365,52 @@ until this block lands. One slice per iteration.
       `tests_normal/cases/test_deploy_workflow.py`
       (`test_smoke_job_gates_deploy`,
       `test_smoke_script_probes_all_endpoints`). _(iter 132.)_
-- [ ] **M8.pw.3** — Real OAuth round-trip via a dedicated Google
+- [~] **M8.pw.3** — Real OAuth round-trip via a dedicated Google
       Cloud service account with the OAuth client pre-consented.
-      Test obtains an ID token (refresh-token or JWT exchange),
-      constructs a synthetic `code` mirroring the real callback
-      payload, presents it to `/auth/google/callback` with a
-      matching `state` cookie, asserts 302 → `/projects` and the
-      `tc_session` passes the session hook. Wired into
+      Test obtains an ID token (refresh-token or JWT exchange) and
+      presents it to a test-only callback finaliser endpoint with a
+      bypass-key header; that endpoint runs JWKS verify + allowlist
+      + DB upsert + session-cookie mint — the same code path the
+      real callback runs post-token-exchange. Wired into
       `verifyLive.spec.ts` as a deploy gate. This is the test that
-      would have caught both production-down bugs.
+      would have caught the iter-131 production-down bug.
+      - [x] **M8.pw.3.0** — Extract `finalizeGoogleSession` from
+            `resolveGoogleCallback` (`oauthCallback.ts`): pure
+            post-verify orchestrator covering allowlist gate, DB
+            session creation, signed session-cookie minting, and
+            the success/signed-out redirect branches.
+            `resolveGoogleCallback` now calls it after the JWKS-
+            verify step. `priorSetCookies` carries the cleared
+            state cookie through to every termination. Unit-tested
+            standalone (`apps/web/test/finalizeGoogleSession.test.mjs`)
+            — happy, prior-cookie passthrough, allowlist-deny,
+            email_verified=false, createSession-throws-500, http
+            (Secure-attr omitted). _(iter 133.)_
+      - [ ] M8.pw.3.1 — `POST /auth/google/test-callback` route
+            gated on `TEST_OAUTH_BYPASS_KEY` env var (404 when
+            unset). Body: `{ idToken }`. Header
+            `X-Test-Bypass: <HMAC(body, key)>`. Server calls
+            `verifyGoogleIdToken` (real JWKS check) then
+            `finalizeGoogleSession`. Returns the same 302 →
+            `/projects` + Set-Cookie shape as the real callback.
+            Test-normal coverage via a pure orchestrator module so
+            we don't spin SvelteKit in unit tests.
+      - [ ] M8.pw.3.2 — `scripts/google-refresh-token.mjs`: one-
+            shot helper that runs the Authorization Code + PKCE
+            flow with `access_type=offline&prompt=consent` against
+            a separate OAuth client, captures the refresh token,
+            writes `creds/google-refresh-token.txt`. Plus
+            `tests_gold/lib/src/mintGoogleIdToken.ts`: refresh-
+            token-grant against `https://oauth2.googleapis.com/token`,
+            returns a real Google ID token.
+      - [ ] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`: in
+            `live` project, mint an ID token via .3.2, POST it to
+            `/auth/google/test-callback` with the bypass header,
+            assert 302 → `/projects` and `tc_session` cookie
+            verifies via the session hook on `/projects`. Sets
+            `TEST_OAUTH_BYPASS_KEY` as a Fly secret; gated by
+            `TEXCENTER_LIVE_TESTS=1` and presence of
+            `creds/google-refresh-token.txt`.
 - [ ] **M8.pw.4** — Full product-loop Playwright spec. With
       pw.3's service-account auth: sign in, create project, type a
       minimal LaTeX source, wait for a `pdf-segment` WS frame,
@@ -408,10 +445,10 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** M8.pw.3 (real OAuth round-trip via a
-dedicated Google Cloud service account). M8.smoke.0 landed iter
-132; M7.4.2 and M7.2 still parked until the rest of the priority
-block lands.
+**Next ordinary iteration:** M8.pw.3.1 — the test-only callback-
+finaliser route. M8.pw.3.0 (the `finalizeGoogleSession` extraction)
+landed iter 133. M7.4.2 and M7.2 still parked until the rest of the
+priority block lands.
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because

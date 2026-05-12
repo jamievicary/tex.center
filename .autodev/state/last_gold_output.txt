@@ -13,7 +13,7 @@ ok
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
 ----------------------------------------------------------------------
-Ran 12 tests in 29.575s
+Ran 12 tests in 29.348s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

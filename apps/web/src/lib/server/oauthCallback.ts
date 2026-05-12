@@ -120,6 +120,72 @@ export type GoogleCallbackResolution =
       readonly setCookies: readonly string[];
     };
 
+/**
+ * Inputs to {@link finalizeGoogleSession}. Subset of
+ * {@link ResolveGoogleCallbackInput} that applies once an ID token has been
+ * verified — covers allowlist gating, DB session persistence, and signed
+ * session-cookie minting. Factored out so an authenticated test path can
+ * drive the same finalisation without going through the full PKCE/code
+ * exchange (see M8.pw.3).
+ */
+export interface FinalizeGoogleSessionInput {
+  readonly claims: VerifiedIdToken;
+  readonly signingKey: Uint8Array;
+  readonly isEmailAllowed: AllowEmailFn;
+  readonly nowSeconds: number;
+  readonly sessionTtlSeconds: number;
+  readonly secureCookie: boolean;
+  readonly sessionCookieName: string;
+  readonly successPath: string;
+  readonly signedOutPath: string;
+  readonly createSession: (claims: VerifiedIdToken) => Promise<string>;
+  /**
+   * Set-Cookie headers to prepend on every termination (e.g. clearing a
+   * one-shot state cookie). Optional; defaults to none.
+   */
+  readonly priorSetCookies?: readonly string[];
+}
+
+export async function finalizeGoogleSession(
+  input: FinalizeGoogleSessionInput,
+): Promise<GoogleCallbackResolution> {
+  const prior = input.priorSetCookies ?? [];
+
+  if (!input.claims.emailVerified || !input.isEmailAllowed(input.claims.email)) {
+    return {
+      kind: "redirect",
+      location: input.signedOutPath,
+      setCookies: [...prior],
+    };
+  }
+
+  let sid: string;
+  try {
+    sid = await input.createSession(input.claims);
+  } catch (err) {
+    return errorWith(
+      500,
+      `Session persistence failed: ${errorMessage(err)}`,
+      [...prior],
+    );
+  }
+  const exp = input.nowSeconds + input.sessionTtlSeconds;
+  const sessionToken = signSessionToken({ sid, exp }, input.signingKey);
+  const sessionCookie = formatSetCookie({
+    name: input.sessionCookieName,
+    value: sessionToken,
+    path: "/",
+    maxAgeSeconds: input.sessionTtlSeconds,
+    secure: input.secureCookie,
+  });
+
+  return {
+    kind: "redirect",
+    location: input.successPath,
+    setCookies: [...prior, sessionCookie],
+  };
+}
+
 const STATE_RE = /^[A-Za-z0-9_-]+$/u;
 
 export async function resolveGoogleCallback(
@@ -202,39 +268,19 @@ export async function resolveGoogleCallback(
     );
   }
 
-  if (!claims.emailVerified || !input.isEmailAllowed(claims.email)) {
-    return {
-      kind: "redirect",
-      location: input.signedOutPath,
-      setCookies: [clearState],
-    };
-  }
-
-  let sid: string;
-  try {
-    sid = await input.createSession(claims);
-  } catch (err) {
-    return errorWith(
-      500,
-      `Session persistence failed: ${errorMessage(err)}`,
-      [clearState],
-    );
-  }
-  const exp = input.nowSeconds + input.sessionTtlSeconds;
-  const sessionToken = signSessionToken({ sid, exp }, input.signingKey);
-  const sessionCookie = formatSetCookie({
-    name: input.sessionCookieName,
-    value: sessionToken,
-    path: "/",
-    maxAgeSeconds: input.sessionTtlSeconds,
-    secure: input.secureCookie,
+  return finalizeGoogleSession({
+    claims,
+    signingKey: input.signingKey,
+    isEmailAllowed: input.isEmailAllowed,
+    nowSeconds: input.nowSeconds,
+    sessionTtlSeconds: input.sessionTtlSeconds,
+    secureCookie: input.secureCookie,
+    sessionCookieName: input.sessionCookieName,
+    successPath: input.successPath,
+    signedOutPath: input.signedOutPath,
+    createSession: input.createSession,
+    priorSetCookies: [clearState],
   });
-
-  return {
-    kind: "redirect",
-    location: input.successPath,
-    setCookies: [clearState, sessionCookie],
-  };
 }
 
 function errorWith(
