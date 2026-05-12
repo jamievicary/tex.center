@@ -171,12 +171,22 @@ spawning, (D) auth + production polish.
                                     `cleanupProjectMachine.test.mjs`
                                     (happy / no-assignment / 404 / 500).
                                     _(iter 116.)_
-                              - [ ] M7.1.3.2.b.1 — Wire the helper into a
-                                    Playwright `live` spec that drives a
-                                    WS upgrade against `/ws/project/<id>`
-                                    with a minted session cookie,
-                                    asserts 101, and calls cleanup in
-                                    `afterAll`. Closes M7.0.3.3 tail.
+                              - [x] M7.1.3.2.b.1 — `verifyLiveWsUpgrade.spec.ts`
+                                    drives an `https.request` WS upgrade against
+                                    `/ws/project/<projectId>` with a minted
+                                    `tc_session` cookie and asserts the
+                                    `'upgrade'` event fires with status 101.
+                                    Test-level try/finally runs
+                                    `cleanupProjectMachine` (inline
+                                    `MachineDestroyer` against
+                                    `api.machines.dev` + drizzle-backed
+                                    `AssignmentStore`), deletes the project
+                                    row, and deletes the session. Live-only
+                                    (skips on `local`); further self-skip on
+                                    missing `FLY_API_TOKEN` /
+                                    `SIDECAR_APP_NAME`. `test.setTimeout`
+                                    raised to 5 min for cold-start. Closes
+                                    M7.0.3.3 tail. _(iter 117.)_
                         - [x] M7.1.3.2.c — Prerender bug on `/`.
                               `+layout.ts` no longer defaults
                               `prerender = true`; every concrete page
@@ -264,10 +274,12 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.2.b.1 (Playwright `live` spec
-that drives the WS upgrade and uses the iter-116 cleanup helper in
-`afterAll`). After that: M7.1.4 (idle-stop wiring on per-project
-Machine side).
+**Next ordinary iteration:** M7.1.4 (idle-stop wiring on the
+per-project Machine side; closes M7.3). The `verifyLiveWsUpgrade`
+spec needs `TEXCENTER_LIVE_TESTS=1` + `FLY_API_TOKEN` +
+`SIDECAR_APP_NAME` in the env to run against prod — first
+deploy-touching iteration that does so will exercise it
+end-to-end.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
