@@ -441,13 +441,25 @@ until this block lands. One slice per iteration.
             created in GCP and the refresh token captured via
             `scripts/google-refresh-token.mjs`. Until those land
             the spec self-skips on every `live` run.
-- [ ] **M8.pw.4** — Full product-loop Playwright spec. With
-      pw.3's service-account auth: sign in, create project, type a
-      minimal LaTeX source, wait for a `pdf-segment` WS frame,
-      assert PDF.js rendered a non-blank canvas. Gated by
-      `TEXCENTER_FULL_PIPELINE=1` so it doesn't beat on prod every
-      iter, but mandatory on any deploy-touching iter. Subsumes
-      M8.acceptance.
+- [~] **M8.pw.4** — Full product-loop Playwright spec.
+      `tests_gold/playwright/verifyLiveFullPipeline.spec.ts` landed
+      iter 137: live-only, additionally gated on
+      `TEXCENTER_FULL_PIPELINE=1`. Seeds a fresh project via
+      `createProject`, navigates the cookie-injected authed page to
+      `/editor/<id>`, types a minimal `\documentclass{article}…`
+      source into CodeMirror (`closeBrackets`-safe), listens for
+      binary `pdf-segment` WS frames (tag `0x20`) on the
+      `/ws/project/<id>` socket, and asserts PDF.js rendered at
+      least one non-near-white pixel into a `.preview canvas`. 5-min
+      test timeout to cover cold-start of the per-project Machine.
+      Project row deleted on teardown; Machine left to idle-stop on
+      its own (M7.3 path).
+      **Live activation still pending**: needs
+      `TEXCENTER_FULL_PIPELINE=1` exported in the live runner env
+      (composes with the existing `TEXCENTER_LIVE_TESTS=1` plus
+      `TEXCENTER_LIVE_DB_PASSWORD` / `SESSION_SIGNING_KEY` /
+      `TEXCENTER_LIVE_USER_ID` already required by `authedPage`).
+      Subsumes M8.acceptance.
 
 ## Current focus
 
@@ -475,15 +487,24 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** activate M8.pw.3.3 against live —
-either as an operator step (set `TEST_OAUTH_BYPASS_KEY` Fly secret
-on `tex-center`, create the test OAuth client in GCP with
-`http://localhost:4567/oauth-callback` registered, run
-`scripts/google-refresh-token.mjs` once to populate
-`creds/google-refresh-token.txt`) or by the engineer if the GCP
-console step is reachable from the API. Once that is done, the
-priority block closes and M8.pw.4 (full product-loop spec) is the
-last item before resuming M7.4.2 / M7.2.
+**Priority block tail (operator-gated).** Both M8.pw.3.3 and
+M8.pw.4 are landed code-side; both self-skip on every `live` run
+until an operator exports their gating env. To activate:
+
+- M8.pw.3.3 — create the test OAuth client in Google Cloud with
+  `http://localhost:4567/oauth-callback` registered, save as
+  `creds/google-oauth-test.json`; run `pnpm exec node
+  scripts/google-refresh-token.mjs` once to capture
+  `creds/google-refresh-token.txt`; `openssl rand -hex 32` →
+  `flyctl secrets set TEST_OAUTH_BYPASS_KEY=<key> -a tex-center`
+  + export the same value in the live runner shell.
+- M8.pw.4 — export `TEXCENTER_FULL_PIPELINE=1` alongside the
+  existing `TEXCENTER_LIVE_TESTS=1` + authedPage env. No deploy
+  step; the spec drives prod through the test user's session.
+
+Once both activate, the priority block closes and the queue
+returns to M7.4.2 (upstream supertex daemon serialise/restore wire)
+followed by M7.2 (`/ws/project/<id>` routing-per-project).
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
