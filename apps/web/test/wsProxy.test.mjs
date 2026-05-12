@@ -282,7 +282,7 @@ assert.ok(events.some((e) => e.kind === "no-match"));
   await new Promise((res) => upstream2.listen(0, "127.0.0.1", res));
   const upstream2Port = upstream2.address().port;
 
-  let nextAuth = false;
+  let nextAuth = { kind: "deny-anon" };
   const httpServer2 = http.createServer();
   const detach2 = attachWsProxy(httpServer2, {
     upstream: { host: "127.0.0.1", port: upstream2Port },
@@ -307,8 +307,8 @@ assert.ok(events.some((e) => e.kind === "no-match"));
     return sock;
   };
 
-  // Reject: client sees 401, upstream never dialled.
-  nextAuth = false;
+  // deny-anon: client sees 401, upstream never dialled.
+  nextAuth = { kind: "deny-anon" };
   {
     const sock = await sendUpgrade("/ws/project/proj1");
     const got = await readUntil(sock, (b) =>
@@ -324,8 +324,30 @@ assert.ok(events.some((e) => e.kind === "no-match"));
   );
   assert.ok(authEvents.some((e) => e.kind === "unauthorised"));
 
+  // deny-acl: client sees 403, upstream still not dialled.
+  nextAuth = { kind: "deny-acl" };
+  {
+    const sock = await sendUpgrade("/ws/project/proj1b");
+    const got = await readUntil(sock, (b) =>
+      b.toString("utf8").includes("403"),
+    );
+    assert.match(got.toString("utf8"), /HTTP\/1\.1 403/);
+    sock.destroy();
+  }
+  assert.equal(
+    authedConnections.length,
+    0,
+    "upstream must not be dialled on ACL reject",
+  );
+  assert.ok(
+    authEvents.some(
+      (e) => e.kind === "forbidden" && e.projectId === "proj1b",
+    ),
+    `expected forbidden event: ${JSON.stringify(authEvents)}`,
+  );
+
   // Accept: bytes flow as before.
-  nextAuth = true;
+  nextAuth = { kind: "allow" };
   {
     const sock = await sendUpgrade("/ws/project/proj2");
     const got = await readUntil(sock, (b) =>

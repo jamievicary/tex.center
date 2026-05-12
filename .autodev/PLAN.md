@@ -208,7 +208,7 @@ spawning, (D) auth + production polish.
                   set in `upstreamFromEnv.ts`, a clean exit leaves the
                   Machine `stopped`; `upstreamResolver.ts:139-141` wakes
                   it on the next WS upgrade. Closes M7.3. _(iter 118.)_
-      - [~] **M7.2** — `/ws/project/<id>` routing per project.
+      - [x] **M7.2** — `/ws/project/<id>` routing per project.
             - [x] M7.2.0 — Per-project access gate at WS upgrade.
                   `WsProxyOptions.authoriseUpgrade` widened to `(req,
                   projectId) => boolean | Promise<boolean>`; the proxy
@@ -225,6 +225,17 @@ spawning, (D) auth + production polish.
                   other-owned → false, missing project → false, no
                   session → false, owner-lookup throws → false, session
                   lookup throws → false). _(iter 138.)_
+            - [x] M7.2.1 — 401 vs 403 discrimination. Authoriser
+                  return widened to a discriminated union
+                  `{ kind: "allow" | "deny-anon" | "deny-acl" }`
+                  (`UpgradeAuthDecision`); proxy maps `deny-anon`
+                  → 401 and `deny-acl` → 403 with a new `forbidden`
+                  event. `makeProjectAccessAuthoriser` deny shape:
+                  no session → anon, owner-lookup throws → acl
+                  (authed caller mustn't be invited to re-auth on a
+                  transient DB hiccup), missing project → acl
+                  (hide existence; don't make the proxy an oracle),
+                  wrong owner → acl. _(iter 139.)_
       - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4
             iter 118; see above.)_
       - [~] **M7.4** — Checkpoint blob protocol on the compiler

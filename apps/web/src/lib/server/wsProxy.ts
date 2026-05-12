@@ -23,6 +23,8 @@ import net from "node:net";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import type { Duplex } from "node:stream";
 
+import type { UpgradeAuthDecision } from "./wsAuth.js";
+
 const PROJECT_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 export interface SidecarUpstream {
@@ -109,15 +111,18 @@ export interface WsProxyOptions {
   // Bounded connect timeout for the upstream dial. If `null`, no
   // timeout (don't use in prod — Fly 6PN should answer fast).
   readonly connectTimeoutMs?: number;
-  // Optional pre-flight authorisation. Resolves true to proxy
-  // the upgrade, false to reject with HTTP 401. A throw or
-  // rejection is treated as 401 — the proxy must never leak the
-  // upstream to an unauthenticated caller because the cookie
-  // store was momentarily unavailable.
+  // Optional pre-flight authorisation. Resolves to an
+  // `UpgradeAuthDecision`:
+  //   - `allow`     → proxy the upgrade.
+  //   - `deny-anon` → 401 (caller has no valid session).
+  //   - `deny-acl`  → 403 (authenticated but no access to this id).
+  // A throw or rejection is treated as 401 — the proxy must never
+  // leak the upstream to an unauthenticated caller because the
+  // cookie store was momentarily unavailable.
   readonly authoriseUpgrade?: (
     req: IncomingMessage,
     projectId: string,
-  ) => boolean | Promise<boolean>;
+  ) => UpgradeAuthDecision | Promise<UpgradeAuthDecision>;
   // Hook for tests / logs. Errors here must not throw — they're
   // best-effort observability.
   readonly onEvent?: (event: WsProxyEvent) => void;
@@ -126,6 +131,7 @@ export interface WsProxyOptions {
 export type WsProxyEvent =
   | { kind: "no-match"; pathname: string }
   | { kind: "unauthorised"; projectId: string }
+  | { kind: "forbidden"; projectId: string }
   | { kind: "auth-error"; projectId: string; message: string }
   | { kind: "resolve-error"; projectId: string; message: string }
   | { kind: "upstream-connect"; projectId: string; upstream: SidecarUpstream }
@@ -216,7 +222,7 @@ export function attachWsProxy(
       return;
     }
 
-    let authResult: boolean | Promise<boolean>;
+    let authResult: UpgradeAuthDecision | Promise<UpgradeAuthDecision>;
     try {
       authResult = options.authoriseUpgrade(req, projectId);
     } catch (err) {
@@ -229,9 +235,12 @@ export function attachWsProxy(
       return;
     }
     Promise.resolve(authResult).then(
-      (ok) => {
-        if (ok) {
+      (decision) => {
+        if (decision.kind === "allow") {
           proceed();
+        } else if (decision.kind === "deny-acl") {
+          options.onEvent?.({ kind: "forbidden", projectId });
+          writeStatusAndClose(clientSocket, "403 Forbidden");
         } else {
           options.onEvent?.({ kind: "unauthorised", projectId });
           writeStatusAndClose(clientSocket, "401 Unauthorized");

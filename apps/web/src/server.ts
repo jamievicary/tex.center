@@ -58,7 +58,7 @@ const authoriseUpgrade =
           return row?.ownerId ?? null;
         },
       })
-    : async () => false;
+    : async () => ({ kind: "deny-anon" as const });
 
 // Per-project resolver: when the Fly + sidecar env vars are all
 // set, construct a `MachinesClient` + db-backed assignment store and

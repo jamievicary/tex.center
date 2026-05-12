@@ -20,10 +20,23 @@ export interface SessionAuthoriserOptions {
   readonly now?: () => number;
 }
 
+// Discriminated decision so the proxy can map "no session" → 401 and
+// "session but no access" → 403. Authoriser throws are still treated
+// as 401 by the proxy (the cookie store is the most likely cause of
+// throws, and we must not admit on a momentary DB failure).
+export type UpgradeAuthDecision =
+  | { kind: "allow" }
+  | { kind: "deny-anon" }
+  | { kind: "deny-acl" };
+
+export const ALLOW: UpgradeAuthDecision = { kind: "allow" };
+export const DENY_ANON: UpgradeAuthDecision = { kind: "deny-anon" };
+export const DENY_ACL: UpgradeAuthDecision = { kind: "deny-acl" };
+
 export type UpgradeAuthoriser = (
   req: IncomingMessage,
   projectId: string,
-) => Promise<boolean>;
+) => Promise<UpgradeAuthDecision>;
 
 export function makeSessionAuthoriser(
   opts: SessionAuthoriserOptions,
@@ -42,7 +55,7 @@ export function makeSessionAuthoriser(
       secureCookie: true,
       lookupSession: opts.lookupSession,
     });
-    return result.session !== null;
+    return result.session !== null ? ALLOW : DENY_ANON;
   };
 }
 
@@ -80,17 +93,21 @@ export function makeProjectAccessAuthoriser(
         lookupSession: opts.lookupSession,
       });
     } catch {
-      return false;
+      // Session-side failure: caller is treated as anonymous.
+      return DENY_ANON;
     }
-    if (session.session === null) return false;
+    if (session.session === null) return DENY_ANON;
     const userId = session.session.user.id;
     let ownerId: string | null;
     try {
       ownerId = await opts.lookupProjectOwner(projectId);
     } catch {
-      return false;
+      // Authenticated but owner lookup failed → not anonymous; treat
+      // as ACL deny so we don't downgrade to 401 (which would tell a
+      // logged-in user to re-auth pointlessly).
+      return DENY_ACL;
     }
-    if (ownerId === null) return false;
-    return ownerId === userId;
+    if (ownerId === null) return DENY_ACL;
+    return ownerId === userId ? ALLOW : DENY_ACL;
   };
 }

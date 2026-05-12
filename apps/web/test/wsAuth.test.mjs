@@ -47,41 +47,51 @@ const reqWith = (cookie) => ({
   headers: cookie === null ? {} : { cookie },
 });
 
-// Valid cookie → true.
-assert.equal(await authorise(reqWith(`tc_session=${validToken}`)), true);
+const allow = { kind: "allow" };
+const denyAnon = { kind: "deny-anon" };
+const denyAcl = { kind: "deny-acl" };
 
-// Valid cookie alongside unrelated cookies → still true.
-assert.equal(
-  await authorise(reqWith(`foo=bar; tc_session=${validToken}; other=baz`)),
-  true,
+// Valid cookie → allow.
+assert.deepEqual(
+  await authorise(reqWith(`tc_session=${validToken}`)),
+  allow,
 );
 
-// No cookie header at all → false.
-assert.equal(await authorise(reqWith(null)), false);
+// Valid cookie alongside unrelated cookies → allow.
+assert.deepEqual(
+  await authorise(reqWith(`foo=bar; tc_session=${validToken}; other=baz`)),
+  allow,
+);
 
-// Wrong cookie name → false.
-assert.equal(await authorise(reqWith(`other=${validToken}`)), false);
+// No cookie header at all → deny-anon.
+assert.deepEqual(await authorise(reqWith(null)), denyAnon);
 
-// Tampered signature → false.
+// Wrong cookie name → deny-anon.
+assert.deepEqual(await authorise(reqWith(`other=${validToken}`)), denyAnon);
+
+// Tampered signature → deny-anon.
 {
   const tampered = validToken.slice(0, -2) + "AA";
-  assert.equal(await authorise(reqWith(`tc_session=${tampered}`)), false);
+  assert.deepEqual(
+    await authorise(reqWith(`tc_session=${tampered}`)),
+    denyAnon,
+  );
 }
 
-// Unknown sid (token verifies, but DB row missing) → false.
+// Unknown sid (token verifies, but DB row missing) → deny-anon.
 {
   const unknownSid = "deadbeef-0000-0000-0000-000000000000";
   const tokenForUnknown = signSessionToken(
     { sid: unknownSid, exp: nowSeconds + 3600 },
     signingKey,
   );
-  assert.equal(
+  assert.deepEqual(
     await authorise(reqWith(`tc_session=${tokenForUnknown}`)),
-    false,
+    denyAnon,
   );
 }
 
-// Lookup throws → authoriser must still resolve cleanly (and to false).
+// Lookup throws → swallowed inside resolveSessionHook → deny-anon.
 {
   const throwing = makeSessionAuthoriser({
     signingKey,
@@ -91,9 +101,9 @@ assert.equal(await authorise(reqWith(`other=${validToken}`)), false);
     },
     now: () => NOW_MS,
   });
-  assert.equal(
+  assert.deepEqual(
     await throwing(reqWith(`tc_session=${validToken}`)),
-    false,
+    denyAnon,
   );
 }
 
@@ -117,29 +127,34 @@ const projectAuthorise = makeProjectAccessAuthoriser({
   now: () => NOW_MS,
 });
 
-// Valid session + owned project → true.
-assert.equal(
+// Valid session + owned project → allow.
+assert.deepEqual(
   await projectAuthorise(reqWith(`tc_session=${validToken}`), ownedProject),
-  true,
+  allow,
 );
 
-// Valid session + project owned by someone else → false.
-assert.equal(
+// Valid session + project owned by someone else → deny-acl (403).
+assert.deepEqual(
   await projectAuthorise(reqWith(`tc_session=${validToken}`), otherProject),
-  false,
+  denyAcl,
 );
 
-// Valid session + project that doesn't exist → false (no Machine
-// spawn for a hand-typed projectId).
-assert.equal(
+// Valid session + project that doesn't exist → deny-acl. We hide
+// existence rather than telling an authed caller "404"; the proxy
+// would otherwise leak a probe oracle.
+assert.deepEqual(
   await projectAuthorise(reqWith(`tc_session=${validToken}`), missingProject),
-  false,
+  denyAcl,
 );
 
-// No session at all → false, regardless of project.
-assert.equal(await projectAuthorise(reqWith(null), ownedProject), false);
+// No session at all → deny-anon (401), regardless of project.
+assert.deepEqual(
+  await projectAuthorise(reqWith(null), ownedProject),
+  denyAnon,
+);
 
-// Project-owner lookup throws → false (DB outage must not admit).
+// Project-owner lookup throws → deny-acl. Caller is already
+// authenticated; 401 would mislead them into re-auth.
 {
   const throwingProject = makeProjectAccessAuthoriser({
     signingKey,
@@ -150,13 +165,13 @@ assert.equal(await projectAuthorise(reqWith(null), ownedProject), false);
     },
     now: () => NOW_MS,
   });
-  assert.equal(
+  assert.deepEqual(
     await throwingProject(reqWith(`tc_session=${validToken}`), ownedProject),
-    false,
+    denyAcl,
   );
 }
 
-// Session lookup throws → false even when project resolves.
+// Session lookup throws → deny-anon (caller never made it past auth).
 {
   const throwingSession = makeProjectAccessAuthoriser({
     signingKey,
@@ -167,9 +182,9 @@ assert.equal(await projectAuthorise(reqWith(null), ownedProject), false);
     lookupProjectOwner,
     now: () => NOW_MS,
   });
-  assert.equal(
+  assert.deepEqual(
     await throwingSession(reqWith(`tc_session=${validToken}`), ownedProject),
-    false,
+    denyAnon,
   );
 }
 
