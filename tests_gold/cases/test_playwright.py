@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -36,6 +37,11 @@ def _env_with_node() -> dict[str, str]:
     env["PATH"] = f"{node_bin}{os.pathsep}{env.get('PATH', '')}"
     # Point Playwright at our vendored browser cache.
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / ".tools" / "playwright")
+    # Force monochrome list-reporter output so the harness's awk
+    # parser doesn't have to strip ANSI sequences to find ✓ / ✘ /
+    # skipped lines.
+    env["FORCE_COLOR"] = "0"
+    env["NO_COLOR"] = "1"
     return env
 
 
@@ -166,11 +172,20 @@ class TestPlaywrightLocal(unittest.TestCase):
             text=True,
             timeout=300,
         )
+        # Always echo the Playwright list-reporter output so its
+        # per-spec ✓ / ✘ lines reach $GOLD_OUT and surface as
+        # individual pass/fail entries in the iteration log
+        # (autodev/iterate_one.sh's awk pattern matches them). Without
+        # this, ~15 Playwright tests collapse to one
+        # `test_local … ok|FAIL` line.
+        sys.stdout.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        sys.stdout.flush()
+        sys.stderr.flush()
         if result.returncode != 0:
             raise AssertionError(
-                f"playwright (local) failed (exit {result.returncode})\n"
-                f"--- stdout ---\n{result.stdout}\n"
-                f"--- stderr ---\n{result.stderr}"
+                f"playwright (local) failed (exit {result.returncode}) "
+                "— see ✓ / ✘ lines above for per-spec breakdown"
             )
 
 
@@ -202,9 +217,14 @@ class TestPlaywrightLive(unittest.TestCase):
             text=True,
             timeout=600,
         )
+        # See test_local for why we always echo (per-spec ✓ / ✘ lines
+        # need to reach $GOLD_OUT for the iter log).
+        sys.stdout.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        sys.stdout.flush()
+        sys.stderr.flush()
         if result.returncode != 0:
             raise AssertionError(
-                f"playwright (live) failed (exit {result.returncode})\n"
-                f"--- stdout ---\n{result.stdout}\n"
-                f"--- stderr ---\n{result.stderr}"
+                f"playwright (live) failed (exit {result.returncode}) "
+                "— see ✓ / ✘ lines above for per-spec breakdown"
             )
