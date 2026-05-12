@@ -314,9 +314,12 @@ export class SupertexDaemonCompiler implements Compiler {
       if (ns.length === 0) return null;
       maxShipout = ns[ns.length - 1]!;
     }
+    // Chunk indices are 1-based per the upstream `--daemon DIR`
+    // protocol: shipouts are announced as `[1.out]`, `[2.out]`, …
+    // and the files on disk match.
     const parts: Uint8Array[] = [];
     let total = 0;
-    for (let n = 0; n <= maxShipout; n++) {
+    for (let n = 1; n <= maxShipout; n++) {
       const path = join(this.chunksDir, `${n}.out`);
       const buf = await readFile(path).catch(() => null);
       if (!buf) {

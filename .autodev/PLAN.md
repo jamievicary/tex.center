@@ -296,9 +296,19 @@ spawning, (D) auth + production polish.
                   timeout, close idempotent, concurrent reject, spawn
                   ENOENT, **rollback truncates assembled segment**,
                   **error→ok recovery on same process** _(iter 113)_.
+                  Iter 121 fixed a 0/1-indexing mismatch:
+                  `SupertexDaemonCompiler.assembleSegment` (and the
+                  fake daemon) used 0-indexed chunks, but the upstream
+                  protocol (discussion 71) and real binary emit
+                  `[1.out]`/`1.out` … `[N.out]`/`N.out`. After the fix
+                  a manual `SupertexDaemonCompiler` smoke against
+                  `vendor/supertex/build/supertex --daemon` produces a
+                  121 KB `%PDF` segment from a 3-page fixture,
+                  deterministic across runs.
                   Still pending before flipping `SIDECAR_COMPILER`
-                  default to `supertex-daemon`: an end-to-end test
-                  against the real `supertex` ELF (not the fake).
+                  default to `supertex-daemon`: a **standing** gold
+                  test that drives the real `supertex` ELF (not the
+                  fake) end-to-end. Smoke covered manually only.
 
 - [~] **M8 — Acceptance pass + Playwright (pulled forward).**
       - [x] M8.pw.0 — Playwright skeleton. _(iter 78.)_

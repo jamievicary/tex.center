@@ -5,9 +5,9 @@
 //   - On startup: clear DIR (the real daemon does this), emit
 //     `supertex: daemon ready` on stderr.
 //   - On each `recompile,<N|end>` line read from stdin: write
-//     chunk files `0.out`..`K.out` into DIR, print `[i.out]` for
-//     each, then `[round-done]`. `N=end` → K=total-1. `N` numeric
-//     → K=min(N-1, total-1).
+//     chunk files `1.out`..`K.out` into DIR, print `[i.out]` for
+//     each, then `[round-done]`. `N=end` → K=total. `N` numeric
+//     → K=min(N, total). (1-indexed per upstream protocol.)
 //   - Env switches let individual tests force `[error reason]`,
 //     a protocol violation, or a hang.
 //   - On stdin EOF: exit 0.
@@ -74,8 +74,8 @@ function handleLine(line) {
   if (mode === "exit-mid" && exitOn && rounds >= parseInt(exitOn, 10)) {
     process.exit(7);
   }
-  const target = m[1] === "end" ? total - 1 : Math.min(parseInt(m[1], 10) - 1, total - 1);
-  for (let i = 0; i <= target; i++) {
+  const target = m[1] === "end" ? total : Math.min(parseInt(m[1], 10), total);
+  for (let i = 1; i <= target; i++) {
     writeFileSync(join(dir, i + ".out"), "CHUNK-" + i + "\\n");
     process.stdout.write("[" + i + ".out]\\n");
   }
@@ -138,10 +138,10 @@ const require = createRequire(import.meta.url);
   assert.equal(seg.offset, 0);
   assert.equal(seg.totalLength, seg.bytes.length);
   const text = Buffer.from(seg.bytes).toString("utf8");
-  assert.match(text, /^CHUNK-0\nCHUNK-1\nCHUNK-2\n$/);
+  assert.match(text, /^CHUNK-1\nCHUNK-2\nCHUNK-3\n$/);
   // Chunk files on disk.
   const onDisk = readdirSync(join(workDir, "chunks")).sort();
-  assert.deepEqual(onDisk, ["0.out", "1.out", "2.out"]);
+  assert.deepEqual(onDisk, ["1.out", "2.out", "3.out"]);
   await c.close();
 }
 
@@ -158,7 +158,7 @@ const require = createRequire(import.meta.url);
   const r = await c.compile({ source: "x", targetPage: 2 });
   assert.equal(r.ok, true);
   const text = Buffer.from(r.segments[0].bytes).toString("utf8");
-  assert.match(text, /^CHUNK-0\nCHUNK-1\n$/);
+  assert.match(text, /^CHUNK-1\nCHUNK-2\n$/);
   await c.close();
 }
 
@@ -282,7 +282,7 @@ const require = createRequire(import.meta.url);
 }
 
 // 10. Rollback: `[rollback K]` truncates the assembled segment to
-//     chunks 0..K, ignoring shipout events for indices > K within
+//     chunks 1..K, ignoring shipout events for indices > K within
 //     the same round.
 {
   const workDir = await makeWorkDir("rollback");
@@ -292,7 +292,7 @@ const require = createRequire(import.meta.url);
     spawnFn: makeSpawnFn({
       FAKE_TOTAL: "3",
       FAKE_MODE: "rollback",
-      FAKE_ROLLBACK_K: "0",
+      FAKE_ROLLBACK_K: "1",
     }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
@@ -300,10 +300,10 @@ const require = createRequire(import.meta.url);
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, true, "rollback compile ok");
   const text = Buffer.from(r.segments[0].bytes).toString("utf8");
-  assert.match(text, /^CHUNK-0\n$/, "segment truncated to chunk 0 after rollback");
+  assert.match(text, /^CHUNK-1\n$/, "segment truncated to chunk 1 after rollback");
   // Only the chunks ≤ K survive on disk.
   const onDisk = readdirSync(join(workDir, "chunks")).sort();
-  assert.deepEqual(onDisk, ["0.out"]);
+  assert.deepEqual(onDisk, ["1.out"]);
   await c.close();
 }
 
@@ -328,7 +328,7 @@ const require = createRequire(import.meta.url);
   const r2 = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r2.ok, true, "recovery compile ok");
   const text = Buffer.from(r2.segments[0].bytes).toString("utf8");
-  assert.match(text, /^CHUNK-0\nCHUNK-1\n$/);
+  assert.match(text, /^CHUNK-1\nCHUNK-2\n$/);
   await c.close();
 }
 
