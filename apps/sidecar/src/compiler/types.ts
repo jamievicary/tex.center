@@ -26,6 +26,16 @@ export interface CompileRequest {
 export interface CompileSuccess {
   ok: true;
   segments: PdfSegment[];
+  /**
+   * Highest shipout page produced by this compile, when the
+   * implementation tracks it. The coalescer uses this to gate
+   * view-only re-fires: if a `view` frame asks for a page that
+   * exceeds the highest shipout we've ever emitted, the sidecar
+   * issues a fresh compile even with no doc-updates. Optional —
+   * implementations that don't expose per-shipout structure may
+   * omit it (then the gate degrades to "doc-updates only").
+   */
+  shipoutPage?: number;
 }
 
 export interface CompileFailure {

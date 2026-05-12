@@ -61,7 +61,6 @@ interface ProjectState {
   doc: Y.Doc;
   text: Y.Text;
   viewers: Set<ProjectClient>;
-  compileTimer: NodeJS.Timeout | null;
   compiler: Compiler;
   workspace: ProjectWorkspace;
   persistence: ProjectPersistence;
@@ -72,6 +71,25 @@ interface ProjectState {
    * lifetime. `null` when no blob store is wired (restore is a no-op).
    */
   restorePromise: Promise<void> | null;
+  // Compile coalescer (per `172_answer.md` items 2/3/5). The
+  // pre-coalescer code gated only on a pending debounce timer, so a
+  // doc-update during an in-flight compile reached the underlying
+  // compiler and tripped its "another compile already in flight"
+  // guard. The state machine below ensures at most one compile is
+  // running, and at most one follow-up is queued; bursts collapse
+  // into "the running one + one final one with the latest source".
+  compileInFlight: boolean;
+  pendingCompile: boolean;
+  debounceTimer: NodeJS.Timeout | null;
+  /**
+   * Highest shipout page observed in any segment we've emitted to
+   * viewers. Used by the `view`-only fire-through path: a viewer
+   * scrolling past the previous compile's ceiling triggers a fresh
+   * compile even with no doc-updates. Defaults to 0 so the first
+   * compile (which has no prior shipout) is unconditionally allowed
+   * by doc-update / hydrate paths.
+   */
+  highestEmittedShipoutPage: number;
 }
 
 interface ProjectClient {
@@ -235,11 +253,14 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       doc,
       text,
       viewers: new Set(),
-      compileTimer: null,
       compiler: compilerFactory({ projectId: id, workspace }),
       workspace,
       persistence,
       restorePromise: null,
+      compileInFlight: false,
+      pendingCompile: false,
+      debounceTimer: null,
+      highestEmittedShipoutPage: 0,
     };
     projects.set(id, state);
     return state;
@@ -252,12 +273,52 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }
   }
 
-  function scheduleCompile(p: ProjectState): void {
-    if (p.compileTimer) return;
-    p.compileTimer = setTimeout(() => {
-      p.compileTimer = null;
-      void runCompile(p);
+  // Mark a compile as wanted and (re)start the debounce window. If
+  // a compile is already in flight, the flag is sufficient — the
+  // in-flight `runCompile()` re-arms the debounce in its `finally`.
+  function kickCompile(p: ProjectState): void {
+    p.pendingCompile = true;
+    if (p.debounceTimer) return;
+    p.debounceTimer = setTimeout(() => {
+      p.debounceTimer = null;
+      maybeFireCompile(p);
     }, COMPILE_DEBOUNCE_MS);
+  }
+
+  // Edge-triggered: at most one compile in flight, at most one
+  // queued follow-up. Called only when the debounce timer fires or
+  // when an in-flight compile completes.
+  function maybeFireCompile(p: ProjectState): void {
+    if (p.compileInFlight) return;
+    if (!p.pendingCompile) return;
+    p.pendingCompile = false;
+    p.compileInFlight = true;
+    void runCompile(p).finally(() => {
+      p.compileInFlight = false;
+      // A doc-update arrived during the round → schedule another.
+      // Goes through the debounce so an in-progress burst still
+      // collapses; the timer fires almost immediately if no new
+      // updates arrive afterwards.
+      if (p.pendingCompile && !p.debounceTimer) {
+        p.debounceTimer = setTimeout(() => {
+          p.debounceTimer = null;
+          maybeFireCompile(p);
+        }, COMPILE_DEBOUNCE_MS);
+      }
+    });
+  }
+
+  // View-only fire-through: a viewer scrolled past the highest
+  // shipout page emitted so far. With no other doc-update activity
+  // we'd otherwise never re-compile. Only kicks when the path is
+  // genuinely idle (no in-flight, no pending) — bursts of view
+  // frames during a compile are absorbed by the standard pending
+  // mechanism.
+  function maybeKickForView(p: ProjectState): void {
+    if (p.compileInFlight) return;
+    if (p.pendingCompile) return;
+    if (maxViewingPage(p) <= p.highestEmittedShipoutPage) return;
+    kickCompile(p);
   }
 
   function maxViewingPage(p: ProjectState): number {
@@ -360,6 +421,12 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       bytesShipped += seg.bytes.byteLength;
       broadcast(p, encodePdfSegment(seg));
     }
+    if (
+      typeof result.shipoutPage === "number" &&
+      result.shipoutPage > p.highestEmittedShipoutPage
+    ) {
+      p.highestEmittedShipoutPage = result.shipoutPage;
+    }
     app.log.info(
       {
         projectId: p.id,
@@ -446,7 +513,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         client.send(
           encodeControl({ type: "file-list", files: project.persistence.files() }),
         );
-        scheduleCompile(project);
+        kickCompile(project);
       });
 
       type FileOp = "create-file" | "rename-file" | "upload-file" | "delete-file";
@@ -473,8 +540,10 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
       // Compile-and-persist must fire on edits to any file's Y.Text,
       // not just `main.tex`, so we listen at the doc level. The
-      // debounce in `scheduleCompile` collapses bursts.
-      const onTextChange = (): void => scheduleCompile(project);
+      // coalescer in `kickCompile` collapses bursts and gates on
+      // an in-flight compile so the underlying compiler never sees
+      // an overlapping `compile()` call.
+      const onTextChange = (): void => kickCompile(project);
       project.doc.on("update", onTextChange);
 
       const onDocUpdate = (update: Uint8Array, origin: unknown): void => {
@@ -511,6 +580,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           case "control":
             if (decoded.message.type === "view") {
               client.viewingPage = decoded.message.page;
+              maybeKickForView(project);
             } else if (decoded.message.type === "create-file") {
               const name = decoded.message.name;
               handleFileOp("create-file", { name }, project.persistence.addFile(name));
@@ -552,9 +622,9 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         noteViewerRemoved();
         project.doc.off("update", onTextChange);
         project.doc.off("update", onDocUpdate);
-        if (project.viewers.size === 0 && project.compileTimer) {
-          clearTimeout(project.compileTimer);
-          project.compileTimer = null;
+        if (project.viewers.size === 0 && project.debounceTimer) {
+          clearTimeout(project.debounceTimer);
+          project.debounceTimer = null;
         }
       });
     });
@@ -563,9 +633,9 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   app.addHook("onClose", async () => {
     clearIdleTimer();
     for (const p of projects.values()) {
-      if (p.compileTimer) {
-        clearTimeout(p.compileTimer);
-        p.compileTimer = null;
+      if (p.debounceTimer) {
+        clearTimeout(p.debounceTimer);
+        p.debounceTimer = null;
       }
       await p.compiler.close();
       await p.workspace.dispose();

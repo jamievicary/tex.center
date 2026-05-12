@@ -109,17 +109,23 @@ GT-A (`verifyLiveNoFlashLoad`), GT-B
   `apps/web/test/wsClientHydrated.test.mjs` (5 cases) locks the
   flag's transition semantics. Makes GT-A green (verifies live).
   Status: **done**.
-- **Compile coalescer.** Sidecar-side state machine in
-  `apps/sidecar/src/server.ts`. `compileInFlight`,
-  `pendingCompile`, `highestEmittedShipoutPage` on
-  `ProjectState`. Replace `scheduleCompile` with
-  `maybeFireCompile`: debounce ~150ms, gate on
-  `!compileInFlight`, fire compile, `finally` clears flag and
-  re-fires if pending. `view` frame fires-through only when
-  idle AND `maxViewingPage > highestEmittedShipoutPage`. Fake-
-  compiler unit test in `apps/sidecar/test/`: 50 rapid
-  `applyUpdate` during in-flight produce **exactly one**
-  follow-up compile. Makes GT-B/C/D green. Status: **pending**.
+- **Compile coalescer.** Landed iter 178. State machine in
+  `apps/sidecar/src/server.ts`: `compileInFlight`,
+  `pendingCompile`, `debounceTimer`, `highestEmittedShipoutPage`
+  on `ProjectState`. `kickCompile` sets pending + (re)arms the
+  debounce; `maybeFireCompile` is edge-triggered and only fires
+  when idle. `runCompile().finally()` clears in-flight and
+  re-arms the debounce if pending. `view` frame fires-through
+  via `maybeKickForView` only when idle AND
+  `maxViewingPage > highestEmittedShipoutPage`. `CompileSuccess`
+  gained an optional `shipoutPage`; the daemon compiler surfaces
+  `events.maxShipout` when ≥0. Unit test at
+  `apps/sidecar/test/serverCompileCoalescer.test.mjs` covers
+  (1) 50-update burst during in-flight produces exactly one
+  follow-up call, (2) error path clears in-flight, (3)
+  view-fire-through gated by highestEmittedShipoutPage, (4)
+  quiescent path. Expected to flip GT-B/C/D green on the next
+  live deploy. Status: **done**.
 - **Toast UX + debug toasts.** `apps/web/src/lib/Toasts.svelte`
   + writable store, supporting multiple color categories, TTL
   variations (auto-dismiss / persistent), aggregation by

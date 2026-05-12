@@ -128,6 +128,9 @@ export class SupertexDaemonCompiler implements Compiler {
             "supertex-daemon: round-done arrived but no chunk files found",
         };
       }
+      if (events.maxShipout >= 0) {
+        return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
+      }
       return { ok: true, segments: [segment] };
     } catch (e) {
       return {
