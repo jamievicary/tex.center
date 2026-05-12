@@ -37,6 +37,12 @@ Recent inflection points (each maps to a discussion question):
   only on `1→0` transition). Count guardrail live in gold.
 - **Debug protocol toasts** (`174_question.md`): folds into
   the toast UX milestone as a follow-up slice on the scaffold.
+- **Topbar iter indicator** (`184_question.md`): landed iter
+  185. `TEXCENTER_ITER` build-arg → Dockerfile ENV → SvelteKit
+  `$env/dynamic/public` (deviation from 184_answer's static
+  preference: svelte-check needs the var present at sync time
+  for static, dynamic is least invasive). Regression-locked in
+  `tests_normal/cases/test_iter_indicator.py`.
 
 Operator-gated work still outstanding: M8.pw.3.3 real-OAuth
 callback spec (needs GCP test client + `TEST_OAUTH_BYPASS_KEY`

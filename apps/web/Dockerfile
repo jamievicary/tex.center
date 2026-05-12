@@ -21,9 +21,11 @@ ARG PNPM_VERSION=9.12.0
 # ---------- builder ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS builder
 ARG PNPM_VERSION
+ARG TEXCENTER_ITER=dev
 ENV CI=1 \
     PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH
+    PATH=/pnpm:$PATH \
+    PUBLIC_TEXCENTER_ITER=$TEXCENTER_ITER
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 WORKDIR /repo
@@ -57,9 +59,11 @@ RUN pnpm --filter @tex-center/web --prod deploy /prod
 
 # ---------- runtime ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+ARG TEXCENTER_ITER=dev
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOST=0.0.0.0
+    HOST=0.0.0.0 \
+    PUBLIC_TEXCENTER_ITER=$TEXCENTER_ITER
 WORKDIR /app
 COPY --from=builder /repo/apps/web/build ./build
 COPY --from=builder /prod/node_modules ./node_modules

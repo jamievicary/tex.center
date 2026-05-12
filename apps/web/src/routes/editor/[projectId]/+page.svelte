@@ -2,6 +2,8 @@
   import { onDestroy, onMount } from "svelte";
   import * as Y from "yjs";
 
+  import { env as publicEnv } from "$env/dynamic/public";
+  const PUBLIC_TEXCENTER_ITER = publicEnv.PUBLIC_TEXCENTER_ITER ?? "dev";
   import Editor from "$lib/Editor.svelte";
   import FileTree from "$lib/FileTree.svelte";
   import PdfViewer from "$lib/PdfViewer.svelte";
@@ -66,7 +68,10 @@
 
 <div class="shell">
   <header class="topbar">
-    <a href="/projects" class="brand">tex.center</a>
+    <div class="brand-group">
+      <a href="/projects" class="brand">tex.center</a>
+      <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
+    </div>
     {#if data.user}
       <div class="who">
         <span class="email">{data.user.displayName ?? data.user.email}</span>
@@ -133,6 +138,11 @@
     background: #fafafa;
     font-size: 0.85rem;
   }
+  .brand-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
   .brand {
     font-weight: 600;
     color: inherit;
@@ -140,6 +150,10 @@
   }
   .brand:hover {
     text-decoration: underline;
+  }
+  .iter {
+    font-size: 0.75rem;
+    color: #9ca3af;
   }
   .editor-placeholder {
     width: 100%;

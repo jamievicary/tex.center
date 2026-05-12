@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { env as publicEnv } from "$env/dynamic/public";
+  const PUBLIC_TEXCENTER_ITER = publicEnv.PUBLIC_TEXCENTER_ITER ?? "dev";
   let { data, form } = $props();
 </script>
 
 <div class="wrap">
   <header class="topbar">
-    <div class="brand">tex.center</div>
+    <div class="brand-group">
+      <div class="brand">tex.center</div>
+      <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
+    </div>
     <form method="POST" action="/auth/logout">
       <button type="submit" class="signout">Sign out</button>
     </form>
@@ -56,8 +61,17 @@
     background: #fafafa;
     font-size: 0.85rem;
   }
+  .brand-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
   .brand {
     font-weight: 600;
+  }
+  .iter {
+    font-size: 0.75rem;
+    color: #9ca3af;
   }
   .signout {
     border: 1px solid #d1d5db;

@@ -40,7 +40,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --config fly.toml --dockerfile apps/web/Dockerfile
+      - name: compute autodev iter
+        id: iter
+        run: echo "iter=$(ls .autodev/logs/*.md | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      - run: flyctl deploy --remote-only --config fly.toml --dockerfile apps/web/Dockerfile --build-arg TEXCENTER_ITER=${{ steps.iter.outputs.iter }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
