@@ -116,6 +116,7 @@ export interface WsProxyOptions {
   // store was momentarily unavailable.
   readonly authoriseUpgrade?: (
     req: IncomingMessage,
+    projectId: string,
   ) => boolean | Promise<boolean>;
   // Hook for tests / logs. Errors here must not throw — they're
   // best-effort observability.
@@ -217,7 +218,7 @@ export function attachWsProxy(
 
     let authResult: boolean | Promise<boolean>;
     try {
-      authResult = options.authoriseUpgrade(req);
+      authResult = options.authoriseUpgrade(req, projectId);
     } catch (err) {
       options.onEvent?.({
         kind: "auth-error",

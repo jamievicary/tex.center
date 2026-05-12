@@ -24,8 +24,8 @@ import { MachinesClient } from "./lib/server/flyMachines.js";
 import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
 import { dbMachineAssignmentStore } from "./lib/server/upstreamResolver.js";
 import { buildUpstreamFromEnv } from "./lib/server/upstreamFromEnv.js";
-import { makeSessionAuthoriser } from "./lib/server/wsAuth.js";
-import { getSessionWithUser } from "@tex-center/db";
+import { makeProjectAccessAuthoriser } from "./lib/server/wsAuth.js";
+import { getProjectById, getSessionWithUser } from "@tex-center/db";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = parsePort(process.env.PORT, 3000);
@@ -45,12 +45,17 @@ const signingKey = (() => {
 
 const authoriseUpgrade =
   signingKey !== null
-    ? makeSessionAuthoriser({
+    ? makeProjectAccessAuthoriser({
         signingKey,
         sessionCookieName: "tc_session",
         lookupSession: async (sid) => {
           const { db } = getDb();
           return getSessionWithUser(db, sid);
+        },
+        lookupProjectOwner: async (projectId) => {
+          const { db } = getDb();
+          const row = await getProjectById(db, projectId);
+          return row?.ownerId ?? null;
         },
       })
     : async () => false;

@@ -208,7 +208,23 @@ spawning, (D) auth + production polish.
                   set in `upstreamFromEnv.ts`, a clean exit leaves the
                   Machine `stopped`; `upstreamResolver.ts:139-141` wakes
                   it on the next WS upgrade. Closes M7.3. _(iter 118.)_
-      - [ ] **M7.2** — `/ws/project/<id>` routing per project.
+      - [~] **M7.2** — `/ws/project/<id>` routing per project.
+            - [x] M7.2.0 — Per-project access gate at WS upgrade.
+                  `WsProxyOptions.authoriseUpgrade` widened to `(req,
+                  projectId) => boolean | Promise<boolean>`; the proxy
+                  passes the validated projectId. New
+                  `makeProjectAccessAuthoriser` in
+                  `apps/web/src/lib/server/wsAuth.ts` resolves the
+                  session, then `lookupProjectOwner(projectId)`; admits
+                  only when `ownerId === session.user.id` (missing
+                  project → false, so a hand-typed projectId can't spawn
+                  a Machine). `server.ts` swaps in
+                  `makeProjectAccessAuthoriser` with a
+                  `getProjectById`-backed owner lookup. Unit-tested via
+                  `apps/web/test/wsAuth.test.mjs` (owned project → 200,
+                  other-owned → false, missing project → false, no
+                  session → false, owner-lookup throws → false, session
+                  lookup throws → false). _(iter 138.)_
       - [x] **M7.3** — ~10-min idle auto-stop. _(Folded into M7.1.4
             iter 118; see above.)_
       - [~] **M7.4** — Checkpoint blob protocol on the compiler
