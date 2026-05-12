@@ -417,14 +417,30 @@ until this block lands. One slice per iteration.
             `tokenUrl`; stub-fetch unit test
             (`mintGoogleIdToken.test.mjs`, gold case) covers
             happy/non-2xx/missing-id_token/empty-input. _(iter 135.)_
-      - [ ] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`: in
-            `live` project, mint an ID token via .3.2, POST it to
-            `/auth/google/test-callback` with the bypass header,
-            assert 302 → `/projects` and `tc_session` cookie
-            verifies via the session hook on `/projects`. Sets
-            `TEST_OAUTH_BYPASS_KEY` as a Fly secret; gated by
-            `TEXCENTER_LIVE_TESTS=1` and presence of
-            `creds/google-refresh-token.txt`.
+      - [x] M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts` in the
+            `live` project: mints an ID token via
+            `mintGoogleIdToken` (refresh token at
+            `creds/google-refresh-token.txt`,
+            client at `creds/google-oauth-test.json`), POSTs
+            `{idToken}` to `/auth/google/test-callback` with the
+            HMAC-SHA256 hex `X-Test-Bypass` header, asserts
+            `302 → /projects` + `tc_session` Set-Cookie, runs the
+            cookie through `verifySessionToken` for an early
+            verifier-side regression signal, then GETs `/projects`
+            with the cookie and asserts 200. Cleans up the
+            inserted `sessions` row in a `try/finally` via
+            `deleteSession(db.db.db, sid)` (sid extracted from the
+            verified payload). Self-skips on missing
+            `TEST_OAUTH_BYPASS_KEY` env, missing
+            `creds/google-oauth-test.json`, or missing
+            `creds/google-refresh-token.txt`. _(iter 136.)_
+            **Live activation still pending**: needs
+            `TEST_OAUTH_BYPASS_KEY` set as a Fly secret on
+            `tex-center` (operator step) and the matching env var
+            in the local CI shell, plus the test OAuth client
+            created in GCP and the refresh token captured via
+            `scripts/google-refresh-token.mjs`. Until those land
+            the spec self-skips on every `live` run.
 - [ ] **M8.pw.4** — Full product-loop Playwright spec. With
       pw.3's service-account auth: sign in, create project, type a
       minimal LaTeX source, wait for a `pdf-segment` WS frame,
@@ -459,17 +475,15 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** M8.pw.3.3 — `verifyLiveOauthCallback.spec.ts`:
-mint an ID token via `mintGoogleIdToken` (refresh token at
-`creds/google-refresh-token.txt`), POST it to
-`/auth/google/test-callback` with `X-Test-Bypass: HMAC-SHA256(body,
-TEST_OAUTH_BYPASS_KEY)`, assert 302 → `/projects` and that the
-returned `tc_session` cookie verifies via the session hook on
-`/projects`. Needs the Fly secret `TEST_OAUTH_BYPASS_KEY` set on
-`tex-center`. Gated by `TEXCENTER_LIVE_TESTS=1` + presence of
-`creds/google-refresh-token.txt`. M8.pw.3.0–3.2 landed iter 133–135;
-M7.4.2 and M7.2 still parked until the rest of the priority block
-lands.
+**Next ordinary iteration:** activate M8.pw.3.3 against live —
+either as an operator step (set `TEST_OAUTH_BYPASS_KEY` Fly secret
+on `tex-center`, create the test OAuth client in GCP with
+`http://localhost:4567/oauth-callback` registered, run
+`scripts/google-refresh-token.mjs` once to populate
+`creds/google-refresh-token.txt`) or by the engineer if the GCP
+console step is reachable from the API. Once that is done, the
+priority block closes and M8.pw.4 (full product-loop spec) is the
+last item before resuming M7.4.2 / M7.2.
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
