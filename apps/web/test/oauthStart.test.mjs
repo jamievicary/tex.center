@@ -34,7 +34,7 @@ assert.equal(
   "https://tex.center/auth/google/callback",
 );
 assert.equal(u.searchParams.get("response_type"), "code");
-assert.equal(u.searchParams.get("scope"), "openid email");
+assert.equal(u.searchParams.get("scope"), "openid email profile");
 assert.equal(u.searchParams.get("code_challenge"), pkce.challenge);
 assert.equal(u.searchParams.get("code_challenge_method"), "S256");
 assert.equal(u.searchParams.get("state"), state);

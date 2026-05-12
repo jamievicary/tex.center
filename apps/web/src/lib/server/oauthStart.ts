@@ -55,7 +55,7 @@ export function buildGoogleAuthorizeRedirect(
     client_id: input.clientId,
     redirect_uri: input.redirectUri,
     response_type: "code",
-    scope: "openid email",
+    scope: "openid email profile",
     code_challenge: input.pkce.challenge,
     code_challenge_method: "S256",
     state: input.state,

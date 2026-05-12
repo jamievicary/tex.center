@@ -25,12 +25,6 @@
   `deleteExpiredSessions(db, now)` landed iter 54; wire it to a
   periodic caller (cron, on-boot pass, or admin route) when one
   exists.
-- **Broaden OAuth scope to `openid email profile`.** Today
-  `oauthStart.ts:58` requests only `openid email`, so the ID token
-  carries no `name` claim and `findOrCreateUserByGoogleSub` defaults
-  `display_name` to `''`. Adding `profile` populates display_name
-  for real. Cosmetic; unrelated to the iter-131 upsert fix
-  (discussion/131 explicitly de-coupled it).
 - **In-image Dockerfile smoke before deploy.** Iter 129 had to
   diagnose a production 500 (`Cannot find package 'jose'`) caused
   by adapter-node leaving `jose` external while
