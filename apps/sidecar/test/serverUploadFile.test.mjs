@@ -8,66 +8,49 @@
 // its content intact.
 
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { LocalFsBlobStore } from "../../../packages/blobs/src/index.ts";
 import {
   MAIN_DOC_NAME,
   encodeControl,
 } from "../../../packages/protocol/src/index.ts";
-import { buildServer } from "../src/server.ts";
-import { bootClient, waitFor } from "./lib.mjs";
+import {
+  bootClient,
+  closeClient,
+  fileListFrames,
+  fileOpErrors,
+  isFileListFrame,
+  latestFileList,
+  makeBlobStore,
+  seedMainTex,
+  startServer,
+  waitFor,
+} from "./lib.mjs";
 
-const blobRoot = mkdtempSync(join(tmpdir(), "sidecar-upload-file-test-"));
-const blobStore = new LocalFsBlobStore({ rootDir: blobRoot });
-
+const { blobStore } = makeBlobStore("upload-file");
 const projectId = "uploadable";
 // Seed a main.tex so hydration succeeds (canPersist=true).
-await blobStore.put(
-  `projects/${projectId}/files/main.tex`,
-  new TextEncoder().encode("\\documentclass{article}\\begin{document}x\\end{document}"),
-);
+await seedMainTex(blobStore, projectId);
 
 const REFS_BIB = "@book{lamport1986latex,\n  title={LaTeX},\n  author={Lamport, L}\n}\n";
 
 // --- Run 1: upload via the protocol -----------------------------------
 {
-  const app = await buildServer({ logger: false, blobStore });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-
+  const app = await startServer({ blobStore });
   const { ws, frames, clientDoc } = await bootClient(app, projectId);
 
   // Wait for initial file-list (main.tex only).
-  await waitFor(
-    () => frames.some((f) => f.kind === "control" && f.message.type === "file-list"),
-    "initial file-list",
-    frames,
-  );
-  const firstFileList = frames.find(
-    (f) => f.kind === "control" && f.message.type === "file-list",
-  );
-  assert.deepEqual(firstFileList.message.files, [MAIN_DOC_NAME]);
+  await waitFor(() => frames.some(isFileListFrame), "initial file-list", frames);
+  assert.deepEqual(latestFileList(frames).message.files, [MAIN_DOC_NAME]);
 
   // Upload a new file.
   ws.send(encodeControl({ type: "upload-file", name: "refs.bib", content: REFS_BIB }));
 
   // File-list updates to include the new entry.
   await waitFor(
-    () =>
-      frames.some(
-        (f) =>
-          f.kind === "control" &&
-          f.message.type === "file-list" &&
-          f.message.files.includes("refs.bib"),
-      ),
+    () => fileListFrames(frames).some((f) => f.message.files.includes("refs.bib")),
     "post-upload file-list",
     frames,
   );
-  const fileListWithNew = [...frames]
-    .reverse()
-    .find((f) => f.kind === "control" && f.message.type === "file-list");
-  assert.deepEqual(fileListWithNew.message.files, ["main.tex", "refs.bib"]);
+  assert.deepEqual(latestFileList(frames).message.files, ["main.tex", "refs.bib"]);
 
   // The Y.Text for refs.bib carries the uploaded content.
   await waitFor(
@@ -88,17 +71,11 @@ const REFS_BIB = "@book{lamport1986latex,\n  title={LaTeX},\n  author={Lamport, 
   ws.send(encodeControl({ type: "upload-file", name: "../escape", content: "x" }));
 
   await waitFor(
-    () =>
-      frames.filter(
-        (f) => f.kind === "control" && f.message.type === "file-op-error",
-      ).length >= 2,
+    () => fileOpErrors(frames).length >= 2,
     "two file-op-error frames",
     frames,
   );
-  const errs = frames.filter(
-    (f) => f.kind === "control" && f.message.type === "file-op-error",
-  );
-  for (const e of errs) {
+  for (const e of fileOpErrors(frames)) {
     assert.equal(e.message.op, "upload-file");
     assert.ok(e.message.reason && e.message.reason.length > 0);
   }
@@ -107,26 +84,16 @@ const REFS_BIB = "@book{lamport1986latex,\n  title={LaTeX},\n  author={Lamport, 
   const stillPersisted = await blobStore.get(`projects/${projectId}/files/refs.bib`);
   assert.equal(new TextDecoder().decode(stillPersisted), REFS_BIB);
 
-  ws.close();
-  await new Promise((r) => ws.once("close", r));
-  await app.close();
+  await closeClient(ws, app);
 }
 
 // --- Run 2: cold restart sees the uploaded file -----------------------
 {
-  const app = await buildServer({ logger: false, blobStore });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-
+  const app = await startServer({ blobStore });
   const { ws, frames, clientDoc } = await bootClient(app, projectId);
 
   await waitFor(
-    () =>
-      frames.some(
-        (f) =>
-          f.kind === "control" &&
-          f.message.type === "file-list" &&
-          f.message.files.includes("refs.bib"),
-      ),
+    () => fileListFrames(frames).some((f) => f.message.files.includes("refs.bib")),
     "refs.bib hydrated on restart",
     frames,
   );
@@ -136,9 +103,7 @@ const REFS_BIB = "@book{lamport1986latex,\n  title={LaTeX},\n  author={Lamport, 
     frames,
   );
 
-  ws.close();
-  await new Promise((r) => ws.once("close", r));
-  await app.close();
+  await closeClient(ws, app);
 }
 
 console.log("sidecar upload-file test: OK");

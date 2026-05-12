@@ -5,64 +5,48 @@
 // file does not reappear.
 
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { LocalFsBlobStore } from "../../../packages/blobs/src/index.ts";
 import {
   MAIN_DOC_NAME,
   encodeControl,
 } from "../../../packages/protocol/src/index.ts";
-import { buildServer } from "../src/server.ts";
-import { bootClient, waitFor } from "./lib.mjs";
+import {
+  bootClient,
+  closeClient,
+  fileListFrames,
+  isFileListFrame,
+  latestFileList,
+  makeBlobStore,
+  seedFile,
+  seedMainTex,
+  startServer,
+  waitFor,
+} from "./lib.mjs";
 
-const blobRoot = mkdtempSync(join(tmpdir(), "sidecar-delete-file-test-"));
-const blobStore = new LocalFsBlobStore({ rootDir: blobRoot });
-
+const { blobStore } = makeBlobStore("delete-file");
 const projectId = "deletable";
-const enc = new TextEncoder();
-await blobStore.put(
-  `projects/${projectId}/files/main.tex`,
-  enc.encode("\\documentclass{article}\\begin{document}x\\end{document}"),
-);
-await blobStore.put(
-  `projects/${projectId}/files/refs.bib`,
-  enc.encode("@book{a,title={t}}"),
-);
+await seedMainTex(blobStore, projectId);
+await seedFile(blobStore, projectId, "refs.bib", "@book{a,title={t}}");
 
 // --- Run 1: delete refs.bib via the protocol -----------------------
 {
-  const app = await buildServer({ logger: false, blobStore });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-
+  const app = await startServer({ blobStore });
   const { ws, frames } = await bootClient(app, projectId);
 
   await waitFor(
-    () =>
-      frames.some(
-        (f) =>
-          f.kind === "control" &&
-          f.message.type === "file-list" &&
-          f.message.files.includes("refs.bib"),
-      ),
+    () => fileListFrames(frames).some((f) => f.message.files.includes("refs.bib")),
     "initial file-list with refs.bib",
     frames,
   );
 
-  const fileListsBefore = frames.filter(
-    (f) => f.kind === "control" && f.message.type === "file-list",
-  ).length;
+  const fileListsBefore = fileListFrames(frames).length;
 
   // Reject: deleting main.tex.
   ws.send(encodeControl({ type: "delete-file", name: MAIN_DOC_NAME }));
   // Reject: deleting an unknown file.
   ws.send(encodeControl({ type: "delete-file", name: "ghost.tex" }));
   await new Promise((r) => setTimeout(r, 100));
-  const fileListsAfterRejects = frames.filter(
-    (f) => f.kind === "control" && f.message.type === "file-list",
-  ).length;
   assert.equal(
-    fileListsAfterRejects,
+    fileListFrames(frames).length,
     fileListsBefore,
     "rejected deletes must not broadcast a new file-list",
   );
@@ -71,53 +55,31 @@ await blobStore.put(
   ws.send(encodeControl({ type: "delete-file", name: "refs.bib" }));
 
   await waitFor(
-    () =>
-      [...frames].reverse().some(
-        (f) =>
-          f.kind === "control" &&
-          f.message.type === "file-list" &&
-          !f.message.files.includes("refs.bib"),
-      ),
+    () => {
+      const latest = latestFileList(frames);
+      return latest && !latest.message.files.includes("refs.bib");
+    },
     "post-delete file-list without refs.bib",
     frames,
   );
-  const latest = [...frames]
-    .reverse()
-    .find((f) => f.kind === "control" && f.message.type === "file-list");
-  assert.deepEqual(latest.message.files, [MAIN_DOC_NAME]);
+  assert.deepEqual(latestFileList(frames).message.files, [MAIN_DOC_NAME]);
 
   // Blob is gone.
   const persisted = await blobStore.get(`projects/${projectId}/files/refs.bib`);
   assert.equal(persisted, null, "expected refs.bib blob to be removed");
 
-  ws.close();
-  await new Promise((r) => ws.once("close", r));
-  await app.close();
+  await closeClient(ws, app);
 }
 
 // --- Run 2: cold restart does not resurrect refs.bib ---------------
 {
-  const app = await buildServer({ logger: false, blobStore });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-
+  const app = await startServer({ blobStore });
   const { ws, frames } = await bootClient(app, projectId);
 
-  await waitFor(
-    () =>
-      frames.some(
-        (f) => f.kind === "control" && f.message.type === "file-list",
-      ),
-    "post-restart file-list",
-    frames,
-  );
-  const fileList = frames.find(
-    (f) => f.kind === "control" && f.message.type === "file-list",
-  );
-  assert.deepEqual(fileList.message.files, [MAIN_DOC_NAME]);
+  await waitFor(() => frames.some(isFileListFrame), "post-restart file-list", frames);
+  assert.deepEqual(latestFileList(frames).message.files, [MAIN_DOC_NAME]);
 
-  ws.close();
-  await new Promise((r) => ws.once("close", r));
-  await app.close();
+  await closeClient(ws, app);
 }
 
 console.log("sidecar delete-file test: OK");
