@@ -344,21 +344,21 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Iter 129 (discussion mode):** Production-down — `/auth/google/callback`
-returned 500 because `apps/web/Dockerfile`'s runtime stage shipped no
-`node_modules`, and adapter-node leaves `jose` (Google ID-token JWKS
-verify) as an external bare specifier. Latent since the first deploy
-with auth: every other live probe avoids `jose`'s import graph.
-Diagnosis from `flyctl logs` (`Cannot find package 'jose'`) +
-synthetic `?error=fake` probe (500 instead of 400). Fix in this
-iteration: `pnpm deploy --prod` in the builder, `COPY` the resulting
+**Iter 129 (discussion mode) — VERIFIED LIVE iter 130.**
+Production-down: `/auth/google/callback` returned 500 because
+`apps/web/Dockerfile`'s runtime stage shipped no `node_modules`,
+and adapter-node leaves `jose` (Google ID-token JWKS verify) as
+an external bare specifier. Latent since the first deploy with
+auth: every other live probe avoids `jose`'s import graph. Fix:
+`pnpm deploy --prod` in the builder, `COPY` the resulting
 `node_modules` into the runtime stage; regression-pinned by
 `test_web_dockerfile.test_runtime_carries_prod_node_modules`; new
 `/auth/google/callback?error=fake → 400` probe added to both
-`deploy/VERIFY.md` and `verifyLive.spec.ts`. CI redeploys on push to
-main — the next iteration confirms the fix is live with
-`TEXCENTER_LIVE_TESTS=1 bash tests_gold/run_tests.sh`. See
-discussion/129 for full diagnosis.
+`deploy/VERIFY.md` and `verifyLive.spec.ts`. Iter 130: after CD
+of `eed6836` completed, live probe of the callback now returns
+400 (was 500); `TEXCENTER_LIVE_TESTS=1 python3 -m unittest
+tests_gold.cases.test_playwright.TestPlaywrightLive` passes.
+See discussion/129 for full diagnosis.
 
 **Next ordinary iteration:** M7.4.2 — upstream supertex daemon
 serialise/restore wire (PLAN "Candidate supertex (upstream)

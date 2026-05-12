@@ -25,6 +25,18 @@
   `deleteExpiredSessions(db, now)` landed iter 54; wire it to a
   periodic caller (cron, on-boot pass, or admin route) when one
   exists.
+- **In-image Dockerfile smoke before deploy.** Iter 129 had to
+  diagnose a production 500 (`Cannot find package 'jose'`) caused
+  by adapter-node leaving `jose` external while
+  `apps/web/Dockerfile`'s runtime stage shipped no `node_modules`.
+  The structural test added that iteration only enforces the
+  `COPY --from=builder /prod/node_modules` line — it can't catch a
+  `pnpm deploy --prod` that silently produces an empty
+  `node_modules`. A CI step that builds the image and runs `node
+  -e "import('jose')"` inside it before pushing to Fly, or runs the
+  synthetic `/auth/google/callback?error=fake` probe after deploy
+  before declaring success, would catch the missed-bundling failure
+  class at root. Verified live iter 130.
 - **`GET /auth/logout` link affordance.** Today only `POST` works;
   for an email-link or status-page link, a CSRF-protected GET→POST
   shim would be needed.
