@@ -143,6 +143,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_google_tokens(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "googleTokens.test.mjs")
 
+    def test_web_readyz(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "readyz.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 

@@ -1,12 +1,5 @@
 # Future ideas
 
-- **`/readyz` endpoint with backing-service status.** `/healthz` is
-  intentionally a liveness probe (decoupled from Postgres/Tigris so
-  a transient outage can't unready every web Machine). Add a
-  separate `/readyz` that reports `db.state` (via `SELECT 1`) and
-  `blobs.state` (via `BlobStore.health()`); useful for the iter-106
-  deploy verification flow and for any future external probe that
-  wants to gate on backing-service readiness.
 - **Narrower deploy-scoped `FLY_API_TOKEN` for the control plane.**
   Iter 106 fell back to the personal `creds/fly.token` because
   `flyctl tokens create deploy` is denied for that token's own
