@@ -384,20 +384,31 @@ Estimated iteration sequence (adjust as work unfolds):
   with a comment naming the reason; lock-in
   `tests_normal/cases/test_projects_empty_state_skips_live.py`.
   FREEZE-lift criterion (a) [M8.pw.4 green auto] now holds; criterion
-  (b) [reused pre-existing project variant] still open, scheduled
-  for iter 171.
+  (b) [reused pre-existing project variant] code-side landed in
+  iter 171, awaiting first live execution.
 
-- **Iter 171+ — Reused-existing-project variant of M8.pw.4.**
-  Per FREEZE-lift criterion (b) in `162_answer.md`. Concrete shape:
-  pre-seed (idempotently, in a migration or fixture row) a project
-  with a fixed UUID owned by the live test user, then add an
-  M8.pw.4 sibling spec that opens that project (does **not** create
-  one in `beforeEach`), types into the editor, and asserts a
-  `pdf-segment` frame arrives. Don't delete the project in
-  `afterEach`. The known coverage hole is that fresh-seed vs
-  reused-existing project lifecycles diverge — iter 162's user
-  report demonstrated edit→preview can be broken in the reused path
-  while M8.pw.4's seeded-fresh path stays green.
+- **Iter 171 — Reused-existing-project variant of M8.pw.4.** *Done.*
+  Added `tests_gold/playwright/verifyLiveFullPipelineReused.spec.ts`:
+  upserts a fixed-UUID fixture project (`00000000-…0001`) owned by
+  the live test user via `.onConflictDoNothing()`, never deletes
+  it, opens `/editor/<id>` without ever calling `createProject`,
+  uses Ctrl+A + Backspace to clear accumulated Y.Doc state from
+  prior runs, types the same known-compilable LaTeX, and asserts a
+  `pdf-segment` (tag 0x20) binary frame plus a non-near-white
+  PDF.js canvas pixel within the same 240s/300s budgets the fresh
+  spec uses. Per-project Machine is intentionally left running —
+  the warm/idle-stopped lifecycle heterogeneity across iterations
+  *is* the coverage value (iter-162 user report showed the reused
+  path can break while the fresh-seed path stays green). Lock-in:
+  `tests_normal/cases/test_reused_project_spec.py` (6 asserts:
+  spec file exists, doesn't call `createProject`, uses fixed UUID
+  constant, idempotent seed via `onConflictDoNothing`, no
+  `afterEach` row/Machine deletion, gates on `live` +
+  `TEXCENTER_FULL_PIPELINE=1`, asserts pdf-segment frame).
+  Harness gold run will be the first execution against live —
+  result reveals whether the reused path was actually broken at
+  iter 162's report time and (separately) whether anything since
+  iter 170's M8.pw.4-green has regressed.
 
 - **Iter 170+ — Old slot, kept for the diagnostic flowchart.**
   If a future M8.pw.4 regresses, diagnose with the iter-163 ws_proxy
