@@ -154,19 +154,30 @@ Estimated iteration sequence (adjust as work unfolds):
   invocation deferred to iter 157 (operator step — needs `flyctl
   proxy` + creds; same recipe as iter 153/155 reuses).
 
-- **Iter 157 — Run payload-bearing probe live + activate M8.pw.4.**
-  Two stretches:
-  1. Operator step: `flyctl proxy 5435:5432 -a tex-center-db`,
-     export `DATABASE_URL`/`SESSION_SIGNING_KEY`/
-     `TEXCENTER_LIVE_USER_ID` from `creds/`, run
-     `pnpm exec tsx scripts/probe-live-ws-payload.mjs`. Expect
-     `kind: "ok"`, `helloSeen: true`, `fileListSeen: true`. This
-     is the first probe that exercises the 1024MB runtime floor.
-  2. Provision the test OAuth client (operator step — needs human
-     in GCP console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl
-     secrets set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the
-     spec into the deploy workflow so no operator-gated tests
-     remain. M8.pw.4 then runs green automatically on every deploy.
+- **Iter 157 — Run payload-bearing probe live (stretch 1).** *Done.*
+  `flyctl proxy 5435:5432 -a tex-center-db` (bg, killed at end),
+  exported `DATABASE_URL` (postgres superuser via 127.0.0.1:5435),
+  `SESSION_SIGNING_KEY=RtO0ubMW…wDY`,
+  `TEXCENTER_LIVE_USER_ID=7d7a970e-…4c70`, ran
+  `pnpm exec tsx scripts/probe-live-ws-payload.mjs`. First call
+  502 (4.3s, resolver mid-cold-start); second call after
+  resolver settle: **`kind: "ok"`, upgraded, helloSeen, fileListSeen,
+  docUpdateSeen, files=["main.tex"], 3.4s, 0 decode errors, no
+  early close.** First live confirmation the sidecar's full
+  framed-payload path (control hello + initial Yjs state +
+  file-list + doc-update) works end-to-end at the 1024MB runtime
+  floor. Project: `ae011b9e-e287-4d62-98ff-d0187ac44dd1` (existing,
+  owned by live user). Proxy PID killed cleanly, port 5435 closed.
+
+- **Iter 158+ — Activate M8.pw.4 (stretch 2 of original iter-157).**
+  Provision the test OAuth client (operator step — needs human in
+  GCP console at `console.cloud.google.com`: create OAuth 2.0
+  Client ID with redirect `http://localhost:4567/oauth-callback`,
+  download client JSON), run `scripts/google-refresh-token.mjs`,
+  push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets set -a
+  tex-center`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec
+  into the deploy workflow so no operator-gated tests remain.
+  M8.pw.4 then runs green automatically on every deploy.
 
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
