@@ -127,17 +127,22 @@ await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().en
   });
   ws.send(encodeDocUpdate(Y.encodeStateAsUpdate(text.doc, before)));
 
+  // Wait for BOTH the blob-persisted side-effect AND the
+  // compile-status:error frame. Polling for only the blob race'd
+  // against the (separate) error-broadcast path — either ordering
+  // is legal at the wire level, so the assertion must tolerate
+  // both arrival orders.
   await waitFor(async () => {
     const persisted = await blobStore.get(`projects/${projectId}/files/main.tex`);
-    return persisted && new TextDecoder().decode(persisted) === target;
-  }, "blob updated despite failing compile", frames);
-
-  // Sanity: the server did broadcast a compile-status:error frame,
-  // confirming the failing-compiler path actually ran.
-  const errored = frames.some(
-    (f) => f.kind === "control" && f.message.type === "compile-status" && f.message.state === "error",
-  );
-  assert.equal(errored, true, "expected compile-status:error from failing compiler");
+    const blobOk = persisted && new TextDecoder().decode(persisted) === target;
+    const errored = frames.some(
+      (f) =>
+        f.kind === "control" &&
+        f.message.type === "compile-status" &&
+        f.message.state === "error",
+    );
+    return blobOk && errored;
+  }, "blob updated AND compile-status:error broadcast", frames);
 
   ws.close();
   await new Promise((r) => ws.once("close", r));

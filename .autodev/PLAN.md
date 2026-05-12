@@ -1,12 +1,14 @@
 # tex.center — Plan
 
 Normal cron resumes: `N%10==0` refactor, `N%10==1` plan-review.
-Iter 180 deferred the refactor cron to fix a regression in the
-M8.pw.4 gating spec; iter 181 took plan-review; iter 182 took the
-cold-start fresh-project flake investigation (anti-flake bounded-
-poll fix on the canvas paint + GT-A timeout to cold-start budget).
-Refactor cron rolls onto iter 183 — second-and-final defer
-allowed under §3.
+Iter 183 took the deferred refactor cron (gold-spec helper
+extraction). Iter 190 deferred refactor cron again: fixed the
+iter-189 regression in `supertexDaemonReal.test.mjs` (identical-
+source second compile now correctly returns `{ segments: [] }`,
+so test edits source between rounds) and a co-located anti-flake
+fix in `serverBlobs.test.mjs` (the failing-compile path race'd
+between blob persistence and the `compile-status:error` frame).
+Refactor cron rolls onto iter 192 (iter 191 is plan-review).
 
 ## 1. Recent state
 

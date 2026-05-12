@@ -8,9 +8,16 @@
 //
 // What we assert: against a 2-page `.tex` fixture the compiler
 // returns ok with a single segment whose bytes start with `%PDF`,
-// and the persistent process survives a second compile call. This
-// is the end-to-end coverage gating the `SIDECAR_COMPILER=
-// supertex-daemon` default flip.
+// and the persistent process survives a second compile call when
+// the source is edited between rounds. This is the end-to-end
+// coverage gating the `SIDECAR_COMPILER=supertex-daemon` default
+// flip.
+//
+// The second compile must edit the source: post-iter-189 the
+// sidecar reports a no-op recompile (round-done with no shipouts)
+// as `{ ok: true, segments: [] }` rather than re-shipping stale
+// chunks from disk. An identical-source second call therefore no
+// longer produces a segment.
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -50,6 +57,14 @@ Second page.
 \\end{document}
 `;
 
+const FIXTURE_EDITED = `\\documentclass{article}
+\\begin{document}
+Hello, gold test, edited.
+\\newpage
+Second page.
+\\end{document}
+`;
+
 async function main() {
   const workDir = mkdtempSync(join(tmpdir(), "supertex-daemon-real-"));
   await mkdir(workDir, { recursive: true });
@@ -76,9 +91,13 @@ async function main() {
       `segment implausibly small: ${seg.bytes.length} bytes`,
     );
 
-    // Persistent process: second compile reuses the running daemon
-    // and returns the same shape.
-    const r2 = await c.compile({ source: FIXTURE, targetPage: 0 });
+    // Persistent process: a second compile against an edited
+    // source reuses the running daemon and produces a fresh
+    // segment. Without an edit the upstream rollback path no-ops
+    // and the sidecar correctly returns `{ segments: [] }` (see
+    // header comment), so we must edit between rounds.
+    await writeFile(join(workDir, "main.tex"), FIXTURE_EDITED);
+    const r2 = await c.compile({ source: FIXTURE_EDITED, targetPage: 0 });
     if (!r2.ok) throw new Error(`second compile failed: ${r2.error}`);
     assert.equal(r2.segments.length, 1);
     assert.equal(
