@@ -182,3 +182,53 @@ Superuser password captured at create time. **Re-save before
 losing access:** stored in `creds/fly.token`-adjacent notes is
 acceptable; do not commit. The per-app role used by the control
 plane is in the `DATABASE_URL` secret on `tex-center`.
+
+# Live Playwright probes
+
+The `verifyLive*.spec.ts` Playwright specs target the deployed
+control plane (`https://tex.center`). `verifyLiveAuthed.spec.ts`
+additionally needs to mint a `tc_session` cookie the live server
+will accept, which requires the rotated signing key + a known user
+id + access to live Postgres through `flyctl proxy`.
+
+Required env (live target):
+
+| var                          | source / value                                                            |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `TEXCENTER_LIVE_TESTS`       | `1`                                                                       |
+| `FLY_API_TOKEN`              | `$(cat creds/fly.token)`                                                  |
+| `SESSION_SIGNING_KEY`        | `creds/session-signing-key.txt` (rotated iter 109)                        |
+| `TEXCENTER_LIVE_USER_ID`     | `creds/live-user-id.txt` (seeded iter 109)                                |
+| `TEXCENTER_LIVE_DB_USER`     | `tex_center` (per-app role; default `postgres` is wrong on this cluster)  |
+| `TEXCENTER_LIVE_DB_NAME`     | `tex_center` (per-app database)                                           |
+| `TEXCENTER_LIVE_DB_PASSWORD` | per-app role password (`creds/fly-postgres.txt`)                          |
+
+Canonical invocation:
+
+```
+TEXCENTER_LIVE_TESTS=1 \
+FLY_API_TOKEN="$(cat creds/fly.token)" \
+SESSION_SIGNING_KEY="$(grep -oE '[A-Za-z0-9_-]{43,}' creds/session-signing-key.txt | head -1)" \
+TEXCENTER_LIVE_USER_ID=7d7a970e-b420-46f2-b00e-e5234d8a4c70 \
+TEXCENTER_LIVE_DB_USER=tex_center \
+TEXCENTER_LIVE_DB_NAME=tex_center \
+TEXCENTER_LIVE_DB_PASSWORD=VuHm3LlIwQE5CE0 \
+bash tests_gold/run_tests.sh
+```
+
+Without these env vars, `verifyLiveAuthed.spec.ts` self-skips (the
+worker fixture reports the missing keys), and the unauthed
+`verifyLive.spec.ts` still runs.
+
+If you rotate `SESSION_SIGNING_KEY` again, update
+`creds/session-signing-key.txt`. If a real OAuth login replaces the
+seeded user row (the upsert keys on `google_sub`), re-discover the
+user id by running:
+
+```
+flyctl proxy 5433:5432 -a tex-center-db &
+DATABASE_URL='postgres://tex_center:…@127.0.0.1:5433/tex_center?sslmode=disable' \
+  pnpm exec tsx scripts/seed-live-user.mjs
+```
+
+— and refresh `creds/live-user-id.txt`.

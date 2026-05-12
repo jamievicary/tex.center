@@ -257,12 +257,39 @@ spawning, (D) auth + production polish.
                         the personal `creds/fly.token` directly. A
                         narrower deploy-scoped token is a hardening
                         follow-up (`FUTURE_IDEAS.md`).
-                  - [ ] M7.1.3.2 — Authed-upgrade happy-path probe in
-                        `verifyLive.spec.ts` (mint session via
-                        `mintSession` against the live DB through
-                        `flyctl proxy`; assert WS upgrade → 101 from
-                        a real per-project Machine). Closes M7.0.3.3
-                        tail.
+                  - [~] M7.1.3.2 — Authed deploy-verification probes.
+                        - [x] M7.1.3.2.a — Rotate `SESSION_SIGNING_KEY`
+                              (live), seed live user row for
+                              `jamievicary@gmail.com`, save both to
+                              `creds/{session-signing-key,live-user-id}.txt`,
+                              add `scripts/seed-live-user.mjs`. Add
+                              `verifyLiveAuthed.spec.ts` with two
+                              probes: authed GET `/projects` → 200
+                              and anon GET `/projects` → 302 to `/`.
+                              Verified live (7/7 live probes pass).
+                              _(iter 109.)_
+                        - [ ] M7.1.3.2.b — WS-upgrade-with-cookie
+                              probe asserting upgrade → 101 from a
+                              real per-project Machine. Defers until
+                              we have a cleanup path that destroys
+                              the spawned Machine (and its
+                              `machine_assignments` row) at the end
+                              of the probe so test debris doesn't
+                              accumulate. Closes M7.0.3.3 tail.
+                        - [ ] M7.1.3.2.c — Prerender bug on `/`: with
+                              `prerender = true; ssr = false` in
+                              `+layout.ts`, the auth-aware redirect
+                              `routeRedirect` programs for GET `/`
+                              with a session is bypassed in
+                              production (hook never runs for the
+                              prerendered static file). Local Vite
+                              dev SSRs the page and the hook fires,
+                              masking the issue. Fix: either drop
+                              prerender on `/` so SSR runs the hook,
+                              or rely on the client-side redirect
+                              from `+layout.ts` once we add one.
+                              Surfaced iter 109 while verifying
+                              M7.1.3.2.a.
             - [ ] M7.1.4 — Idle-stop wiring on per-project Machine
                   side; closes M7.3.
       - [ ] **M7.2** — `/ws/project/<id>` routing per project.
@@ -351,19 +378,21 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.2 — authed-upgrade happy-path
-probe in `verifyLive.spec.ts`. Mint a session via `mintSession`
-against the live DB through `flyctl proxy`, then assert WS upgrade
-→ 101 from a freshly-spawned per-project Machine. Closes the
-M7.0.3.3 tail and exercises the upstream resolver end-to-end for
-the first time. Note: this needs the live `SESSION_SIGNING_KEY`
-locally available — secrets can't be read back from Fly, so the
-slice will likely rotate the key (generate locally, persist in
-`creds/session-signing-key.txt`, `flyctl secrets set`, redeploy)
-before the probe can mint cookies the prod control plane will
-verify. After that: M7.1.4 (idle-stop wiring on the per-project
-Machine side), then M7.5.3 (`compile-status:error` wire frame on
-the heels of M7.5.2).
+**Next ordinary iteration:** M7.1.3.2.c (fix prerender bug on `/`)
+or M7.1.3.2.b (WS-upgrade-with-cookie probe + Machine cleanup).
+Both are tractable; M7.1.3.2.c is the smaller one (drop
+`prerender = true` on `/` so the session-redirect hook fires in
+production). After that: M7.1.4 (idle-stop wiring on the
+per-project Machine side), then M7.5.3 (`compile-status:error` wire
+frame on the heels of M7.5.2).
+
+Iter 109 closed M7.1.3.2.a: rotated `SESSION_SIGNING_KEY` on
+`tex-center`, seeded the live user row (`scripts/seed-live-user.mjs`),
+saved both to `creds/`, added `verifyLiveAuthed.spec.ts`, and
+verified end-to-end (`TEXCENTER_LIVE_TESTS=1 …
+bash tests_gold/run_tests.sh` → 7/7 live probes green). See
+`deploy/README.md#live-playwright-probes` for the env-var
+invocation.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
