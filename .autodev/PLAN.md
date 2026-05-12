@@ -1,5 +1,48 @@
 # tex.center — Plan
 
+## P0: live MVP is non-functional (iter 145, discussion-revised)
+
+User reports against https://tex.center: login + project list +
+project open all work, but inside the editor: typing doesn't save,
+the create-file button does nothing, the PDF preview never renders.
+The three symptoms share one most-plausible cause: the **WebSocket
+path (browser → control-plane `wsProxy.ts` → sidecar) is broken in
+production**. Yjs syncs, file-tree verbs, and `pdf-segment` frames
+all route over that WS; the working flows are HTTP routes that
+don't touch it.
+
+Anon WS probe (iter 145) returns a clean 401, so Fly proxy + WS
+handler routing are intact. The remaining hypotheses are: (a)
+auth gate returning `deny-anon` or `deny-acl` for a real signed-in
+user; (b) upgrade succeeds but sidecar doesn't wake / Yjs doesn't
+init / compiler hangs.
+
+**Next ordinary iteration (was M7.4.2 — deferred):** authed WS
+probe of live. flyctl-proxy live Postgres → `mintSession` for the
+`creds/live-user-id.txt` user → WS handshake against
+`wss://tex.center/ws/project/<a-real-owned-project-id>` with the
+cookie. Capture exact status + which side hangs. Single-purpose
+iteration; no fix attempt until the failure layer is known.
+
+After that: fix + regression test + redeploy + wire an authed-WS
+check into the deploy-time spec so the regression class can't
+recur silently.
+
+### Paused until live MVP unblocked + deploy-gated
+
+- **N%10 refactor cron** and **N%10==1 plan-review cron**. Both
+  resume only when an authed-WS deploy check runs green on every
+  deploy.
+- **M7.4.2** (upstream supertex daemon serialise/restore wire) and
+  all post-MVP M7 hardening (rate limits, observability,
+  narrower deploy tokens, etc).
+- FUTURE_IDEAS-sourced slices.
+- PLAN.md rewrite (overdue per user; ≤80 lines, critical-path-
+  first). Do *after* live fix lands.
+
+See `.autodev/discussion/145_{question,answer}.md` for the full
+diagnosis.
+
 ## Overview
 
 Build a cloud LaTeX editor (Overleaf-like) on top of `vendor/supertex`,
@@ -239,11 +282,14 @@ Until these activate, both specs self-skip on every `live` run.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.4.2 — upstream supertex daemon
+**Superseded by the P0 block at the top of this file.** M7.4.2
+is paused until live MVP is unblocked and deploy-gated.
+
+(For when work resumes: M7.4.2 — upstream supertex daemon
 serialise/restore wire (candidate item 2 below), then real
 `SupertexDaemonCompiler.snapshot/restore`. With M7.4.1 landed, the
 sidecar half is fully wired: the day a real `snapshot()` returns
-non-null, persistence is automatic.
+non-null, persistence is automatic.)
 
 The CD workflow `.github/workflows/deploy-sidecar.yml` (iter 124)
 is path-gated on `apps/sidecar/**`, `vendor/supertex`,
