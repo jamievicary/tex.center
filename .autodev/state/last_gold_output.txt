@@ -2,6 +2,7 @@ test_authed_cookie (test_authed_cookie.TestAuthedCookie.test_authed_cookie) ... 
 test_fly_proxy (test_fly_proxy.TestFlyProxy.test_fly_proxy) ... ok
 test_local_db (test_local_db.TestLocalDb.test_local_db) ... ok
 test_mint_session (test_mint_session.TestMintSession.test_mint_session) ... ok
+test_machine_assignments (test_pglite.TestPglite.test_machine_assignments) ... ok
 test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
@@ -10,7 +11,7 @@ test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright
 ok
 
 ----------------------------------------------------------------------
-Ran 9 tests in 40.033s
+Ran 10 tests in 45.761s
 
 OK (skipped=1)
 tests_gold/run_tests.sh: PASS

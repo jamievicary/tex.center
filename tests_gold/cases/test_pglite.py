@@ -45,3 +45,6 @@ class TestPglite(unittest.TestCase):
 
     def test_projects(self) -> None:
         _run_tsx_script("packages/db/test/projects-pglite.test.mjs")
+
+    def test_machine_assignments(self) -> None:
+        _run_tsx_script("packages/db/test/machine-assignments-pglite.test.mjs")

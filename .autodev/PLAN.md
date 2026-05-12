@@ -154,10 +154,23 @@ spawning, (D) auth + production polish.
                   base `https://api.machines.dev/v1`; injectable
                   `fetch`. Internal 6PN form
                   `<id>.vm.<app>.internal`. _(iter 99.)_
-            - [ ] **M7.1.1 — DB schema for project↔machine
-                  mapping.** `machine_id`, `app_name`, state-cache
-                  columns on `projects` or a sibling table; storage
-                  primitives to mint + look up.
+            - [x] **M7.1.1 — DB schema for project↔machine
+                  mapping.** _(iter 102.)_ Sibling table
+                  `machine_assignments` (`project_id` PK,
+                  `machine_id`, `region`, `state`, `last_seen_at`,
+                  `created_at`) was already declared in
+                  `schema.ts` + migration `0001_initial.sql`;
+                  iter 102 added the storage primitives
+                  (`upsertMachineAssignment`,
+                  `getMachineAssignmentByProjectId`,
+                  `updateMachineAssignmentState`,
+                  `deleteMachineAssignment`) in
+                  `packages/db/src/machineAssignments.ts` plus a
+                  PGlite integration test. `app_name` left
+                  ambient (env-driven on the control plane) since
+                  the MVP runs a single sidecar app
+                  (`tex-center-sidecar`); promote to a column if
+                  multi-app routing lands.
             - [ ] M7.1.2 — Per-project upstream resolver wired into
                   `wsProxy.ts`. Hook in `boot.ts` replaces static
                   `resolveSidecarUpstream` with
@@ -246,13 +259,15 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.1 — DB schema for the
-project↔machine mapping. With the API client (M7.1.0 / iter 99)
-in place, the next slice introduces the DB column(s) the
-upstream resolver will read, plus the storage primitive to mint
-+ look up the machine row. Then M7.1.2 wires it into
-`wsProxy.ts`, M7.1.3 deploys + extends `verifyLive.spec.ts`,
-M7.1.4 closes idle-stop.
+**Next ordinary iteration:** M7.1.2 — per-project upstream
+resolver wired into `wsProxy.ts`. With the API client (M7.1.0 /
+iter 99) and the storage primitives (M7.1.1 / iter 102) both in
+place, the next slice replaces the static `resolveSidecarUpstream`
+in `boot.ts` with `(projectId) → Promise<SidecarUpstream>` that
+consults `machine_assignments` and the `MachinesClient` (creates/
+starts if missing/stopped, caches `state` + `lastSeenAt`). Then
+M7.1.3 deploys + extends `verifyLive.spec.ts`, M7.1.4 closes
+idle-stop.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
