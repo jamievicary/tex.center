@@ -123,96 +123,21 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertIn("ERR_MODULE_NOT_FOUND", script_text)
         self.assertIn("Cannot find package", script_text)
 
-    def test_live_pipeline_job_runs_full_pipeline_spec(self) -> None:
-        # M8.pw.4 — the full product-loop spec must run automatically
-        # on every push to main (after deploy succeeds). PLAN's
-        # standing FREEZE lifts only when this job runs green
-        # automatically; if any of the structural invariants below
-        # drift the spec silently stops running and the freeze
-        # protection is gone.
+    def test_no_live_pipeline_job(self) -> None:
+        # Iter 166: the `live-pipeline` job moved out of CI and into
+        # the gold runner (`tests_gold/cases/test_playwright.py::
+        # TestPlaywrightLive`). The contract that M8.pw.4 actually
+        # runs now lives in
+        # `tests_normal/cases/test_gold_runs_live_specs.py`.
+        # If a future iteration re-adds the job, that's a signal
+        # the gold-runner approach was abandoned — bring this test
+        # in sync with the new arrangement deliberately.
         jobs = self.doc.get("jobs", {})
-        self.assertIn(
+        self.assertNotIn(
             "live-pipeline",
             jobs,
-            "deploy.yml must define a live-pipeline job that runs M8.pw.4",
+            "live-pipeline job belongs in the gold runner now, not CI",
         )
-        job = jobs["live-pipeline"]
-        self.assertEqual(job.get("runs-on"), "ubuntu-latest")
-
-        needs = job.get("needs")
-        if isinstance(needs, str):
-            needs = [needs]
-        self.assertIn(
-            "deploy",
-            needs or [],
-            "live-pipeline must run after deploy",
-        )
-
-        steps = job.get("steps") or []
-        uses = [s.get("uses") or "" for s in steps]
-        self.assertTrue(
-            any(u.startswith("actions/checkout@") for u in uses),
-            "live-pipeline must check out the repo",
-        )
-        self.assertTrue(
-            any(u.startswith("actions/setup-node@") for u in uses),
-            "live-pipeline must set up Node",
-        )
-        self.assertTrue(
-            any(u.startswith("superfly/flyctl-actions/setup-flyctl") for u in uses),
-            "live-pipeline must set up flyctl (the authedPage fixture spawns "
-            "`flyctl proxy` to reach tex-center-db)",
-        )
-
-        runs = [s.get("run") or "" for s in steps]
-        self.assertTrue(
-            any("playwright install" in r for r in runs),
-            "live-pipeline must install playwright browsers",
-        )
-        pw_steps = [
-            s
-            for s in steps
-            if "playwright test" in (s.get("run") or "")
-            and "--project=live" in (s.get("run") or "")
-        ]
-        self.assertEqual(
-            len(pw_steps),
-            1,
-            "expected exactly one `playwright test --project=live` step",
-        )
-        run = pw_steps[0]["run"]
-        self.assertIn(
-            "tests_gold/playwright.config.ts",
-            run,
-            "live-pipeline must point playwright at the gold config",
-        )
-
-        env = pw_steps[0].get("env") or {}
-        # These four env keys are the contract authedPage + live spec
-        # require; if any are missing the spec self-skips and the
-        # freeze protection silently turns off.
-        for key, secret in (
-            ("TEXCENTER_LIVE_TESTS", "1"),
-            ("TEXCENTER_FULL_PIPELINE", "1"),
-            ("PLAYWRIGHT_SKIP_WEBSERVER", "1"),
-        ):
-            self.assertEqual(
-                env.get(key),
-                secret,
-                f"live-pipeline env must set {key}={secret!r}, got {env.get(key)!r}",
-            )
-        for key in (
-            "FLY_API_TOKEN",
-            "TEXCENTER_LIVE_DB_PASSWORD",
-            "SESSION_SIGNING_KEY",
-            "TEXCENTER_LIVE_USER_ID",
-        ):
-            v = env.get(key) or ""
-            self.assertIn(
-                f"secrets.{key}",
-                v,
-                f"live-pipeline env must thread {key} from repo secrets, got {v!r}",
-            )
 
     def test_dockerfile_reference_exists(self) -> None:
         # If the workflow names a Dockerfile path, that file must

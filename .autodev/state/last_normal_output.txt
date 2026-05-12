@@ -9,16 +9,16 @@ Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -34,7 +34,7 @@ test_triggers_on_push_to_main_with_paths (test_deploy_sidecar_workflow.TestSidec
 test_uses_setup_flyctl (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_uses_setup_flyctl) ... ok
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
-test_live_pipeline_job_runs_full_pipeline_spec (test_deploy_workflow.TestDeployWorkflow.test_live_pipeline_job_runs_full_pipeline_spec) ... ok
+test_no_live_pipeline_job (test_deploy_workflow.TestDeployWorkflow.test_no_live_pipeline_job) ... ok
 test_runs_flyctl_deploy_with_token (test_deploy_workflow.TestDeployWorkflow.test_runs_flyctl_deploy_with_token) ... ok
 test_smoke_job_gates_deploy (test_deploy_workflow.TestDeployWorkflow.test_smoke_job_gates_deploy) ... ok
 test_smoke_script_probes_all_endpoints (test_deploy_workflow.TestDeployWorkflow.test_smoke_script_probes_all_endpoints) ... ok
@@ -47,6 +47,10 @@ test_http_service_forces_https (test_fly_toml.TestFlyToml.test_http_service_forc
 test_http_service_port_matches_dockerfile (test_fly_toml.TestFlyToml.test_http_service_port_matches_dockerfile) ... ok
 test_http_service_scale_to_zero (test_fly_toml.TestFlyToml.test_http_service_scale_to_zero) ... ok
 test_primary_region_set (test_fly_toml.TestFlyToml.test_primary_region_set) ... ok
+test_creds_loaded_from_disk (test_gold_runs_live_specs.TestGoldRunsLiveSpecs.test_creds_loaded_from_disk) ... ok
+test_full_pipeline_set_unconditionally (test_gold_runs_live_specs.TestGoldRunsLiveSpecs.test_full_pipeline_set_unconditionally) ... ok
+test_live_test_exists (test_gold_runs_live_specs.TestGoldRunsLiveSpecs.test_live_test_exists) ... ok
+test_no_texcenter_live_tests_gate (test_gold_runs_live_specs.TestGoldRunsLiveSpecs.test_no_texcenter_live_tests_gate) ... ok
 test_exports_get_handler (test_healthz_route.TestHealthzRoute.test_exports_get_handler) ... ok
 test_no_cache (test_healthz_route.TestHealthzRoute.test_no_cache) ... ok
 test_payload_carries_protocol_marker (test_healthz_route.TestHealthzRoute.test_payload_carries_protocol_marker) ... ok
@@ -145,7 +149,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 119 tests in 41.995s
+Ran 123 tests in 41.526s
 
 OK
 tests_normal/run_tests.sh: PASS

@@ -1,9 +1,16 @@
-"""Playwright gold case — first slice (M8.pw.0).
+"""Playwright gold case (M8.pw.0 + M8.pw.4).
 
-Runs the `local`-project Playwright suite against an
-auto-booted SvelteKit dev server. The `live` project, which
-targets https://tex.center, is gated on `TEXCENTER_LIVE_TESTS=1`
-so the default `tests_gold` run doesn't beat on production.
+Two cases: a `local`-target run against an auto-booted SvelteKit
+dev server, and a `live`-target run against https://tex.center.
+
+The live case is the per-iter readout of "is the live product
+working" (per `162_question.md` / `166_question.md`). It runs on
+every gold invocation: credentials are loaded directly from
+`creds/` (gitignored, maintainer-local) and exported as the env
+vars `authedPage` requires. If `creds/` is incomplete or
+unparseable the case fails with a message naming the missing
+field/file — it does not skip silently. (Absent creds are real
+configuration breakage that should surface as an iteration goal.)
 
 Chromium is provisioned by `tests_gold/setup_playwright.sh`
 (idempotent).
@@ -12,6 +19,7 @@ Chromium is provisioned by `tests_gold/setup_playwright.sh`
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -19,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "tests_gold" / "playwright.config.ts"
+CREDS = ROOT / "creds"
 
 
 def _env_with_node() -> dict[str, str]:
@@ -40,6 +49,77 @@ def _setup_playwright() -> None:
     )
 
 
+def _read_creds_file(name: str) -> str:
+    path = CREDS / name
+    if not path.is_file():
+        raise AssertionError(
+            f"live spec requires {path} but the file is missing. "
+            "Live credentials are maintainer-local (creds/ is "
+            "gitignored); restore the file before running gold."
+        )
+    return path.read_text()
+
+
+def _extract(text: str, pattern: str, *, file: str, field: str) -> str:
+    m = re.search(pattern, text, flags=re.MULTILINE)
+    if m is None:
+        raise AssertionError(
+            f"live spec could not parse {field!r} out of "
+            f"creds/{file} (pattern {pattern!r} did not match). "
+            "The file format may have drifted; fix the file or "
+            "update tests_gold/cases/test_playwright.py:_load_live_creds."
+        )
+    return m.group(1).strip()
+
+
+def _load_live_creds() -> dict[str, str]:
+    """Read live credentials from `creds/` and return env-var assignments.
+
+    Each missing/unparseable file fails loudly with a message that
+    names the file and the field that wasn't found. Never returns
+    an empty value.
+    """
+    fly_pg = _read_creds_file("fly-postgres.txt")
+    signing = _read_creds_file("session-signing-key.txt")
+    user = _read_creds_file("live-user-id.txt")
+
+    # `creds/fly-postgres.txt` lists the superuser block as
+    #   Superuser:
+    #     username: postgres
+    #     password: <value>
+    # Match the first `password:` line — that is the superuser.
+    password = _extract(
+        fly_pg,
+        r"^\s*password:\s*(\S+)\s*$",
+        file="fly-postgres.txt",
+        field="superuser password",
+    )
+
+    # `creds/session-signing-key.txt` has the key on its own
+    # indented line directly below the "base64url-encoded:" header.
+    signing_key = _extract(
+        signing,
+        r"base64url-encoded:\s*\n\s*([A-Za-z0-9_-]+)",
+        file="session-signing-key.txt",
+        field="SESSION_SIGNING_KEY (base64url)",
+    )
+
+    # `creds/live-user-id.txt` has the row's UUID under
+    #   id:          <uuid>
+    user_id = _extract(
+        user,
+        r"^\s*id:\s*([0-9a-f-]{36})\s*$",
+        file="live-user-id.txt",
+        field="user id (uuid)",
+    )
+
+    return {
+        "TEXCENTER_LIVE_DB_PASSWORD": password,
+        "SESSION_SIGNING_KEY": signing_key,
+        "TEXCENTER_LIVE_USER_ID": user_id,
+    }
+
+
 class TestPlaywrightLocal(unittest.TestCase):
     def test_local(self) -> None:
         # `pnpm --filter @tex-center/web dev` requires the SvelteKit
@@ -51,6 +131,8 @@ class TestPlaywrightLocal(unittest.TestCase):
                 "node_modules missing; run tests_normal first"
             )
         if shutil.which("pnpm") is None and not (
+            ROOT / "node_modules" / ".bin" / "pnpm"
+        ).exists() and not (
             ROOT / ".tools" / "node" / "bin" / "pnpm"
         ).exists():
             raise unittest.SkipTest("pnpm not on PATH")
@@ -83,15 +165,16 @@ class TestPlaywrightLocal(unittest.TestCase):
 
 class TestPlaywrightLive(unittest.TestCase):
     def test_live(self) -> None:
-        if os.environ.get("TEXCENTER_LIVE_TESTS") != "1":
-            raise unittest.SkipTest(
-                "skipped because TEXCENTER_LIVE_TESTS != 1"
-            )
+        # No skip-on-missing-creds: live verification is the per-iter
+        # readout of the GOAL.md product loop. If creds are absent,
+        # _load_live_creds raises AssertionError naming what's missing.
+        env = _env_with_node()
+        env.update(_load_live_creds())
+        env["TEXCENTER_FULL_PIPELINE"] = "1"
+        env["PLAYWRIGHT_SKIP_WEBSERVER"] = "1"
 
         _setup_playwright()
 
-        env = _env_with_node()
-        env["PLAYWRIGHT_SKIP_WEBSERVER"] = "1"
         result = subprocess.run(
             [
                 "pnpm",
@@ -106,7 +189,7 @@ class TestPlaywrightLive(unittest.TestCase):
             env=env,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
         if result.returncode != 0:
             raise AssertionError(

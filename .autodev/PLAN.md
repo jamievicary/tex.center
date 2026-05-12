@@ -306,7 +306,31 @@ Estimated iteration sequence (adjust as work unfolds):
   accumulating projects from probes. Not on critical path —
   deferred to a later iteration once M8.pw.4 is green.
 
-- **Iter 165 — Confirm iter-164's deploy / M8.pw.4 result.**
+- **Iter 165 — Live specs into gold runner (discussion mode).** *Done.* Per
+  `166_question.md`, the live `verifyLive*` Playwright specs
+  used to live in CI's `live-pipeline` job, so the per-iter gold
+  output read PASS while the live product was broken. Moved
+  M8.pw.4 (and the rest of the `--project=live` set) into
+  `tests_gold/cases/test_playwright.py::TestPlaywrightLive`,
+  which now (a) loads creds from `creds/` directly, (b) sets
+  `TEXCENTER_FULL_PIPELINE=1` unconditionally, (c) fails loudly
+  with a named missing field/file rather than skipping silently
+  when creds are absent. Fixture's `test.skip` on missing live
+  env replaced with `throw`, so direct `pnpm exec playwright`
+  invocations also surface the gap. The CI `live-pipeline` job
+  is gone (deploy.yml). Lock-in:
+  `tests_normal/cases/test_gold_runs_live_specs.py` enforces the
+  new contract; `test_deploy_workflow::test_no_live_pipeline_job`
+  prevents drift back to the old arrangement. Known coverage
+  hole (reused-existing-project edit→pdf-segment) recorded for
+  iter 166+ per `162_answer.md`.
+
+  Note iter 165's original goal (confirm iter-164's deploy /
+  M8.pw.4 result, see slot just below) slid to iter 166+; the
+  166_question came in first and discussion mode took precedence.
+
+- **Iter 166+ — Confirm M8.pw.4 result with the new gold-runner
+  arrangement.**
   Same shape as iter 164: read the deploy's live-pipeline result;
   if pdf-segment frames arrive, FREEZE-lift is ready (per `162_answer.md`
   criterion, also requires the pre-existing-project edit variant).

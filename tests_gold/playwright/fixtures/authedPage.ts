@@ -70,11 +70,16 @@ export const test = base.extend<Fixtures, Record<string, never>>({
       if (projectName === "live") {
         const resolved = resolveLiveDbConfig(process.env);
         if (!resolved.ok) {
-          test.skip(
-            true,
+          // Per `166_question.md`: live verification must fail loudly
+          // when credentials are absent, not skip silently. The
+          // tests_gold Python runner is the canonical entry point and
+          // populates these from `creds/`; if we reach this branch
+          // it means the spec was invoked directly with an incomplete
+          // env, which is still a real configuration breakage worth
+          // surfacing.
+          throw new Error(
             `authedPage: missing required env for live: ${resolved.missing.join(", ")}`,
           );
-          return;
         }
         const proxy = await startFlyProxy({
           app: resolved.config.app,
