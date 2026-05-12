@@ -1,4 +1,40 @@
+import { createHash } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
+
+// DrvFs (/mnt/c on WSL2) cannot reliably host Playwright's
+// `test-results/` directory: between runs Playwright `rmdir`s the
+// dir, which races with Windows file handles and fails with EACCES.
+// Mirror the setup_playwright.sh symlink-to-ext4 pattern: when the
+// checkout lives under /mnt/*, redirect outputDir to a cache dir
+// under $HOME. Off DrvFs, use the in-repo default.
+//
+// Playwright loads this config in CJS mode (no `import.meta`), so
+// derive the repo root from the test runner's cwd, which is always
+// the checkout root (`tests_gold/cases/test_playwright.py` sets
+// `cwd=ROOT`).
+const REPO_ROOT = resolve(process.cwd());
+function resolveOutputDir(): string {
+  if (REPO_ROOT.startsWith("/mnt/")) {
+    const hash = createHash("sha1")
+      .update(REPO_ROOT)
+      .digest("hex")
+      .slice(0, 12);
+    const cacheDir = join(
+      homedir(),
+      ".cache",
+      "tex-center-pw-results",
+      hash,
+      "test-results",
+    );
+    mkdirSync(cacheDir, { recursive: true });
+    return cacheDir;
+  }
+  return join(REPO_ROOT, "test-results");
+}
 
 // Two projects:
 //   local — boots `pnpm --filter @tex-center/web dev` via webServer.
@@ -15,6 +51,7 @@ const LOCAL_PORT = 3000;
 
 export default defineConfig({
   testDir: "./playwright",
+  outputDir: resolveOutputDir(),
   globalSetup: "./playwright/globalSetup.ts",
   fullyParallel: false,
   forbidOnly: true,
