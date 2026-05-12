@@ -139,14 +139,29 @@ Estimated iteration sequence (adjust as work unfolds):
   iter 156 (requires writing a small WS client; not a trivial probe
   tweak).
 
-- **Iter 156 — Payload-bearing WS probe + M8.pw.4 activation.**
+- **Iter 156 — Payload-bearing WS probe (code-side).** *Done.*
+  Added `scripts/probe-live-ws-payload.mjs`: a sibling to
+  `probe-live-ws.mjs` that uses the `ws` client (not raw
+  `node:https`), keeps the WS connection open after upgrade,
+  decodes leading frames with `@tex-center/protocol`'s
+  `decodeFrame`, asserts the sidecar's `hello` control + `file-
+  list` arrive, sends a `view` control frame back upstream, and
+  holds the socket open for 3s after `file-list` to confirm
+  upstream doesn't immediately close (cgroup-kill / framing
+  error). Hard timeouts on every wait. Root `package.json` gained
+  `@tex-center/protocol`, `ws`, `@types/ws` so the probe is
+  runnable from the project root via `pnpm exec tsx`. Live
+  invocation deferred to iter 157 (operator step — needs `flyctl
+  proxy` + creds; same recipe as iter 153/155 reuses).
+
+- **Iter 157 — Run payload-bearing probe live + activate M8.pw.4.**
   Two stretches:
-  1. Extend `scripts/probe-live-ws.mjs` (or a sibling script) to
-     keep the WS connection open after upgrade and send a Yjs
-     sync-step-1 frame (binary, masked); assert upstream replies
-     (or at least doesn't immediately 502 / cgroup-kill). This is
-     the first probe that actually exercises the 1024MB runtime
-     floor — the bare upgrade handshake barely allocates.
+  1. Operator step: `flyctl proxy 5435:5432 -a tex-center-db`,
+     export `DATABASE_URL`/`SESSION_SIGNING_KEY`/
+     `TEXCENTER_LIVE_USER_ID` from `creds/`, run
+     `pnpm exec tsx scripts/probe-live-ws-payload.mjs`. Expect
+     `kind: "ok"`, `helloSeen: true`, `fileListSeen: true`. This
+     is the first probe that exercises the 1024MB runtime floor.
   2. Provision the test OAuth client (operator step — needs human
      in GCP console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl
      secrets set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the
@@ -160,13 +175,6 @@ Estimated iteration sequence (adjust as work unfolds):
   paired with an explicit kill before iteration end. Never pipe
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
-
-- **Iter 157 — Activate M8.pw.4 as a hard deploy gate (if not
-  bundled in iter 156).** Provision
-  the test OAuth client (operator step — needs human in GCP
-  console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
-  set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
-  the deploy workflow so no operator-gated tests remain.
 
 After M8.pw.4 passes green automatically, the freezes above may
 be lifted via an explicit edit here.

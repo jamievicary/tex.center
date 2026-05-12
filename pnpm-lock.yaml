@@ -23,6 +23,12 @@ importers:
       '@tex-center/db':
         specifier: workspace:*
         version: link:packages/db
+      '@tex-center/protocol':
+        specifier: workspace:*
+        version: link:packages/protocol
+      '@types/ws':
+        specifier: ^8.5.12
+        version: 8.18.1
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@electric-sql/pglite@0.3.16)(postgres@3.4.9)
@@ -32,6 +38,9 @@ importers:
       typescript:
         specifier: 5.6.3
         version: 5.6.3
+      ws:
+        specifier: ^8.18.0
+        version: 8.20.0
 
   apps/sidecar:
     dependencies:
