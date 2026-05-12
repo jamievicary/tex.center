@@ -20,8 +20,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # M8.smoke.0 — build the production runtime image and probe every
+  # server endpoint for module-load failures before deploying. Catches
+  # the iter-129 incident class (adapter-node externalised npm dep
+  # missing from runtime stage) at PR time instead of in production.
+  smoke:
+    name: runtime image smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - run: bash scripts/smoke-runtime-image.sh
+
   deploy:
     name: flyctl deploy
+    needs: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

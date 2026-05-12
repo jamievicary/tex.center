@@ -5,23 +5,23 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 74, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/protocol typecheck: Done
 packages/auth typecheck: Done
 packages/blobs typecheck: Done
-packages/protocol typecheck: Done
 packages/db typecheck: Done
-apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778573321927 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778573321932 COMPLETED 723 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778573682886 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778573682892 COMPLETED 723 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_fly_config_exists (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_fly_config_exists) ... ok
@@ -33,6 +33,8 @@ test_uses_setup_flyctl (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.t
 test_dockerfile_reference_exists (test_deploy_workflow.TestDeployWorkflow.test_dockerfile_reference_exists) ... ok
 test_has_deploy_job_on_ubuntu (test_deploy_workflow.TestDeployWorkflow.test_has_deploy_job_on_ubuntu) ... ok
 test_runs_flyctl_deploy_with_token (test_deploy_workflow.TestDeployWorkflow.test_runs_flyctl_deploy_with_token) ... ok
+test_smoke_job_gates_deploy (test_deploy_workflow.TestDeployWorkflow.test_smoke_job_gates_deploy) ... ok
+test_smoke_script_probes_all_endpoints (test_deploy_workflow.TestDeployWorkflow.test_smoke_script_probes_all_endpoints) ... ok
 test_steps_check_out_and_setup_flyctl (test_deploy_workflow.TestDeployWorkflow.test_steps_check_out_and_setup_flyctl) ... ok
 test_triggers_on_push_to_main (test_deploy_workflow.TestDeployWorkflow.test_triggers_on_push_to_main) ... ok
 test_app_name (test_fly_toml.TestFlyToml.test_app_name) ... ok
@@ -132,7 +134,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 107 tests in 37.486s
+Ran 109 tests in 38.348s
 
 OK
 tests_normal/run_tests.sh: PASS

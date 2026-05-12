@@ -352,18 +352,19 @@ untested. discussion/131 promotes the following over the open M7.x
 work; do **not** start M7.4.2, M7.2, or refactor/plan-review iters
 until this block lands. One slice per iteration.
 
-- [ ] **M8.smoke.0** — Build-time runtime-image smoke. New job in
-      `.github/workflows/deploy.yml` (or a prerequisite workflow):
-      `docker build` `apps/web/Dockerfile`, `docker run` with
-      placeholder env vars, `curl` every server endpoint and
-      assert no `ERR_MODULE_NOT_FOUND`-class response. Endpoints:
-      `/`, `/healthz`, `/readyz`, `/auth/google/start`,
-      `/auth/google/callback?error=fake`, `POST /auth/logout`,
-      `/projects`, `/editor/abc123`. Catches the iter-129 class
-      structurally. Open question for the implementing iter: the
-      runtime entrypoint calls `bootMigrations.ts` before the
-      listener binds, so a placeholder `DATABASE_URL` blocks; pick
-      `RUN_MIGRATIONS_ON_BOOT=0` or stub the resolve target.
+- [x] **M8.smoke.0** — `scripts/smoke-runtime-image.sh` +
+      `smoke` job in `.github/workflows/deploy.yml` (deploy now
+      `needs: smoke`). Script builds `apps/web/Dockerfile`, runs
+      with placeholder `SESSION_SIGNING_KEY` + `GOOGLE_OAUTH_*` env,
+      `DATABASE_URL` unset (the M8.smoke.0 open question resolved
+      by omitting the URL — `runBootMigrations` short-circuits on
+      no URL, and no probed GET touches the DB without an auth'd
+      session). Probes all eight endpoints from PLAN; flags any
+      `ERR_MODULE_NOT_FOUND` / `Cannot find package` / unexpected
+      5xx. Structural invariants pinned by
+      `tests_normal/cases/test_deploy_workflow.py`
+      (`test_smoke_job_gates_deploy`,
+      `test_smoke_script_probes_all_endpoints`). _(iter 132.)_
 - [ ] **M8.pw.3** — Real OAuth round-trip via a dedicated Google
       Cloud service account with the OAuth client pre-consented.
       Test obtains an ID token (refresh-token or JWT exchange),
@@ -407,8 +408,10 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** M8.smoke.0 (build-time runtime-image
-smoke). M7.4.2 and M7.2 are parked until the priority block lands.
+**Next ordinary iteration:** M8.pw.3 (real OAuth round-trip via a
+dedicated Google Cloud service account). M8.smoke.0 landed iter
+132; M7.4.2 and M7.2 still parked until the rest of the priority
+block lands.
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
