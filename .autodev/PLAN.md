@@ -127,17 +127,31 @@ Estimated iteration sequence (adjust as work unfolds):
   and needs destroying so the resolver recreates it at the new
   size — that's an iter-155 operational step.
 
-- **Iter 155 — Destroy stale per-project Machine + payload-bearing
-  re-probe.** After this iter's `Deploy web to Fly` CD run goes
-  green: `flyctl machines destroy --force d8d545df11d078 -a
-  tex-center-sidecar` so the resolver recreates it at 1GB on the
-  next dial; re-run `scripts/probe-live-ws.mjs` to confirm
-  `kind: "upgrade", status: 101` still holds at the new size. If
-  feasible inside the wallclock, extend the probe to send a Yjs
-  sync-step-1 frame after upgrade and assert the upstream doesn't
-  502 / cgroup-kill mid-stream — that's the first probe that
-  actually exercises the runtime memory floor (the upgrade
-  handshake alone barely allocates).
+- **Iter 155 — Destroy stale per-project Machine + re-probe.**
+  *Done.* Waited for iter-154 `Deploy to Fly` (run 25733765835) to
+  finish before destroying so the recreated Machine would pick up
+  the 1024MB guest config (not the old 256MB default). Destroyed
+  `d8d545df11d078`. Resolver recreated `48e3376f957e18` at
+  `shared-cpu-1x:1024MB`. Third probe (after Machine reached
+  `started`) returned `kind: "upgrade", status: 101` via two `via`
+  hops in 633ms. First live confirmation iter-154 memory bump
+  reached production. Payload-bearing probe extension deferred to
+  iter 156 (requires writing a small WS client; not a trivial probe
+  tweak).
+
+- **Iter 156 — Payload-bearing WS probe + M8.pw.4 activation.**
+  Two stretches:
+  1. Extend `scripts/probe-live-ws.mjs` (or a sibling script) to
+     keep the WS connection open after upgrade and send a Yjs
+     sync-step-1 frame (binary, masked); assert upstream replies
+     (or at least doesn't immediately 502 / cgroup-kill). This is
+     the first probe that actually exercises the 1024MB runtime
+     floor — the bare upgrade handshake barely allocates.
+  2. Provision the test OAuth client (operator step — needs human
+     in GCP console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl
+     secrets set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the
+     spec into the deploy workflow so no operator-gated tests
+     remain. M8.pw.4 then runs green automatically on every deploy.
 
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
@@ -147,13 +161,14 @@ Estimated iteration sequence (adjust as work unfolds):
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
 
-- **Iter 156 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 157 — Activate M8.pw.4 as a hard deploy gate (if not
+  bundled in iter 156).** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 156 passes green automatically, the freezes above may
+After M8.pw.4 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state
