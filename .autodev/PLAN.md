@@ -114,20 +114,30 @@ Estimated iteration sequence (adjust as work unfolds):
   WS-502 incident class is **closed**. New per-project Machine
   `d8d545df11d078` running the new image.
 
-- **Iter 154 — Bump per-project Machine memory.** The probe
-  succeeded on the upgrade *handshake*, but per-project Machines
-  still come up at the Fly Machines API default (~256MB). The
-  earlier OOM-reboot loop on the old image happened on first WS
-  request at 256MB (anon-rss tiny, total-vm 1.26GB → cgroup kill);
-  the new image will hit the same wall once real Yjs traffic
-  arrives. Add `guest: { memory_mb: 1024, cpu_kind: "shared",
-  cpus: 1 }` to `machineConfig` in
-  `apps/web/src/lib/server/upstreamFromEnv.ts`, lock with a unit
-  test asserting `memory_mb >= 1024`, let web CD redeploy the
-  control plane, destroy stale per-project Machines, re-probe with
-  a payload-bearing path if feasible (extending
-  `probe-live-ws.mjs` to send a Yjs sync-step-1 frame after
-  upgrade is the natural shape). Cheap and surgical.
+- **Iter 154 — Bump per-project Machine memory (code side).**
+  *Done.* `apps/web/src/lib/server/upstreamFromEnv.ts`
+  `machineConfig` now carries
+  `guest: { memory_mb: 1024, cpu_kind: "shared", cpus: 1 }`. Lock-
+  in: happy-path block of
+  `apps/web/test/upstreamFromEnv.test.mjs` asserts
+  `createCall.req.config.guest.memory_mb >= 1024`. The harness
+  commit will trigger `Deploy web to Fly` (web CD); once it lands,
+  newly-created per-project Machines come up at 1GB. Pre-existing
+  Machine `d8d545df11d078` (from iter-153 probe) is still 256MB
+  and needs destroying so the resolver recreates it at the new
+  size — that's an iter-155 operational step.
+
+- **Iter 155 — Destroy stale per-project Machine + payload-bearing
+  re-probe.** After this iter's `Deploy web to Fly` CD run goes
+  green: `flyctl machines destroy --force d8d545df11d078 -a
+  tex-center-sidecar` so the resolver recreates it at 1GB on the
+  next dial; re-run `scripts/probe-live-ws.mjs` to confirm
+  `kind: "upgrade", status: 101` still holds at the new size. If
+  feasible inside the wallclock, extend the probe to send a Yjs
+  sync-step-1 frame after upgrade and assert the upstream doesn't
+  502 / cgroup-kill mid-stream — that's the first probe that
+  actually exercises the runtime memory floor (the upgrade
+  handshake alone barely allocates).
 
   **Leaked-subprocess hygiene (per `150_answer.md`):** do NOT
   invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`, `watch`,
@@ -137,13 +147,13 @@ Estimated iteration sequence (adjust as work unfolds):
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
 
-- **Iter 155 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 156 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 155 passes green automatically, the freezes above may
+After iter 156 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state

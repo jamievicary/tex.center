@@ -43,6 +43,14 @@ export function buildUpstreamFromEnv(
     image,
     auto_destroy: false,
     restart: { policy: "on-failure" },
+    // Per-project Machines need ≥1GB to survive the runtime
+    // total-vm footprint of the sidecar (Node + lualatex-incremental
+    // ELF + fmt dump). The Fly Machines API default (~256MB) OOM-
+    // killed Machines on first WS request — see iter 153 log + iter
+    // 154 PLAN entry. cgroup memory accounting tracks total VM, not
+    // RSS, so even a small-RSS process is killed if its mappings
+    // exceed the limit.
+    guest: { memory_mb: 1024, cpu_kind: "shared", cpus: 1 },
   };
 
   const machines = deps.makeMachinesClient({ token, appName });

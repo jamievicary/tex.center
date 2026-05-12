@@ -5,14 +5,14 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 71, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.1s
+Done in 1.2s
 Scope: 6 of 7 workspace projects
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/protocol typecheck: Done
@@ -141,7 +141,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 115 tests in 45.305s
+Ran 115 tests in 44.722s
 
 OK
 tests_normal/run_tests.sh: PASS

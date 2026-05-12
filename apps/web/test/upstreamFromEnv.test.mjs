@@ -149,6 +149,20 @@ assert.equal(
   assert.equal(createCall.req.config.image, "registry/sidecar:abc");
   assert.equal(createCall.req.config.auto_destroy, false);
   assert.deepEqual(createCall.req.config.restart, { policy: "on-failure" });
+  // Iter 154: per-project Machines must be sized large enough to
+  // survive the sidecar's runtime total-vm footprint. 1GB is the
+  // floor; anything smaller OOM-killed under real WS traffic on the
+  // Fly Machines API default. Lock in a >= 1024 invariant so a
+  // future refactor can't silently regress to the default.
+  assert.ok(
+    createCall.req.config.guest,
+    "machineConfig.guest must be set so Fly doesn't fall back to the ~256MB default",
+  );
+  assert.ok(
+    typeof createCall.req.config.guest.memory_mb === "number" &&
+      createCall.req.config.guest.memory_mb >= 1024,
+    `machineConfig.guest.memory_mb must be >= 1024 (got ${createCall.req.config.guest.memory_mb})`,
+  );
 }
 
 // ---- SIDECAR_PORT / SIDECAR_REGION override ----
