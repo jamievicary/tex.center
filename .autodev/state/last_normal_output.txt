@@ -9,16 +9,16 @@ Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
+packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
-packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
-packages/blobs typecheck: Done
 packages/auth typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
-apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
 apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
 apps/web typecheck: Getting Svelte diagnostics...
@@ -111,6 +111,7 @@ test_invokes_probe_ready (test_readyz_route.TestReadyzRoute.test_invokes_probe_r
 test_no_cache (test_readyz_route.TestReadyzRoute.test_no_cache) ... ok
 test_prerender_disabled (test_readyz_route.TestReadyzRoute.test_prerender_disabled) ... ok
 test_builder_runs_supertex_make (test_sidecar_dockerfile.TestSidecarDockerfile.test_builder_runs_supertex_make) ... ok
+test_engine_binary_is_executable_in_git (test_sidecar_dockerfile.TestSidecarDockerfile.test_engine_binary_is_executable_in_git) ... ok
 test_files_exist (test_sidecar_dockerfile.TestSidecarDockerfile.test_files_exist) ... ok
 test_install_layer_covers_every_workspace_package (test_sidecar_dockerfile.TestSidecarDockerfile.test_install_layer_covers_every_workspace_package) ... ok
 test_install_runs_frozen (test_sidecar_dockerfile.TestSidecarDockerfile.test_install_runs_frozen) ... ok
@@ -140,7 +141,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 114 tests in 42.235s
+Ran 115 tests in 40.871s
 
 OK
 tests_normal/run_tests.sh: PASS

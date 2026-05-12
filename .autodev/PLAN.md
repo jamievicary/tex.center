@@ -84,10 +84,30 @@ Estimated iteration sequence (adjust as work unfolds):
   new sidecar image will be built at HEAD which already includes
   iter 149.
 
-- **Iter 152 — Live cutover (was 151).** Once the sidecar CD
-  triggered by iter 151's commit completes successfully (gh run
-  for `Deploy sidecar to Fly` on the iter-151 commit, expected
-  ~10–14 min), do the cutover. Steps:
+- **Iter 152 — Fix engine-binary exec bit in git.** *Done.*
+  The iter-151 submodule-token fix unblocked the checkout step;
+  CD then progressed for the first time ever and surfaced the
+  *next* latent bug: the vendored ELF
+  `vendor/engine/x86_64-linux/lualatex-incremental` is stored in
+  git as mode 100644, so on the Fly remote builder the runtime
+  stage's `--ini` fmt-dump fails with `/bin/sh: 1:
+  /opt/engine/binary: Permission denied` (exit 126). This bug
+  has been latent since iter 75 (when the engine ELF was added);
+  it stayed invisible because (a) sidecar CD never reached the
+  runtime stage until iter 151's fix and (b) the maintainer's
+  WSL filesystem always reports the file as executable
+  regardless of git mode, so local docker builds also succeed.
+  Fix: `git update-index --chmod=+x
+  vendor/engine/x86_64-linux/lualatex-incremental`. Regression
+  lock: `tests_normal/cases/test_sidecar_dockerfile.py::test_engine_binary_is_executable_in_git`.
+  Cutover slides to iter 153, M8.pw.4 activation to iter 154.
+
+- **Iter 153 — Live cutover (was 152).** Once the sidecar CD
+  triggered by iter 152's commit completes successfully (gh run
+  for `Deploy sidecar to Fly` on the iter-152 commit, expected
+  ~10–14 min — first ever non-CACHED runtime-stage build, so
+  may take longer if the texlive-full layer rebuilds), do the
+  cutover. Steps:
   (1) `flyctl image show -a tex-center-sidecar` (one-shot) for
   the latest sha; (2) `flyctl secrets set
   SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:<new>
@@ -109,13 +129,13 @@ Estimated iteration sequence (adjust as work unfolds):
   paired with an explicit kill before iteration end. Never pipe
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
-- **Iter 153 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 154 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 153 passes green automatically, the freezes above may
+After iter 154 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state

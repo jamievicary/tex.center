@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -130,6 +131,32 @@ class TestSidecarDockerfile(unittest.TestCase):
             runtime, r"/opt/engine/bin/lualatex-incremental"
         )
         self.assertRegex(runtime, r"/opt/engine/bin:\$PATH")
+
+    def test_engine_binary_is_executable_in_git(self) -> None:
+        # The vendored ELF is COPYed straight into the image without a
+        # `chmod +x`, so it must carry the executable bit through git
+        # itself (mode 100755). On Windows/WSL the local filesystem
+        # always reports the file as executable, so a regression to
+        # mode 100644 stays invisible locally and surfaces only as
+        # `/bin/sh: 1: /opt/engine/binary: Permission denied` deep in
+        # the runtime stage's --ini fmt dump on the Fly remote builder
+        # (iter 152: first sidecar CD success after the iter-151
+        # submodule-token fix exposed this).
+        out = subprocess.check_output(
+            ["git", "ls-files", "-s", "vendor/engine/x86_64-linux/lualatex-incremental"],
+            cwd=ROOT,
+            text=True,
+        ).strip()
+        self.assertTrue(out, "engine binary not tracked in git")
+        mode = out.split()[0]
+        self.assertEqual(
+            mode,
+            "100755",
+            f"vendor/engine/x86_64-linux/lualatex-incremental must be "
+            f"mode 100755 in git, got {mode}. Run "
+            "`git update-index --chmod=+x vendor/engine/x86_64-linux/"
+            "lualatex-incremental`.",
+        )
 
     def test_runtime_sets_texmfcnf_for_kpathsea(self) -> None:
         # The vendored engine ELF was compiled with SELFAUTO-derived
