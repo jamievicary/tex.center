@@ -96,15 +96,19 @@ GT-A (`verifyLiveNoFlashLoad`), GT-B
 (`verifyLiveEditTriggersFreshPdf`), GT-D
 (`verifyLiveSustainedTyping`). Code-side slices:
 
-- **Logo → /projects.** Trivial: `<div class="brand">` →
-  `<a href="/projects" class="brand">` in
-  `apps/web/src/routes/editor/[projectId]/+page.svelte`. Status:
-  **pending** (was iter-174 in old plan but discussion mode
-  consumed iter 174).
-- **No-flash editor.** Gate CodeMirror mount on a `hydrated`
-  boolean set when first `doc-update` / `file-list` frame
-  arrives. Placeholder with editor's eventual dimensions to
-  prevent reflow. Makes GT-A green. Status: **pending**.
+- **Logo → /projects.** Landed iter 177. `<div class="brand">`
+  is now `<a href="/projects" class="brand">` with inherit-color
+  + hover-underline styling so the visual remains unchanged.
+  Status: **done**.
+- **No-flash editor.** Landed iter 177. `WsClientSnapshot` gains
+  a `hydrated: boolean`, flipped true on the first `doc-update`
+  or `file-list` frame in `apps/web/src/lib/wsClient.ts`. The
+  editor page renders `<Editor>` only when `snapshot.hydrated`,
+  otherwise a same-dimensioned `.editor-placeholder` div holds
+  the grid cell. Unit test
+  `apps/web/test/wsClientHydrated.test.mjs` (5 cases) locks the
+  flag's transition semantics. Makes GT-A green (verifies live).
+  Status: **done**.
 - **Compile coalescer.** Sidecar-side state machine in
   `apps/sidecar/src/server.ts`. `compileInFlight`,
   `pendingCompile`, `highestEmittedShipoutPage` on

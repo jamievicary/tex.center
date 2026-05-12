@@ -33,6 +33,14 @@ export interface WsClientSnapshot {
    * `file-list` (which only arrives after a successful op).
    */
   fileOpError: string | null;
+  /**
+   * `true` once the first authoritative server frame has been
+   * applied to the local Y.Doc — either a `doc-update` (Yjs
+   * initial-sync) or a `file-list` control. Editor UI gates
+   * CodeMirror mount on this to avoid the empty-buffer flash
+   * described in GT-A.
+   */
+  hydrated: boolean;
 }
 
 export interface WsClientOptions {
@@ -53,6 +61,7 @@ export class WsClient {
   private _compileState: WsClientSnapshot["compileState"] = "unknown";
   private _files: string[] = [MAIN_DOC_NAME];
   private _fileOpError: string | null = null;
+  private _hydrated = false;
   private readonly onDocUpdate: (update: Uint8Array, origin: unknown) => void;
 
   constructor(opts: WsClientOptions) {
@@ -112,6 +121,10 @@ export class WsClient {
     switch (decoded.kind) {
       case "doc-update":
         Y.applyUpdate(this.doc, decoded.update, this);
+        if (!this._hydrated) {
+          this._hydrated = true;
+          this.emit();
+        }
         break;
       case "pdf-segment":
         this._pdfBytes = this.pdf.applySegment(decoded.segment);
@@ -127,6 +140,7 @@ export class WsClient {
         } else if (decoded.message.type === "file-list") {
           this._files = decoded.message.files;
           this._fileOpError = null;
+          this._hydrated = true;
           this.emit();
         } else if (decoded.message.type === "file-op-error") {
           this._fileOpError = decoded.message.reason;
@@ -205,6 +219,7 @@ export class WsClient {
       compileState: this._compileState,
       files: this._files,
       fileOpError: this._fileOpError,
+      hydrated: this._hydrated,
     };
   }
 

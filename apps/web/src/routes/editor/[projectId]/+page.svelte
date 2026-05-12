@@ -13,13 +13,13 @@
 
   let selected = $state<string>(MAIN_DOC_NAME);
 
-  // Until the WS connects we display nothing in the editor + viewer.
-  // The editor mounts against a transient Y.Doc until then so
-  // CodeMirror has something to bind; the real one replaces it
-  // after `onMount` (a future iteration may guard this with a
-  // suspense block — over-engineering for MVP).
-  let placeholderDoc = new Y.Doc();
-  let text = $state<Y.Text>(placeholderDoc.getText(MAIN_DOC_NAME));
+  // The CodeMirror editor is mounted only after the per-project
+  // sidecar's first authoritative frame (Yjs initial-sync or
+  // `file-list`) lands in the local Y.Doc — see GT-A
+  // (`verifyLiveGt1NoFlashLoad.spec.ts`). Until then we render
+  // a same-dimensioned placeholder so the grid layout doesn't
+  // reflow when the editor appears.
+  let text = $state<Y.Text | null>(null);
 
   let snapshot = $state<WsClientSnapshot>({
     status: "connecting",
@@ -28,6 +28,7 @@
     compileState: "unknown",
     files: [MAIN_DOC_NAME],
     fileOpError: null,
+    hydrated: false,
   });
 
   let client: WsClient | null = null;
@@ -60,13 +61,12 @@
 
   onDestroy(() => {
     client?.destroy();
-    placeholderDoc.destroy();
   });
 </script>
 
 <div class="shell">
   <header class="topbar">
-    <div class="brand">tex.center</div>
+    <a href="/projects" class="brand">tex.center</a>
     {#if data.user}
       <div class="who">
         <span class="email">{data.user.displayName ?? data.user.email}</span>
@@ -94,9 +94,13 @@
     />
   </aside>
   <section class="editor">
-    {#key text}
-      <Editor {text} />
-    {/key}
+    {#if snapshot.hydrated && text}
+      {#key text}
+        <Editor {text} />
+      {/key}
+    {:else}
+      <div class="editor-placeholder" aria-hidden="true"></div>
+    {/if}
   </section>
   <section class="preview">
     <PdfViewer src={snapshot.pdfBytes} onPageChange={handlePageChange} />
@@ -131,6 +135,16 @@
   }
   .brand {
     font-weight: 600;
+    color: inherit;
+    text-decoration: none;
+  }
+  .brand:hover {
+    text-decoration: underline;
+  }
+  .editor-placeholder {
+    width: 100%;
+    height: 100%;
+    background: white;
   }
   .who {
     display: flex;

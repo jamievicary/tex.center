@@ -161,6 +161,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_readyz(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "readyz.test.mjs")
 
+    def test_web_ws_client_hydrated(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "wsClientHydrated.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 
