@@ -437,6 +437,67 @@ Estimated iteration sequence (adjust as work unfolds):
   reuses a pre-seeded fixture project owned by the live test
   user — the seeded-fresh vs reused-existing path divergence
   remains a known coverage hole.
+- **Iter 172 — Discussion mode (live editor UX gaps).** *Done.*
+  Answered `172_question.md`. Agreed with diagnosis on all five
+  items; agreed with proposed TDD ordering. Refinement to GT-D
+  (drop `≥2 segments`; assert "no overlap error" + "final state
+  matches" instead). Chose **skeleton-placeholder** over SSR for
+  item 6 (no blob/sidecar reach from control plane). Slots 173–177
+  below schedule the work.
+
+- **Iter 173 — Land GT-A/B/C/D as failing gold tests.** *Pending.*
+  Four new specs under `tests_gold/playwright/`, one per file:
+  GT-A (no-flash load: assert canonical seeded `main.tex` shows
+  in CodeMirror within ~200ms of `goto`), GT-B (initial PDF for
+  seeded content arrives without user input), GT-C (single-
+  keystroke edit triggers fresh `pdf-segment`; no overlap-error
+  surfaces), GT-D (sustained typing — refined assertions: no
+  overlap error, final server doc bytes == typed bytes, ≥1
+  pdf-segment with final source). Live-project variants; reuse
+  the iter-171 fixture-project pattern. No production code
+  touched. Gold output reads red for these four until 174–177
+  land. Regression lock in `tests_normal/cases/` asserting the
+  four spec files exist with the expected assertion shapes.
+
+- **Iter 174 — Logo → /projects in editor.** *Pending.*
+  `apps/web/src/routes/editor/[projectId]/+page.svelte:69`
+  change `<div class="brand">` → `<a href="/projects" class="brand">`,
+  preserve styling. Trivial. Not gated on a new gold test (small
+  local Playwright unit could be added but not required).
+
+- **Iter 175 — No-flash editor (item 6, makes GT-A green).**
+  *Pending.* Frontend-only: `Editor.svelte` gates CodeMirror
+  mount on a `hydrated` boolean set when the first WS
+  `doc-update` (or `file-list`) frame arrives. Placeholder
+  "Loading project…" with the editor's eventual dimensions to
+  prevent reflow. Skeleton chosen over SSR — avoids new blob/
+  sidecar plumbing from control plane.
+
+- **Iter 176 — Compile coalescer (item 5, makes GT-B/C/D green).**
+  *Pending.* Sidecar-side state machine in `apps/sidecar/src/server.ts`.
+  Add `compileInFlight: boolean`, `pendingCompile: boolean`,
+  `highestEmittedShipoutPage: number` to `ProjectState`. Replace
+  `scheduleCompile` with `maybeFireCompile` per `172_answer.md`:
+  debounce ~150 ms, gate on `!compileInFlight`, write workspace
+  inside the gate, fire `compile()`, clear `compileInFlight` in
+  a `finally` (covers `result.ok === false`), re-fire if
+  `pendingCompile` set. `view` frame fires-through only when
+  idle AND `maxViewingPage > highestEmittedShipoutPage`.
+  Sub-items 2/3 fall out. New `apps/sidecar/test/` unit test
+  with a fake compiler: 50 rapid `doc.applyUpdate` calls during
+  an in-flight compile produce **exactly one** follow-up
+  compile with the final source. Error-path regression: fake
+  compiler returns `{ok:false}` — next `maybeFireCompile` must
+  proceed. If state-machine refactor doesn't fit one iter,
+  split into 176a (state machine, dark) + 176b (cutover).
+
+- **Iter 177 — Toast UX (item 4) + GT-E.** *Pending.*
+  Small `apps/web/src/lib/Toasts.svelte` + writable store.
+  Newest-on-top stack, 2 s + 150 ms fade for info/success,
+  persistent + explicit close for errors, dedup with count
+  badge on rapid repeats. GT-E asserts the three behaviours
+  with the local target (no live variant needed).
+
 - **Iter 166+ — Save-feedback affordance.** New `SyncStatus`
   indicator in `apps/web`. Three visual states (idle/"Saved",
   in-flight/"Saving…" with 250ms tail debounce, error/"Save

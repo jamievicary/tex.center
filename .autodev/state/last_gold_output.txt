@@ -12,52 +12,52 @@ test_live (test_playwright.TestPlaywrightLive.test_live) ... setup_playwright.sh
 
 Running 19 tests using 1 worker
 
-  ✓  1 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.9s)
-  ✓  2 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (831ms)
-  ✓  3 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (607ms)
+  ✓  1 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.0s)
+  ✓  2 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (445ms)
+  ✓  3 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (532ms)
   -  4 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects
-  ✓  5 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (901ms)
-  ✓  6 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (223ms)
-  ✓  7 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (95ms)
-  ✓  8 [live] › verifyLiveFullPipeline.spec.ts:65:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (23.0s)
-  ✓  9 [live] › verifyLiveFullPipelineReused.spec.ts:75:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (12.9s)
+  ✓  5 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (520ms)
+  ✓  6 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (195ms)
+  ✓  7 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (100ms)
+  ✓  8 [live] › verifyLiveFullPipeline.spec.ts:65:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (15.8s)
+  ✓  9 [live] › verifyLiveFullPipelineReused.spec.ts:75:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (1.0s)
   -  10 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
   -  11 [live] › verifyLiveWsUpgrade.spec.ts:60:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  12 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (206ms)
-  ✓  13 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (183ms)
-  ✓  14 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (50ms)
-  ✓  15 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (31ms)
-  ✓  16 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (47ms)
-  ✓  17 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (137ms)
-  ✓  18 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (58ms)
-  ✓  19 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (67ms)
+  ✓  12 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (189ms)
+  ✓  13 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (96ms)
+  ✓  14 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (43ms)
+  ✓  15 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (35ms)
+  ✓  16 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (49ms)
+  ✓  17 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (152ms)
+  ✓  18 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (139ms)
+  ✓  19 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (92ms)
 
-  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (23.0s)
+  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (15.8s)
   Consider splitting slow test files to speed up parallel execution
   3 skipped
-  16 passed (45.2s)
+  16 passed (23.9s)
 ok
 test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-[dev] 4:27:38 PM [vite] ws proxy error:
+[dev] 4:33:44 PM [vite] ws proxy error:
 Error: connect ECONNREFUSED 127.0.0.1:3001
     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
     at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
-[globalSetup] DB ready (userId=baaf1f15-f71b-4f4d-bf57-71e75e7efc5a); spawning dev server on :3000
+[globalSetup] DB ready (userId=10645edb-df6a-4141-876a-940bb3c64350); spawning dev server on :3000
 
 Running 19 tests using 1 worker
 
-  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.1s)
+  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.2s)
   ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.1s)
-  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (516ms)
-  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (442ms)
-  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (558ms)
+  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (243ms)
+  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (446ms)
+  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (587ms)
   -  6 [local] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200
   -  7 [local] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to /
   -  8 [local] › verifyLiveFullPipeline.spec.ts:65:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas
   -  9 [local] › verifyLiveFullPipelineReused.spec.ts:75:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas
   -  10 [local] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
   -  11 [local] › verifyLiveWsUpgrade.spec.ts:60:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  12 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (236ms)
+  ✓  12 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (244ms)
   -  13 [local] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker
   -  14 [local] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up
   -  15 [local] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page)
@@ -67,12 +67,12 @@ Running 19 tests using 1 worker
   -  19 [local] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404
 
   13 skipped
-  6 passed (12.1s)
+  6 passed (12.2s)
 ok
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
 ----------------------------------------------------------------------
-Ran 13 tests in 106.409s
+Ran 13 tests in 55.973s
 
 OK
 tests_gold/run_tests.sh: PASS
