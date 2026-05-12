@@ -99,6 +99,9 @@ const baseOpts = {
   sidecarPort: 3001,
   sidecarRegion: "fra",
   machineConfig: { image: "registry.example/sidecar:latest" },
+  // Skip the real net.connect probe in unit tests by default. Cases
+  // that exercise the probe path supply their own stub.
+  tcpProbe: async () => {},
 };
 
 // ---- case 1: missing row → createMachine, started immediately ----
@@ -381,6 +384,57 @@ const baseOpts = {
     coldStartTimeoutSec: 0,
   });
   await assert.rejects(() => resolve("p9"), /408/);
+}
+
+// ---- case 10: TCP probe retries past initial ECONNREFUSED ----
+//
+// Iter 168 diagnosis: after Fly reports the Machine `started`, the
+// sidecar's user process still needs a moment to bind to port 3001.
+// A dial that races the bind gets ECONNREFUSED. The resolver must
+// retry the TCP probe under a bounded budget rather than returning
+// an upstream that immediately fails on dial.
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  let probeCalls = 0;
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    tcpProbe: async () => {
+      probeCalls += 1;
+      if (probeCalls < 3) {
+        const err = new Error("connect ECONNREFUSED");
+        err.code = "ECONNREFUSED";
+        throw err;
+      }
+    },
+    tcpProbeTimeoutSec: 30,
+  });
+  const upstream = await resolve("p10");
+  assert.equal(upstream.host, "m-1.vm.test-app.internal");
+  assert.equal(probeCalls, 3, "probe must retry on ECONNREFUSED");
+}
+
+// ---- case 11: TCP probe deadline propagates as a resolver error ----
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    tcpProbe: async () => {
+      const err = new Error("connect ECONNREFUSED");
+      err.code = "ECONNREFUSED";
+      throw err;
+    },
+    tcpProbeTimeoutSec: 0,
+  });
+  await assert.rejects(
+    () => resolve("p11"),
+    /did not accept TCP within probe budget/,
+  );
 }
 
 console.log("upstreamResolver ok");

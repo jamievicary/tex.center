@@ -21,6 +21,8 @@
 // trip. A per-projectId promise cache dedupes in-flight calls; the
 // entry is cleared on settle.
 
+import net from "node:net";
+
 import {
   deleteMachineAssignment,
   getMachineAssignmentByProjectId,
@@ -83,6 +85,49 @@ export interface UpstreamResolverOptions {
    * call still uses `waitTimeoutSec`.
    */
   readonly coldStartTimeoutSec?: number;
+  /**
+   * Probe the upstream's TCP port after Fly reports the Machine as
+   * `started`, retrying until it accepts a connection or
+   * `tcpProbeTimeoutSec` elapses. Closes the gap between Fly's
+   * Machine-state transition and the sidecar process actually
+   * binding to its listen port (observed live, iter 168: dial races
+   * the sidecar's bind by 100s of ms and gets ECONNREFUSED). The
+   * function must resolve on a successful TCP connect and reject on
+   * any error; the resolver retries on rejection.
+   *
+   * Defaults to a `net.connect`-based probe. Tests inject a stub
+   * (or a no-op for cases that don't exercise the probe path).
+   */
+  readonly tcpProbe?: (host: string, port: number) => Promise<void>;
+  /**
+   * Bound on the post-`started` TCP-readiness probe loop, in
+   * seconds. Defaults to 60. Independent of `coldStartTimeoutSec`
+   * because the API-side wait and the port-readiness wait are
+   * different timing populations.
+   */
+  readonly tcpProbeTimeoutSec?: number;
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export function defaultTcpProbe(host: string, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host, port });
+    let settled = false;
+    const cleanup = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.destroy();
+      } catch {
+        // socket may already be torn down
+      }
+      fn();
+    };
+    socket.once("connect", () => cleanup(() => resolve()));
+    socket.once("error", (err) => cleanup(() => reject(err)));
+  });
 }
 
 const TERMINAL_STATES: ReadonlySet<MachineState> = new Set([
@@ -111,10 +156,34 @@ export function createUpstreamResolver(
     machine = await driveToStarted(machineId, machine);
     await opts.store.updateState(projectId, "running");
 
-    return {
+    const upstream = {
       host: opts.machines.internalAddress(machineId),
       port: opts.sidecarPort,
     };
+    await waitForUpstreamReady(upstream);
+    return upstream;
+  };
+
+  const waitForUpstreamReady = async (
+    upstream: SidecarUpstream,
+  ): Promise<void> => {
+    const probe = opts.tcpProbe ?? defaultTcpProbe;
+    const deadline = Date.now() + (opts.tcpProbeTimeoutSec ?? 60) * 1000;
+    let lastErr: unknown = null;
+    while (Date.now() < deadline) {
+      try {
+        await probe(upstream.host, upstream.port);
+        return;
+      } catch (err) {
+        lastErr = err;
+        await sleep(500);
+      }
+    }
+    const message =
+      lastErr instanceof Error ? lastErr.message : String(lastErr);
+    throw new Error(
+      `upstreamResolver: ${upstream.host}:${upstream.port} did not accept TCP within probe budget: ${message}`,
+    );
   };
 
   const ensureMachineId = async (projectId: string): Promise<string> => {

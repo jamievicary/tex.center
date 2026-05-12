@@ -63,6 +63,7 @@ function makeMachinesStub(appName) {
 const baseDeps = {
   makeMachinesClient: () => makeMachinesStub("noop"),
   makeStore: () => makeStore(),
+  tcpProbe: async () => {},
 };
 
 assert.equal(buildUpstreamFromEnv({}, baseDeps), null);
@@ -131,6 +132,7 @@ assert.equal(
         return stub;
       },
       makeStore: () => makeStore(),
+      tcpProbe: async () => {},
     },
   );
   assert.notEqual(resolver, null);
@@ -180,6 +182,7 @@ assert.equal(
     {
       makeMachinesClient: () => stub,
       makeStore: () => makeStore(),
+      tcpProbe: async () => {},
     },
   );
   const upstream = await resolver("p");

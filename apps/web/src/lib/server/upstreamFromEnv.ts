@@ -12,6 +12,7 @@
 import type { MachineConfig, MachinesClient } from "./flyMachines.js";
 import {
   createUpstreamResolver,
+  defaultTcpProbe,
   type MachineAssignmentStore,
   type UpstreamResolver,
 } from "./upstreamResolver.js";
@@ -23,6 +24,12 @@ export interface UpstreamFromEnvDeps {
     readonly appName: string;
   }) => MachinesClient;
   readonly makeStore: () => MachineAssignmentStore;
+  /**
+   * TCP-readiness probe injection point for tests. Defaults to a
+   * `net.connect` against the upstream host:port. Tests that want
+   * to exercise the resolver against fake hostnames pass a no-op.
+   */
+  readonly tcpProbe?: (host: string, port: number) => Promise<void>;
 }
 
 const DEFAULT_SIDECAR_REGION = "fra";
@@ -66,6 +73,11 @@ export function buildUpstreamFromEnv(
     // and returns 408 on miss; the resolver retries under this
     // overall deadline.
     coldStartTimeoutSec: 300,
+    tcpProbe: deps.tcpProbe ?? defaultTcpProbe,
+    // Iter 168: after `started`, give the sidecar 60s to actually
+    // bind the listen port. In practice this is sub-second on a
+    // warm image and a few seconds on a cold pull.
+    tcpProbeTimeoutSec: 60,
   });
 }
 

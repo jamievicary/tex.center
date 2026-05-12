@@ -329,7 +329,21 @@ Estimated iteration sequence (adjust as work unfolds):
   M8.pw.4 result, see slot just below) slid to iter 166+; the
   166_question came in first and discussion mode took precedence.
 
-- **Iter 166+ — Confirm M8.pw.4 result with the new gold-runner
+- **Iter 168 — Close cold-start TCP race in upstream resolver.**
+  *Done.* iter-167's M8.pw.4 still red. Live ws-proxy log for the
+  spec project `ec9bab00-…8198ef` showed `upstream-connect` →
+  `upstream-error: ECONNREFUSED fdaa:74:…:3001` at 14:18:21Z, with
+  the sidecar's `Server listening at http://[::]:3001` on
+  `286ded5c751948` arriving the same second. The dial races the
+  sidecar's `listen()` bind by sub-second after Fly reports the
+  Machine `started`. Fix: `upstreamResolver.ts` now runs a TCP
+  probe (`net.connect`-based) after `driveToStarted` and retries
+  every 500ms until accept or `tcpProbeTimeoutSec` (default 60s);
+  wired through `upstreamFromEnv.ts`. Lock-in:
+  `apps/web/test/upstreamResolver.test.mjs` case 10 (two
+  ECONNREFUSEDs then ok) and case 11 (probe budget=0 → reject).
+
+- **Iter 169+ — Confirm M8.pw.4 result with the new gold-runner
   arrangement.**
   Same shape as iter 164: read the deploy's live-pipeline result;
   if pdf-segment frames arrive, FREEZE-lift is ready (per `162_answer.md`
