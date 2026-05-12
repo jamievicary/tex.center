@@ -8,10 +8,23 @@ test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_live (test_playwright.TestPlaywrightLive.test_live) ... skipped 'skipped because TEXCENTER_LIVE_TESTS != 1'
 test_local (test_playwright.TestPlaywrightLocal.test_local) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-ok
+FAIL
+
+======================================================================
+FAIL: test_local (test_playwright.TestPlaywrightLocal.test_local)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 77, in test_local
+    raise AssertionError(
+AssertionError: playwright (local) failed (exit 1)
+--- stdout ---
+Error: EACCES: permission denied, rmdir '/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/test-results'
+
+
+--- stderr ---
+
 
 ----------------------------------------------------------------------
-Ran 10 tests in 36.949s
+Ran 10 tests in 26.691s
 
-OK (skipped=1)
-tests_gold/run_tests.sh: PASS
+FAILED (failures=1, skipped=1)

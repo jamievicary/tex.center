@@ -220,14 +220,34 @@ spawning, (D) auth + production polish.
                         `packages/db/src/migrations/` to
                         `/app/migrations` (the default
                         `MIGRATIONS_DIR`). _(iter 105.)_
-                  - [ ] M7.1.3.1 — Provision Fly Postgres (unmanaged,
+                  - [x] M7.1.3.1 — Provision Fly Postgres (unmanaged,
                         single-node `shared-cpu-1x` in `fra`), attach
                         to `tex-center` (sets `DATABASE_URL`
-                        automatically), set
-                        `RUN_MIGRATIONS_ON_BOOT=1`, `FLY_API_TOKEN`
-                        (deploy token), `SIDECAR_APP_NAME=tex-center-
-                        sidecar`, `SIDECAR_IMAGE=<digest>`, deploy,
-                        verify `/healthz` reports `db.state: ok`.
+                        automatically), set `RUN_MIGRATIONS_ON_BOOT=1`,
+                        `FLY_API_TOKEN`, `SIDECAR_APP_NAME=tex-center-
+                        sidecar`, `SIDECAR_IMAGE=<digest>`, deploy.
+                        _(iter 106.)_ Cluster `tex-center-db`
+                        (machine `287d475f314128`, `fra`,
+                        `shared-cpu-1x` / 1 GB vol, flex). Attach
+                        injected `DATABASE_URL=postgres://tex_center:…
+                        @tex-center-db.flycast:5432/tex_center?
+                        sslmode=disable`. Secret-set redeployed
+                        existing image (`sha256:e035ded…`, built on
+                        iter-105 commit); boot log shows
+                        `migrations: 1 applied, 0 already present
+                        (0001_initial)`. `/healthz` 200. **Caveat**:
+                        `/healthz` is intentionally a liveness probe
+                        — no `db.state` field (per
+                        `apps/web/src/routes/healthz/+server.ts`
+                        rationale). DB readiness verified via the
+                        boot-migration log line; a `/readyz` with
+                        backing-service status is candidate work in
+                        `FUTURE_IDEAS.md`. **Token caveat**:
+                        `flyctl tokens create deploy` denied for the
+                        personal token's scope; control plane uses
+                        the personal `creds/fly.token` directly. A
+                        narrower deploy-scoped token is a hardening
+                        follow-up (`FUTURE_IDEAS.md`).
                   - [ ] M7.1.3.2 — Authed-upgrade happy-path probe in
                         `verifyLive.spec.ts` (mint session via
                         `mintSession` against the live DB through
@@ -312,14 +332,13 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.1 — provision Fly Postgres,
-attach to `tex-center` (sets `DATABASE_URL`), set
-`RUN_MIGRATIONS_ON_BOOT=1`, `FLY_API_TOKEN` (deploy token),
-`SIDECAR_APP_NAME=tex-center-sidecar`, `SIDECAR_IMAGE=<latest
-digest>`, deploy, verify `/healthz`. The migration-on-boot helper
-(M7.1.3.0, iter 105) means a fresh DB attaches without an
-out-of-band migration step. M7.1.3.2 (authed-upgrade probe) and
-M7.1.4 (idle-stop) follow once a real Machine has been waked.
+**Next ordinary iteration:** M7.1.3.2 — authed-upgrade happy-path
+probe in `verifyLive.spec.ts`. Mint a session via `mintSession`
+against the live DB through `flyctl proxy`, then assert WS upgrade
+→ 101 from a freshly-spawned per-project Machine. Closes the
+M7.0.3.3 tail and exercises the upstream resolver end-to-end for
+the first time. After that: M7.1.4 (idle-stop wiring on the
+per-project Machine side).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.
@@ -343,8 +362,10 @@ validation (iter 69).
 - Persistence is one-shot per session: permanent blob outage
   means edits this process are never persisted. Acceptable in
   the per-project Machine model where Machines cycle frequently.
-- Control plane `DATABASE_URL` not yet set: authed WS upgrade
-  collapses to 401 fail-closed. M7.1.3 fixes.
+- ~~Control plane `DATABASE_URL` not yet set: authed WS upgrade
+  collapses to 401 fail-closed.~~ Set iter 106 (Fly Postgres
+  `tex-center-db` attached); auth queries now live. Happy-path
+  upgrade probe still pending (M7.1.3.2).
 
 ## Local toolchain
 

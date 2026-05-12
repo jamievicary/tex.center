@@ -120,3 +120,62 @@ End-to-end probe via `flyctl ssh console -a tex-center-sidecar
   idle stop is M7.3 on per-project Machines, not the shared sidecar.
 - The trial-stop seen at 21:28 on the original 21:22 boot was
   resolved by switching the org to a paid card (discussion 89).
+
+---
+
+# Live deploy state — Postgres (M7.1.3.1)
+
+Provisioned and attached at iteration 106 (2026-05-12).
+
+## Fly app
+
+- **App:** `tex-center-db` (unmanaged Fly Postgres, flex / Repmgr)
+- **Region:** `fra`
+- **Topology:** single node, `shared-cpu-1x`, 1 GB volume
+- **Machine:** `287d475f314128`
+- **Internal hostname:** `tex-center-db.flycast` (port 5432 proxy,
+  5433 direct)
+- **Image:** `flyio/postgres-flex:17.2`
+
+## Attachment
+
+`flyctl postgres attach tex-center-db --app tex-center` injected
+the secret on the control plane:
+
+```
+DATABASE_URL=postgres://tex_center:…@tex-center-db.flycast:5432/tex_center?sslmode=disable
+```
+
+Per-app role `tex_center` + database `tex_center` created by the
+attach command.
+
+## Companion control-plane secrets (set same iteration)
+
+| name                     | source                                                                  |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `DATABASE_URL`           | injected by `flyctl postgres attach`                                    |
+| `RUN_MIGRATIONS_ON_BOOT` | `1` — enables `runBootMigrations` (M7.1.3.0)                            |
+| `FLY_API_TOKEN`          | personal `creds/fly.token` (deploy-scoped token denied; see PLAN/IDEAS) |
+| `SIDECAR_APP_NAME`       | `tex-center-sidecar`                                                    |
+| `SIDECAR_IMAGE`          | `registry.fly.io/tex-center-sidecar@sha256:f31ef7be…`                   |
+
+## Verification
+
+```
+flyctl logs -a tex-center | grep migrations
+# → migrations: 1 applied, 0 already present (0001_initial)
+
+curl -s https://tex.center/healthz
+# → {"ok":true,"protocol":"tex-center-web-v1"}
+```
+
+`/healthz` is intentionally liveness-only; DB readiness is
+confirmed via the boot-migration log line above. A `/readyz` with
+`db.state` / `blobs.state` is queued in `FUTURE_IDEAS.md`.
+
+## Cluster credentials
+
+Superuser password captured at create time. **Re-save before
+losing access:** stored in `creds/fly.token`-adjacent notes is
+acceptable; do not commit. The per-app role used by the control
+plane is in the `DATABASE_URL` secret on `tex-center`.
