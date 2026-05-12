@@ -386,15 +386,22 @@ until this block lands. One slice per iteration.
             — happy, prior-cookie passthrough, allowlist-deny,
             email_verified=false, createSession-throws-500, http
             (Secure-attr omitted). _(iter 133.)_
-      - [ ] M8.pw.3.1 — `POST /auth/google/test-callback` route
+      - [x] M8.pw.3.1 — `POST /auth/google/test-callback` route
             gated on `TEST_OAUTH_BYPASS_KEY` env var (404 when
-            unset). Body: `{ idToken }`. Header
-            `X-Test-Bypass: <HMAC(body, key)>`. Server calls
-            `verifyGoogleIdToken` (real JWKS check) then
-            `finalizeGoogleSession`. Returns the same 302 →
-            `/projects` + Set-Cookie shape as the real callback.
-            Test-normal coverage via a pure orchestrator module so
-            we don't spin SvelteKit in unit tests.
+            unset). Body: `{ idToken }`. Header `X-Test-Bypass:
+            HMAC-SHA256(body, key)` lowercase hex; comparison is
+            `timingSafeEqual`. Server calls `verifyGoogleIdToken`
+            (real JWKS check) then `finalizeGoogleSession`. Same
+            302 → `/projects` + Set-Cookie shape as the real
+            callback. Pure orchestrator
+            `apps/web/src/lib/server/testOauthCallback.ts:
+            resolveTestCallback` covers HMAC gate, JSON shape, and
+            verify hand-off; route module is the thin wiring.
+            Unit-tested via
+            `apps/web/test/testOauthCallback.test.mjs` (11 cases:
+            happy, missing/malformed/wrong-key/wrong-body header,
+            empty key, body-not-JSON, missing/empty idToken,
+            verify-throws, finalize-passthrough). _(iter 134.)_
       - [ ] M8.pw.3.2 — `scripts/google-refresh-token.mjs`: one-
             shot helper that runs the Authorization Code + PKCE
             flow with `access_type=offline&prompt=consent` against
@@ -445,10 +452,12 @@ diagnosis. The deeper issue (verification surface gap) is
 addressed by the priority block above — see "Priority block
 (iter 131, discussion-revised)".
 
-**Next ordinary iteration:** M8.pw.3.1 — the test-only callback-
-finaliser route. M8.pw.3.0 (the `finalizeGoogleSession` extraction)
-landed iter 133. M7.4.2 and M7.2 still parked until the rest of the
-priority block lands.
+**Next ordinary iteration:** M8.pw.3.2 — `scripts/google-refresh-
+token.mjs` one-shot helper + `tests_gold/lib/src/mintGoogleIdToken.ts`
+refresh-token-grant adapter. M8.pw.3.0/3.1 (pure `finalizeGoogleSession`
+extraction + `POST /auth/google/test-callback` route) landed iter 133–
+134. M7.4.2 and M7.2 still parked until the rest of the priority
+block lands.
 
 **Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
