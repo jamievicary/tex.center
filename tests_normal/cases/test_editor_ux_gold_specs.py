@@ -23,6 +23,14 @@ GT_B = SPEC_DIR / "verifyLiveGt2InitialPdfSeeded.spec.ts"
 GT_C = SPEC_DIR / "verifyLiveGt3EditTriggersFreshPdf.spec.ts"
 GT_D = SPEC_DIR / "verifyLiveGt4SustainedTyping.spec.ts"
 
+# Iter 183 consolidated the duplicated WS-frame capture and
+# bounded canvas-painted poll into these shared fixture modules.
+# The wire-tag invariants (TAG_PDF_SEGMENT=0x20, TAG_CONTROL=0x10,
+# `framereceived` listener shape) live here now; specs assert by
+# importing `captureFrames` rather than redeclaring constants.
+WIRE_FRAMES = SPEC_DIR / "fixtures" / "wireFrames.ts"
+PREVIEW_CANVAS = SPEC_DIR / "fixtures" / "previewCanvas.ts"
+
 
 class TestGoldSpecsExist(unittest.TestCase):
     def test_all_four_files_present(self) -> None:
@@ -103,9 +111,13 @@ class TestGtBInitialPdfSeeded(unittest.TestCase):
         self.text = GT_B.read_text()
 
     def test_asserts_pdf_segment(self) -> None:
-        self.assertIn("TAG_PDF_SEGMENT", self.text)
-        self.assertIn("0x20", self.text)
-        self.assertIn("framereceived", self.text)
+        # Wire-tag invariant moved into `fixtures/wireFrames.ts`
+        # iter 183. Spec asserts the relationship via the shared
+        # `captureFrames` helper; the constants are checked
+        # centrally in TestWireFramesHelper below.
+        self.assertIn("captureFrames(", self.text)
+        self.assertIn('from "./fixtures/wireFrames.js"', self.text)
+        self.assertIn("pdfSegmentFrames", self.text)
 
     def test_does_not_type_into_editor(self) -> None:
         # The whole point of GT-B is the no-typing path. Any
@@ -144,8 +156,12 @@ class TestGtCEditTriggersFreshPdf(unittest.TestCase):
         # The overlap-error check must look at TAG_CONTROL frames,
         # not just text-search every payload (which would yield
         # false-negatives if the wire payload were ever base64'd).
-        self.assertIn("TAG_CONTROL", self.text)
-        self.assertIn("0x10", self.text)
+        # Iter 183 moved that filter into `fixtures/wireFrames.ts`
+        # (see TestWireFramesHelper for the tag-byte invariants);
+        # the spec consumes it via the destructured `overlapErrors`
+        # array returned from `captureFrames`.
+        self.assertIn("captureFrames(", self.text)
+        self.assertIn("overlapErrors", self.text)
 
 
 class TestGtDSustainedTyping(unittest.TestCase):
@@ -200,3 +216,158 @@ class TestGtDSustainedTyping(unittest.TestCase):
         # delay the keystrokes batch into a single Yjs update and
         # the test no longer exercises the coalescer.
         self.assertRegex(self.text, r"delay:\s*30")
+
+
+class TestWireFramesHelper(unittest.TestCase):
+    """Iter 183 extracted the duplicated WS-frame listener from
+    five live specs into `fixtures/wireFrames.ts`. The wire-tag
+    invariants (TAG_PDF_SEGMENT=0x20, TAG_CONTROL=0x10, the
+    `framereceived` listener, the `already in flight` overlap
+    sentinel, per-project URL filter) live here now."""
+
+    def setUp(self) -> None:
+        self.assertTrue(
+            WIRE_FRAMES.is_file(),
+            f"missing wire-frames helper at {WIRE_FRAMES}",
+        )
+        self.text = WIRE_FRAMES.read_text()
+
+    def test_exports_tag_constants(self) -> None:
+        # Authoritative tag bytes (mirror of `packages/protocol/`).
+        self.assertRegex(
+            self.text,
+            r"export\s+const\s+TAG_PDF_SEGMENT\s*=\s*0x20",
+        )
+        self.assertRegex(
+            self.text,
+            r"export\s+const\s+TAG_CONTROL\s*=\s*0x10",
+        )
+
+    def test_attaches_framereceived_listener(self) -> None:
+        # Listener shape that proves we observe the wire stream
+        # rather than poll DOM state.
+        self.assertIn('page.on("websocket"', self.text)
+        self.assertIn('ws.on("framereceived"', self.text)
+
+    def test_filters_per_project_url(self) -> None:
+        # Without this filter the listener would also pick up the
+        # control-plane WS and confuse the frame buckets.
+        self.assertIn("/ws/project/${projectId}", self.text)
+
+    def test_detects_overlap_error_sentinel(self) -> None:
+        # GT-C/D rely on the overlap-error bucket; the substring
+        # match is the one place the sentinel is hard-coded.
+        self.assertIn("already in flight", self.text)
+
+    def test_exports_capture_frames_function(self) -> None:
+        # The single primitive consumed by all five live specs.
+        self.assertRegex(
+            self.text,
+            r"export\s+function\s+captureFrames\s*\(",
+        )
+
+
+class TestPreviewCanvasHelper(unittest.TestCase):
+    """Iter 183 extracted the bounded canvas-painted poll (landed
+    iter 182 in two specs to fix the PDF.js paint race) into
+    `fixtures/previewCanvas.ts`. The anti-flake invariants
+    (re-locate each tick, swallow per-tick evaluate errors,
+    width/height==0 guard) live here now."""
+
+    def setUp(self) -> None:
+        self.assertTrue(
+            PREVIEW_CANVAS.is_file(),
+            f"missing preview-canvas helper at {PREVIEW_CANVAS}",
+        )
+        self.text = PREVIEW_CANVAS.read_text()
+
+    def test_exports_helper(self) -> None:
+        self.assertRegex(
+            self.text,
+            r"export\s+async\s+function\s+expectPreviewCanvasPainted\s*\(",
+        )
+
+    def test_uses_bounded_poll(self) -> None:
+        # The anti-flake primitive — must not be a single-shot
+        # `canvas.evaluate(...)`. Re-locates the canvas inside the
+        # poll (handles incremental re-renders replacing the
+        # element).
+        self.assertIn("expect", self.text)
+        self.assertIn(".poll(", self.text)
+        # Re-locator inside the poll body. If a future iter
+        # captures the locator once outside the poll, this regex
+        # stops matching.
+        self.assertRegex(
+            self.text,
+            r"\.poll\(\s*async\s*\([^)]*\)\s*=>\s*\{[\s\S]{0,400}"
+            r'\.locator\("\.preview canvas"\)',
+        )
+
+    def test_guards_width_height_zero(self) -> None:
+        # Without this guard, the helper would treat an unmounted
+        # 0×0 canvas as "blank" and emit a spurious failure.
+        self.assertRegex(
+            self.text,
+            r"c\.width\s*===\s*0\s*\|\|\s*c\.height\s*===\s*0",
+        )
+
+    def test_swallows_evaluate_errors(self) -> None:
+        # A canvas mid-replace throws on `evaluate`; the poll
+        # must catch and retry on the next tick.
+        self.assertIn(".catch(() => false)", self.text)
+
+
+class TestLiveSpecsUseHelpers(unittest.TestCase):
+    """All five live specs that watch the WS frame stream must
+    consume the shared `captureFrames` helper rather than
+    redeclare the listener inline. The single allowed
+    `TAG_PDF_SEGMENT`/`TAG_CONTROL` token site is the helper
+    file itself.
+    """
+
+    SPECS = [
+        SPEC_DIR / "verifyLiveFullPipeline.spec.ts",
+        SPEC_DIR / "verifyLiveFullPipelineReused.spec.ts",
+        SPEC_DIR / "verifyLiveGt2InitialPdfSeeded.spec.ts",
+        SPEC_DIR / "verifyLiveGt3EditTriggersFreshPdf.spec.ts",
+        SPEC_DIR / "verifyLiveGt4SustainedTyping.spec.ts",
+    ]
+
+    def test_each_spec_imports_capture_frames(self) -> None:
+        for spec in self.SPECS:
+            with self.subTest(spec=spec.name):
+                text = spec.read_text()
+                self.assertIn(
+                    'from "./fixtures/wireFrames.js"',
+                    text,
+                    f"{spec.name} must consume the shared wireFrames helper",
+                )
+                self.assertIn("captureFrames(", text)
+
+    def test_no_spec_redeclares_tag_constants(self) -> None:
+        # If a spec re-introduces `const TAG_PDF_SEGMENT = 0x20`
+        # the consolidation has eroded. The helper is the only
+        # tag-byte site.
+        pattern = r"const\s+TAG_(PDF_SEGMENT|CONTROL)\s*="
+        for spec in self.SPECS:
+            with self.subTest(spec=spec.name):
+                self.assertNotRegex(spec.read_text(), pattern)
+
+    def test_canvas_specs_use_helper(self) -> None:
+        # Specs that assert preview-canvas paint must use the
+        # bounded-poll helper, not a single-shot evaluate. Iter
+        # 181's flake came from a single-shot read; iter 182
+        # fixed two specs; iter 183 covered the rest.
+        canvas_specs = [
+            SPEC_DIR / "verifyLiveFullPipeline.spec.ts",
+            SPEC_DIR / "verifyLiveFullPipelineReused.spec.ts",
+            SPEC_DIR / "verifyLiveGt2InitialPdfSeeded.spec.ts",
+        ]
+        for spec in canvas_specs:
+            with self.subTest(spec=spec.name):
+                text = spec.read_text()
+                self.assertIn("expectPreviewCanvasPainted(", text)
+                self.assertIn(
+                    'from "./fixtures/previewCanvas.js"',
+                    text,
+                )

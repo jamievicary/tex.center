@@ -29,9 +29,7 @@
 // last so its typed body is appended after GT-C's single char.
 
 import { expect, test } from "./fixtures/sharedLiveProject.js";
-
-const TAG_PDF_SEGMENT = 0x20;
-const TAG_CONTROL = 0x10;
+import { captureFrames } from "./fixtures/wireFrames.js";
 
 const TYPING_BODY =
   "Coalescer probe " +
@@ -58,25 +56,11 @@ test.describe("live sustained typing (GT-D)", () => {
   }) => {
     test.setTimeout(420_000);
 
-    const pdfSegmentFrames: Buffer[] = [];
-    const overlapErrors: string[] = [];
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string") return;
-        if (payload.length === 0) return;
-        if (payload[0] === TAG_PDF_SEGMENT) {
-          pdfSegmentFrames.push(payload);
-          return;
-        }
-        if (payload[0] === TAG_CONTROL) {
-          const json = payload.subarray(1).toString("utf8");
-          if (json.includes("already in flight")) {
-            overlapErrors.push(json);
-          }
-        }
-      });
-    });
+    // Shared frame-capture helper (see `fixtures/wireFrames.ts`).
+    const { pdfSegmentFrames, overlapErrors } = captureFrames(
+      authedPage,
+      liveProject.id,
+    );
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 

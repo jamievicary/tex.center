@@ -34,13 +34,8 @@ import {
 
 import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { expect, test } from "./fixtures/authedPage.js";
-
-// `@tex-center/protocol` is not in the root workspace devDeps that
-// Playwright's transform sees — inline the single constant we need
-// rather than wire a fresh dependency just for this. The wire
-// format guarantees this byte is the `pdf-segment` frame tag (see
-// `packages/protocol/src/index.ts:TAG_PDF_SEGMENT`).
-const TAG_PDF_SEGMENT = 0x20;
+import { captureFrames } from "./fixtures/wireFrames.js";
+import { expectPreviewCanvasPainted } from "./fixtures/previewCanvas.js";
 
 test.describe("live full pipeline (M8.pw.4)", () => {
   let seeded: ProjectRow | null = null;
@@ -81,23 +76,11 @@ test.describe("live full pipeline (M8.pw.4)", () => {
     });
     seeded = project;
 
-    // Collect `pdf-segment` frames as they stream in. The
-    // listener must be attached before navigation so we don't
-    // miss the very first one. Playwright's `framereceived`
-    // payload is a `Buffer` (binary frame) or `string` (text
-    // frame); we only care about binary frames whose first byte
-    // is the PDF_SEGMENT tag.
-    const pdfSegmentFrames: Buffer[] = [];
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${project.id}`)) return;
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string") return;
-        if (payload.length === 0) return;
-        if (payload[0] === TAG_PDF_SEGMENT) {
-          pdfSegmentFrames.push(payload);
-        }
-      });
-    });
+    // Collect `pdf-segment` frames via the shared helper. The
+    // listener attaches before navigation so the very first frame
+    // (which can arrive as soon as the sidecar accepts the WS) is
+    // not missed.
+    const { pdfSegmentFrames } = captureFrames(authedPage, project.id);
 
     await authedPage.goto(`/editor/${project.id}`);
 
@@ -133,47 +116,10 @@ test.describe("live full pipeline (M8.pw.4)", () => {
 
     // The preview pane renders each PDF.js page as a `<canvas>`.
     // Assert the first canvas exists and contains at least one
-    // non-near-white pixel. Arrival of the `pdf-segment` frame
-    // above only proves the bytes reached the page — PDF.js
-    // parse + render is async after that, so a single-shot
-    // `evaluate` races the paint. Bounded poll is the right
-    // sync primitive (anti-flake: see iter 181 reused-spec
-    // failure, where the frame arrived but the canvas snapshot
-    // was still blank). Re-locate inside the poll so a canvas
-    // replaced by an incremental re-render is handled.
-    const canvas = authedPage.locator(".preview canvas").first();
-    await canvas.waitFor({ state: "attached", timeout: 30_000 });
-
-    await expect
-      .poll(
-        async () => {
-          return await authedPage
-            .locator(".preview canvas")
-            .first()
-            .evaluate((el: Element) => {
-              const c = el as HTMLCanvasElement;
-              const ctx = c.getContext("2d");
-              if (!ctx) return false;
-              if (c.width === 0 || c.height === 0) return false;
-              const { data } = ctx.getImageData(0, 0, c.width, c.height);
-              for (let i = 0; i < data.length; i += 4) {
-                const r = data[i]!;
-                const g = data[i + 1]!;
-                const b = data[i + 2]!;
-                const a = data[i + 3]!;
-                if (a === 0) continue;
-                if (r < 240 || g < 240 || b < 240) return true;
-              }
-              return false;
-            })
-            .catch(() => false);
-        },
-        {
-          timeout: 30_000,
-          message:
-            "preview canvas had no non-near-white pixel within 30s — PDF rendered blank or canvas tainted",
-        },
-      )
-      .toBe(true);
+    // non-near-white pixel via the shared bounded-poll helper
+    // (anti-flake primitive landed iter 182 — the `pdf-segment`
+    // frame's arrival only proves the bytes reached the page;
+    // PDF.js parse + render is async after that).
+    await expectPreviewCanvasPainted(authedPage);
   });
 });

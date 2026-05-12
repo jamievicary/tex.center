@@ -24,9 +24,7 @@
 // `liveProject` fixture (shared with GT-A/B/D).
 
 import { expect, test } from "./fixtures/sharedLiveProject.js";
-
-const TAG_PDF_SEGMENT = 0x20;
-const TAG_CONTROL = 0x10;
+import { captureFrames } from "./fixtures/wireFrames.js";
 
 test.describe("live edit triggers fresh PDF (GT-C)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -46,29 +44,13 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
   }) => {
     test.setTimeout(360_000);
 
-    const pdfSegmentFrames: Buffer[] = [];
-    const overlapErrors: string[] = [];
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string") return;
-        if (payload.length === 0) return;
-        if (payload[0] === TAG_PDF_SEGMENT) {
-          pdfSegmentFrames.push(payload);
-          return;
-        }
-        if (payload[0] === TAG_CONTROL) {
-          // Control frames are TAG_CONTROL byte + JSON. Cheaper
-          // than wiring `decodeFrame` from the protocol package
-          // into the Playwright transform path; we only need to
-          // detect the overlap-error sentinel substring.
-          const json = payload.subarray(1).toString("utf8");
-          if (json.includes("already in flight")) {
-            overlapErrors.push(json);
-          }
-        }
-      });
-    });
+    // Shared helper buckets pdf-segment frames and the
+    // "already in flight" overlap-error control frames (see
+    // `fixtures/wireFrames.ts`); attach before navigation.
+    const { pdfSegmentFrames, overlapErrors } = captureFrames(
+      authedPage,
+      liveProject.id,
+    );
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 

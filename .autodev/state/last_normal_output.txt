@@ -5,23 +5,23 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 79, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1s
+Done in 1.2s
 Scope: 6 of 7 workspace projects
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
-packages/protocol typecheck: Done
 packages/auth typecheck: Done
+packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778614863767 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778614863776 COMPLETED 728 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778615832517 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778615832527 COMPLETED 728 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -58,6 +58,18 @@ test_gt_a_gated (test_editor_ux_gold_specs.TestLiveGating.test_gt_a_gated) ... o
 test_gt_b_gated (test_editor_ux_gold_specs.TestLiveGating.test_gt_b_gated) ... ok
 test_gt_c_gated (test_editor_ux_gold_specs.TestLiveGating.test_gt_c_gated) ... ok
 test_gt_d_gated (test_editor_ux_gold_specs.TestLiveGating.test_gt_d_gated) ... ok
+test_canvas_specs_use_helper (test_editor_ux_gold_specs.TestLiveSpecsUseHelpers.test_canvas_specs_use_helper) ... ok
+test_each_spec_imports_capture_frames (test_editor_ux_gold_specs.TestLiveSpecsUseHelpers.test_each_spec_imports_capture_frames) ... ok
+test_no_spec_redeclares_tag_constants (test_editor_ux_gold_specs.TestLiveSpecsUseHelpers.test_no_spec_redeclares_tag_constants) ... ok
+test_exports_helper (test_editor_ux_gold_specs.TestPreviewCanvasHelper.test_exports_helper) ... ok
+test_guards_width_height_zero (test_editor_ux_gold_specs.TestPreviewCanvasHelper.test_guards_width_height_zero) ... ok
+test_swallows_evaluate_errors (test_editor_ux_gold_specs.TestPreviewCanvasHelper.test_swallows_evaluate_errors) ... ok
+test_uses_bounded_poll (test_editor_ux_gold_specs.TestPreviewCanvasHelper.test_uses_bounded_poll) ... ok
+test_attaches_framereceived_listener (test_editor_ux_gold_specs.TestWireFramesHelper.test_attaches_framereceived_listener) ... ok
+test_detects_overlap_error_sentinel (test_editor_ux_gold_specs.TestWireFramesHelper.test_detects_overlap_error_sentinel) ... ok
+test_exports_capture_frames_function (test_editor_ux_gold_specs.TestWireFramesHelper.test_exports_capture_frames_function) ... ok
+test_exports_tag_constants (test_editor_ux_gold_specs.TestWireFramesHelper.test_exports_tag_constants) ... ok
+test_filters_per_project_url (test_editor_ux_gold_specs.TestWireFramesHelper.test_filters_per_project_url) ... ok
 test_app_name (test_fly_toml.TestFlyToml.test_app_name) ... ok
 test_build_dockerfile_points_at_web (test_fly_toml.TestFlyToml.test_build_dockerfile_points_at_web) ... ok
 test_http_service_check_points_at_healthz (test_fly_toml.TestFlyToml.test_http_service_check_points_at_healthz) ... ok
@@ -178,7 +190,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 153 tests in 46.743s
+Ran 165 tests in 47.497s
 
 OK
 tests_normal/run_tests.sh: PASS

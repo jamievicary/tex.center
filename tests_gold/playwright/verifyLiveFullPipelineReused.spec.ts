@@ -46,12 +46,8 @@ import {
 } from "@tex-center/db";
 
 import { expect, test } from "./fixtures/authedPage.js";
-
-// Inlined for the same reason as the sibling spec: avoid pulling
-// `@tex-center/protocol` into the root workspace devDeps just for
-// one constant. Authoritative definition:
-// `packages/protocol/src/index.ts:TAG_PDF_SEGMENT`.
-const TAG_PDF_SEGMENT = 0x20;
+import { captureFrames } from "./fixtures/wireFrames.js";
+import { expectPreviewCanvasPainted } from "./fixtures/previewCanvas.js";
 
 // Fixed v4 UUID. The all-zero prefix makes it instantly
 // distinguishable from real user projects in logs and in the DB.
@@ -111,17 +107,7 @@ test.describe("live full pipeline reused (M8.pw.4 reused project)", () => {
 
     const projectId = REUSED_PROJECT_ID;
 
-    const pdfSegmentFrames: Buffer[] = [];
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${projectId}`)) return;
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string") return;
-        if (payload.length === 0) return;
-        if (payload[0] === TAG_PDF_SEGMENT) {
-          pdfSegmentFrames.push(payload);
-        }
-      });
-    });
+    const { pdfSegmentFrames } = captureFrames(authedPage, projectId);
 
     await authedPage.goto(`/editor/${projectId}`);
 
@@ -152,47 +138,15 @@ test.describe("live full pipeline reused (M8.pw.4 reused project)", () => {
       })
       .toBeGreaterThan(0);
 
-    // Bounded poll for the canvas paint — the `pdf-segment`
-    // frame's arrival only proves the bytes reached the page;
-    // PDF.js parse + render is async, so a single-shot
-    // `evaluate` races the paint. Iter 181 surfaced this as a
-    // flake on the reused (warm) path where the frame arrived
-    // immediately and the canvas was still blank when sampled.
-    // Re-locate inside the poll so a canvas replaced by an
-    // incremental re-render is handled.
-    const canvas = authedPage.locator(".preview canvas").first();
-    await canvas.waitFor({ state: "attached", timeout: 30_000 });
-
-    await expect
-      .poll(
-        async () => {
-          return await authedPage
-            .locator(".preview canvas")
-            .first()
-            .evaluate((el: Element) => {
-              const c = el as HTMLCanvasElement;
-              const ctx = c.getContext("2d");
-              if (!ctx) return false;
-              if (c.width === 0 || c.height === 0) return false;
-              const { data } = ctx.getImageData(0, 0, c.width, c.height);
-              for (let i = 0; i < data.length; i += 4) {
-                const r = data[i]!;
-                const g = data[i + 1]!;
-                const b = data[i + 2]!;
-                const a = data[i + 3]!;
-                if (a === 0) continue;
-                if (r < 240 || g < 240 || b < 240) return true;
-              }
-              return false;
-            })
-            .catch(() => false);
-        },
-        {
-          timeout: 30_000,
-          message:
-            "reused-project preview canvas had no non-near-white pixel within 30s — PDF rendered blank or canvas tainted",
-        },
-      )
-      .toBe(true);
+    // Bounded canvas-painted poll via the shared helper — iter 181
+    // surfaced the flake on the reused/warm path where the frame
+    // arrived immediately and a single-shot canvas snapshot was
+    // still blank. Iter 182 fixed it; iter 183 moved the primitive
+    // to `fixtures/previewCanvas.ts`.
+    await expectPreviewCanvasPainted(authedPage, {
+      message:
+        "reused-project preview canvas had no non-near-white pixel " +
+        "within timeout — PDF rendered blank or canvas tainted",
+    });
   });
 });

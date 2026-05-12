@@ -98,7 +98,11 @@ class TestReusedProjectSpec(unittest.TestCase):
         )
 
     def test_asserts_pdf_segment_frame(self) -> None:
-        # The wire-level proof the edit→compile→frame loop closed.
-        self.assertIn("TAG_PDF_SEGMENT", self.text)
-        self.assertIn("0x20", self.text)
-        self.assertIn("framereceived", self.text)
+        # Wire-tag invariant moved into `fixtures/wireFrames.ts`
+        # iter 183 (see `test_editor_ux_gold_specs.py`'s
+        # TestWireFramesHelper). The reused spec consumes it via
+        # the shared `captureFrames` helper rather than
+        # redeclaring the constant + listener inline.
+        self.assertIn("captureFrames(", self.text)
+        self.assertIn('from "./fixtures/wireFrames.js"', self.text)
+        self.assertIn("pdfSegmentFrames", self.text)

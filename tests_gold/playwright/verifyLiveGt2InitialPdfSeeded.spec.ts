@@ -22,8 +22,8 @@
 // `liveProject` fixture (shared with GT-A/C/D).
 
 import { expect, test } from "./fixtures/sharedLiveProject.js";
-
-const TAG_PDF_SEGMENT = 0x20;
+import { captureFrames } from "./fixtures/wireFrames.js";
+import { expectPreviewCanvasPainted } from "./fixtures/previewCanvas.js";
 
 test.describe("live initial PDF for seeded content (GT-B)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -43,17 +43,7 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
   }) => {
     test.setTimeout(300_000);
 
-    const pdfSegmentFrames: Buffer[] = [];
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string") return;
-        if (payload.length === 0) return;
-        if (payload[0] === TAG_PDF_SEGMENT) {
-          pdfSegmentFrames.push(payload);
-        }
-      });
-    });
+    const { pdfSegmentFrames } = captureFrames(authedPage, liveProject.id);
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 
@@ -70,26 +60,16 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
       })
       .toBeGreaterThan(0);
 
-    const canvas = authedPage.locator(".preview canvas").first();
-    await canvas.waitFor({ state: "attached", timeout: 30_000 });
-    const nonBlank = await canvas.evaluate((el: Element) => {
-      const c = el as HTMLCanvasElement;
-      const ctx = c.getContext("2d");
-      if (!ctx) return false;
-      const { data } = ctx.getImageData(0, 0, c.width, c.height);
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i]!;
-        const g = data[i + 1]!;
-        const b = data[i + 2]!;
-        const a = data[i + 3]!;
-        if (a === 0) continue;
-        if (r < 240 || g < 240 || b < 240) return true;
-      }
-      return false;
+    // Bounded canvas-painted poll via the shared helper. GT-B
+    // used to do a single-shot `canvas.evaluate(nonBlank)`, which
+    // is the same race iter 181 surfaced on fullpipeline/reused
+    // (the `pdf-segment` frame's arrival doesn't synchronise with
+    // PDF.js's async paint). Iter 183 consolidated all five live
+    // specs onto the iter-182 bounded-poll primitive.
+    await expectPreviewCanvasPainted(authedPage, {
+      message:
+        "seeded-template preview canvas had no non-near-white pixel " +
+        "within timeout — initial-compile PDF rendered blank",
     });
-    expect(
-      nonBlank,
-      "seeded-template preview canvas had no non-near-white pixel",
-    ).toBe(true);
   });
 });
