@@ -156,12 +156,27 @@ spawning, (D) auth + production polish.
                               `verifyLiveAuthed.spec.ts` (authed
                               `/projects` 200; anon `/projects` 302 → `/`).
                               7/7 live probes pass. _(iter 109.)_
-                        - [ ] M7.1.3.2.b — WS-upgrade-with-cookie probe
+                        - [~] M7.1.3.2.b — WS-upgrade-with-cookie probe
                               asserting upgrade → 101 from a real
-                              per-project Machine. Blocked on a cleanup
-                              path that destroys the spawned Machine (and
-                              its `machine_assignments` row) at probe
-                              end. Closes M7.0.3.3 tail.
+                              per-project Machine.
+                              - [x] M7.1.3.2.b.0 — Teardown helper
+                                    `tests_gold/lib/src/cleanupProjectMachine.ts`:
+                                    composes `MachinesClient.destroyMachine`
+                                    + `deleteMachineAssignment`; 404 from
+                                    destroy is "already gone" (success);
+                                    non-404 propagates and preserves the
+                                    row so the next iteration can retry.
+                                    Duck-typed interfaces keep it free of
+                                    an `apps/web` import. Unit-tested via
+                                    `cleanupProjectMachine.test.mjs`
+                                    (happy / no-assignment / 404 / 500).
+                                    _(iter 116.)_
+                              - [ ] M7.1.3.2.b.1 — Wire the helper into a
+                                    Playwright `live` spec that drives a
+                                    WS upgrade against `/ws/project/<id>`
+                                    with a minted session cookie,
+                                    asserts 101, and calls cleanup in
+                                    `afterAll`. Closes M7.0.3.3 tail.
                         - [x] M7.1.3.2.c — Prerender bug on `/`.
                               `+layout.ts` no longer defaults
                               `prerender = true`; every concrete page
@@ -249,9 +264,10 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.3.2.b (WS-upgrade-with-cookie probe
-+ Machine cleanup at probe end). After that: M7.1.4 (idle-stop wiring
-on per-project Machine side).
+**Next ordinary iteration:** M7.1.3.2.b.1 (Playwright `live` spec
+that drives the WS upgrade and uses the iter-116 cleanup helper in
+`afterAll`). After that: M7.1.4 (idle-stop wiring on per-project
+Machine side).
 
 Smaller alternatives if M7.1 hits a blocker:
 - Anything that doesn't require docker (S3 adapter M4.3.1 still
