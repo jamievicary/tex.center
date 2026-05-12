@@ -66,6 +66,25 @@ class TestSidecarDeployWorkflow(unittest.TestCase):
         with_ = checkouts[0].get("with") or {}
         self.assertIn(with_.get("submodules"), ("recursive", "true", True))
 
+    def test_checkout_supplies_submodule_token(self) -> None:
+        # vendor/supertex is a private repo on the same GitHub
+        # account; the default GITHUB_TOKEN only has access to the
+        # current repo, so a PAT is required to clone the submodule.
+        # Iter 151 discovered the sidecar workflow had been silently
+        # failing every run since at least iter 124 because of this.
+        steps = self.doc["jobs"]["deploy"]["steps"]
+        checkouts = [
+            s for s in steps if (s.get("uses") or "").startswith("actions/checkout@")
+        ]
+        with_ = checkouts[0].get("with") or {}
+        token = with_.get("token") or ""
+        self.assertIn(
+            "SUBMODULE_TOKEN",
+            token,
+            f"checkout must pass a PAT secret as `token:` to clone the "
+            f"private vendor/supertex submodule, got token={token!r}",
+        )
+
     def test_uses_setup_flyctl(self) -> None:
         steps = self.doc["jobs"]["deploy"]["steps"]
         uses = [s.get("uses", "") for s in steps]

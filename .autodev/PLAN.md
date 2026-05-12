@@ -67,11 +67,27 @@ Estimated iteration sequence (adjust as work unfolds):
 - **Iter 150 — Discussion-mode (leaked-subprocess wedge from
   iter 148).** *Done.* Answered `150_question.md`; no engineering.
   Renumbered the cutover + activation slices below.
-- **Iter 151 — Live cutover.** When iter 149 landed, the
-  paths-based CD trigger (`apps/sidecar/**`) rebuilt the
-  sidecar image at a fresh sha — the control plane will not pick
-  it up automatically because `SIDECAR_IMAGE` is still pinned to
-  the old sha. Steps:
+- **Iter 151 — Fix sidecar CD (it was silently broken).**
+  *Done.* Discovered the sidecar deploy workflow has been
+  failing since at least iter 124: `actions/checkout@v5` with
+  `submodules: recursive` was using the default GITHUB_TOKEN,
+  which has no access to the private `vendor/supertex` repo, so
+  every sidecar CD run since the supertex repo went private has
+  exited at the submodule clone step with `Repository not found`.
+  This means the iter-149 bind-host fix never reached the
+  production sidecar image. Fix: added `SUBMODULE_TOKEN` repo
+  Actions secret (PAT, `repo` scope, sourced from
+  `creds/github.token`) and passed it as `token:` on the checkout
+  step. Lock-in:
+  `tests_normal/cases/test_deploy_sidecar_workflow.py::test_checkout_supplies_submodule_token`.
+  The harness commit will trigger CD with the fix in place; the
+  new sidecar image will be built at HEAD which already includes
+  iter 149.
+
+- **Iter 152 — Live cutover (was 151).** Once the sidecar CD
+  triggered by iter 151's commit completes successfully (gh run
+  for `Deploy sidecar to Fly` on the iter-151 commit, expected
+  ~10–14 min), do the cutover. Steps:
   (1) `flyctl image show -a tex-center-sidecar` (one-shot) for
   the latest sha; (2) `flyctl secrets set
   SIDECAR_IMAGE=registry.fly.io/tex-center-sidecar@sha256:<new>
@@ -93,13 +109,13 @@ Estimated iteration sequence (adjust as work unfolds):
   paired with an explicit kill before iteration end. Never pipe
   such a command into a downstream that waits for EOF (`… | tail
   -N`, `… | head`). That pipeline shape is what wedged iter 148.
-- **Iter 152 — Activate M8.pw.4 as a hard deploy gate.** Provision
+- **Iter 153 — Activate M8.pw.4 as a hard deploy gate.** Provision
   the test OAuth client (operator step — needs human in GCP
   console), push `TEST_OAUTH_BYPASS_KEY` via `flyctl secrets
   set`, export `TEXCENTER_FULL_PIPELINE=1`, wire the spec into
   the deploy workflow so no operator-gated tests remain.
 
-After iter 152 passes green automatically, the freezes above may
+After iter 153 passes green automatically, the freezes above may
 be lifted via an explicit edit here.
 
 ## 2. Per-area current state

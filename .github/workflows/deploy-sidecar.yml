@@ -46,6 +46,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
+          # vendor/supertex is a private repo. The default
+          # GITHUB_TOKEN only has access to this repo, so we need a
+          # PAT (`SUBMODULE_TOKEN`, scope `repo`) to clone it.
+          # Without this the sidecar build silently stops triggering
+          # CD — discovered iter 151 after the iter-149 bind-host fix
+          # never reached production.
+          token: ${{ secrets.SUBMODULE_TOKEN }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only --no-public-ips -a tex-center-sidecar --config apps/sidecar/fly.toml .
         env:
