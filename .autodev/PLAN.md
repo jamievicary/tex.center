@@ -191,12 +191,23 @@ spawning, (D) auth + production polish.
                         dialled. `BootOptions.resolveUpstream`
                         forwards to the proxy; fallback path is
                         unchanged static envvar. _(iter 103.)_
-                  - [ ] M7.1.2.1 — Wire `createUpstreamResolver` in
+                  - [x] M7.1.2.1 — Wire `createUpstreamResolver` in
                         `server.ts` gated on `FLY_API_TOKEN` +
                         `SIDECAR_APP_NAME` + `SIDECAR_IMAGE`; falls
-                        back to static envvar if absent. Cover via
-                        a small integration test booting `boot()`
-                        with a stub `MachinesClient`.
+                        back to static envvar if absent. _(iter
+                        104.)_ Factored as
+                        `apps/web/src/lib/server/upstreamFromEnv.ts`
+                        with injectable
+                        `makeMachinesClient`/`makeStore` deps so the
+                        helper can be unit-tested without a db or
+                        the live Fly API. `MachineConfig` carries
+                        `image` from `SIDECAR_IMAGE` plus
+                        `auto_destroy: false`, `restart:
+                        on-failure`; `SIDECAR_PORT` defaults to
+                        3001, `SIDECAR_REGION` to `fra`. Stubs are
+                        not constructed when env is incomplete
+                        (otherwise missing `DATABASE_URL` would
+                        crash the fallback path at boot).
             - [ ] M7.1.3 — `DATABASE_URL` + `FLY_API_TOKEN` secrets
                   on the control plane; deploy; extend
                   `verifyLive.spec.ts` with a happy-path
@@ -279,14 +290,14 @@ spawning, (D) auth + production polish.
 
 ## Current focus
 
-**Next ordinary iteration:** M7.1.2.1 — wire the resolver into
-`server.ts`. The pure resolver landed in iter 103
-(`upstreamResolver.ts`); the production entry still falls back to
-the static envvar upstream because the secrets (`FLY_API_TOKEN`,
-`SIDECAR_APP_NAME`, `SIDECAR_IMAGE`) aren't set on the control
-plane yet. M7.1.2.1 plumbs the construction conditional on env;
-M7.1.3 deploys + extends `verifyLive.spec.ts`, M7.1.4 closes
-idle-stop.
+**Next ordinary iteration:** M7.1.3 — set `DATABASE_URL` and the
+sidecar/Fly env vars (`FLY_API_TOKEN`, `SIDECAR_APP_NAME`,
+`SIDECAR_IMAGE`) as Fly secrets on the control plane; deploy;
+extend `verifyLive.spec.ts` with an authed-upgrade happy-path
+probe. M7.1.2 / M7.1.2.1 are landed: the production entry now
+builds a per-project resolver when those vars are present and
+falls back to the static envvar upstream otherwise. M7.1.4
+(idle-stop) follows once a real Machine has been waked end-to-end.
 
 Smaller alternatives if M7.1 hits a blocker:
 - Wiring `awaitPdfStable` once a streaming compile path exists.

@@ -16,7 +16,10 @@ import { handler } from "./handler.js";
 
 import { boot, parsePort } from "./lib/server/boot.js";
 import { getDb } from "./lib/server/db.js";
+import { MachinesClient } from "./lib/server/flyMachines.js";
 import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
+import { dbMachineAssignmentStore } from "./lib/server/upstreamResolver.js";
+import { buildUpstreamFromEnv } from "./lib/server/upstreamFromEnv.js";
 import { makeSessionAuthoriser } from "./lib/server/wsAuth.js";
 import { getSessionWithUser } from "@tex-center/db";
 
@@ -48,12 +51,24 @@ const authoriseUpgrade =
       })
     : async () => false;
 
+// Per-project resolver: when the Fly + sidecar env vars are all
+// set, construct a `MachinesClient` + db-backed assignment store and
+// route each `/ws/project/<id>` upgrade to that project's Machine.
+// Otherwise fall through to the static `SIDECAR_HOST`/`SIDECAR_PORT`
+// upstream (M7.0 shared-sidecar path).
+const resolveUpstream = buildUpstreamFromEnv(process.env, {
+  makeMachinesClient: ({ token, appName }) =>
+    new MachinesClient({ token, appName }),
+  makeStore: () => dbMachineAssignmentStore(getDb().db),
+});
+
 const { server } = boot({
   handler,
   host,
   port,
   env: process.env,
   authoriseUpgrade,
+  ...(resolveUpstream ? { resolveUpstream } : {}),
 });
 
 server.on("listening", () => {
