@@ -69,6 +69,24 @@ try {
   const allUsers = await db.select().from(users);
   assert.equal(allUsers.length, 2);
 
+  // --- regression (iter 131): same email + different google_sub --
+  // The iter-109 deploy-verification seed pre-inserts a placeholder
+  // google_sub against the live email; the first real OAuth callback
+  // arrives with the same email but a different google_sub. Before
+  // 0002_drop_users_email_unique, that combination hit
+  // `UNIQUE (email)` before the `ON CONFLICT (google_sub)` branch
+  // and 500'd the callback. After the migration, the new google_sub
+  // creates a fresh row alongside the placeholder.
+  const sameEmail = await findOrCreateUserByGoogleSub(db, {
+    googleSub: 'google-sub-C',
+    email: 'a-new@example.com', // matches `refreshed.email` above
+    displayName: 'C',
+  });
+  assert.notEqual(sameEmail.id, created.id, 'different google_sub → different row');
+  assert.equal(sameEmail.email, 'a-new@example.com');
+  const afterDupEmail = await db.select().from(users);
+  assert.equal(afterDupEmail.length, 3);
+
   // --- insertSession ---------------------------------------------
   const exp = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const session = await insertSession(db, {
@@ -163,7 +181,7 @@ try {
 
   // Users untouched by session sweep.
   const usersAfter = await db.select().from(users);
-  assert.equal(usersAfter.length, 2);
+  assert.equal(usersAfter.length, 3);
 
   console.log('users + sessions PGlite test: OK');
 } finally {

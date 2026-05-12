@@ -36,7 +36,7 @@ export interface TableSpec {
 
 export interface UserRow {
   id: string;            // uuid
-  email: string;         // unique; only jamievicary@gmail.com today
+  email: string;         // allowlisted; uniqueness enforced by `google_sub`, not `email`
   googleSub: string;     // OAuth subject identifier
   displayName: string | null;
   createdAt: Date;

@@ -21,7 +21,7 @@ const ts = (name: string) =>
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(),
-  email: text('email').notNull().unique(),
+  email: text('email').notNull(),
   googleSub: text('google_sub').notNull().unique(),
   displayName: text('display_name'),
   createdAt: ts('created_at'),

@@ -342,9 +342,75 @@ spawning, (D) auth + production polish.
             check + cookie-injection authed tests cover the same
             surface).
 
+## Priority block (iter 131, discussion-revised)
+
+Two production-down OAuth-callback bugs in 24h (iter 129 `jose`
+module-not-found, iter 131 user-upsert email-unique collision)
+exposed that the current verification surface — `verifyLive.spec.ts`
++ cookie-injected authed probes — leaves the full callback path
+untested. discussion/131 promotes the following over the open M7.x
+work; do **not** start M7.4.2, M7.2, or refactor/plan-review iters
+until this block lands. One slice per iteration.
+
+- [ ] **M8.smoke.0** — Build-time runtime-image smoke. New job in
+      `.github/workflows/deploy.yml` (or a prerequisite workflow):
+      `docker build` `apps/web/Dockerfile`, `docker run` with
+      placeholder env vars, `curl` every server endpoint and
+      assert no `ERR_MODULE_NOT_FOUND`-class response. Endpoints:
+      `/`, `/healthz`, `/readyz`, `/auth/google/start`,
+      `/auth/google/callback?error=fake`, `POST /auth/logout`,
+      `/projects`, `/editor/abc123`. Catches the iter-129 class
+      structurally. Open question for the implementing iter: the
+      runtime entrypoint calls `bootMigrations.ts` before the
+      listener binds, so a placeholder `DATABASE_URL` blocks; pick
+      `RUN_MIGRATIONS_ON_BOOT=0` or stub the resolve target.
+- [ ] **M8.pw.3** — Real OAuth round-trip via a dedicated Google
+      Cloud service account with the OAuth client pre-consented.
+      Test obtains an ID token (refresh-token or JWT exchange),
+      constructs a synthetic `code` mirroring the real callback
+      payload, presents it to `/auth/google/callback` with a
+      matching `state` cookie, asserts 302 → `/projects` and the
+      `tc_session` passes the session hook. Wired into
+      `verifyLive.spec.ts` as a deploy gate. This is the test that
+      would have caught both production-down bugs.
+- [ ] **M8.pw.4** — Full product-loop Playwright spec. With
+      pw.3's service-account auth: sign in, create project, type a
+      minimal LaTeX source, wait for a `pdf-segment` WS frame,
+      assert PDF.js rendered a non-blank canvas. Gated by
+      `TEXCENTER_FULL_PIPELINE=1` so it doesn't beat on prod every
+      iter, but mandatory on any deploy-touching iter. Subsumes
+      M8.acceptance.
+
 ## Current focus
 
-**Iter 129 (discussion mode) — VERIFIED LIVE iter 130.**
+**Iter 131 (discussion mode).** Second production-down OAuth-
+callback bug in 24h. Real PG error (uncovered by reading the live
+`users` table directly, not by `flyctl logs` — its 100-line buffer
+had rolled past): `UNIQUE (email)` collision between the iter-109
+seed row (`google_sub = 'probe-jamievicary-livefix'`,
+`email = 'jamievicary@gmail.com'`) and the real OAuth callback
+(same email, real google_sub). `ON CONFLICT (google_sub)` couldn't
+fire — the new sub didn't match — so the `unique_email_key`
+constraint raised before the conflict branch. Two fixes landed:
+
+1. One-shot UPDATE on live DB aligned the seed row's `google_sub`
+   to the real value; next OAuth attempt hits the conflict-DO-
+   UPDATE branch.
+2. `0002_drop_users_email_unique.sql` removes the redundant
+   constraint; `drizzle.ts:24` dropped `.unique()`. PGlite test
+   pins the regression (same email + different google_sub →
+   succeeds). Applies to live on next deploy via the existing
+   `RUN_MIGRATIONS_ON_BOOT=1` path.
+
+See `.autodev/discussion/131_{question,answer}.md` for full
+diagnosis. The deeper issue (verification surface gap) is
+addressed by the priority block above — see "Priority block
+(iter 131, discussion-revised)".
+
+**Next ordinary iteration:** M8.smoke.0 (build-time runtime-image
+smoke). M7.4.2 and M7.2 are parked until the priority block lands.
+
+**Prior callback fix (iter 129) — VERIFIED LIVE iter 130.**
 Production-down: `/auth/google/callback` returned 500 because
 `apps/web/Dockerfile`'s runtime stage shipped no `node_modules`,
 and adapter-node leaves `jose` (Google ID-token JWKS verify) as
