@@ -174,6 +174,48 @@ Remaining slices:
        plumbing **only if** the coalescer-trace turned out
        unnecessary in retrospect (it likely did — keep it for now
        as a passive diagnostic).
+  **Iter 225 — local fast repro built, both probes pass (negative
+  finding).** New gold case
+  `tests_gold/lib/test/supertexColdNewpageCrash.test.mjs` spawns a
+  real `supertex --daemon` against the `MAIN_DOC_HELLO_WORLD` seed
+  and runs two probes:
+    (a) steady ramp — 20 rounds × (+1 `\newpage NN`, `recompile,T`)
+        at 500 ms cadence;
+    (b) coalesced big-paste — baseline, then +15 `\newpage` lines in
+        one delta (modelling what the sidecar coalescer presents
+        after a slow cold first compile), then 5 single-newpage
+        follow-up rounds.
+  **Both probes PASS.** The user's literal stdin sequence does NOT
+  trigger code 134 in a local headless daemon. The bug requires
+  *something the live environment adds beyond the in-process stdin
+  protocol* — step 1 of the iter-224 plan is therefore complete but
+  does not produce a debuggable repro.
+  **Revised next-iteration plan (hypotheses, in cheapest-to-probe
+  order):**
+    1. **R2 chunk hydration delta.** Pre-create `chunks/` with the
+       artefacts the sidecar's hydrate path would leave for a
+       brand-new project (it restores from R2 even when R2 has
+       nothing for this project id) and re-run the local probes.
+       Cheap to try.
+    2. **Yjs hydration racing `writeMain`.** Instrument `runCompile`
+       with a pre/post source-bytes assertion; if the source mutates
+       *during* the daemon's `recompile,T` round (because a Yjs
+       chunk applied to the live doc mid-compile), the daemon may
+       see a torn read of `main.tex`. Either capture the race in a
+       new local probe (spawn a write thread mid-`recompile,T`) or
+       add a sidecar-side mutex.
+    3. **CPU/memory pressure on Fly's shared-cpu-1x.** A local probe
+       can run inside `taskset -c 0` + `prlimit --as=$((1024*1024*1024))`
+       to simulate the 1 vCPU / 1 GB Fly Machine. Worth trying
+       only if (1) and (2) come up empty.
+    4. **Subtle source-byte difference.** Diff the live cold-start
+       transcript's main.tex against the local probe's main.tex
+       at the moment of the supposed line 56 / 163 / 187 inspection;
+       if the user's typed source includes characters our local
+       Playwright path doesn't, that's a low-effort gap to close.
+  Local probe stays green as a regression lock on the
+  "stdin-only sequence doesn't crash" invariant.
+
   Pre-iter-224 prior framings retained for archival reference:
   the iter-217..219 stdin-only / file-watcher narrative was
   correct (supertex IS stdin-driven only). The iter-220..223
