@@ -106,6 +106,18 @@ Remaining slices:
   the warm-doc body-edit input shape, bump submodule, redeploy
   sidecar. See iter-229 findings and `supertexColdNewpageCrash`
   for the regression-lock pattern to mirror.
+  Iter 230: local headless repro landed —
+  `tests_gold/lib/test/supertexWarmDocBodyEditNoop.test.mjs` +
+  `tests_gold/cases/test_supertex_warm_doc_body_edit_noop.py`.
+  Drives `supertex --daemon` directly through
+  `SupertexDaemonCompiler` with the GT-D `Coalescer probe …`
+  typing build-up followed by GT-5's `\section{New Section}`
+  insertion; deterministically surfaces 5 consecutive silent
+  no-op rounds starting at `sourceLen≈190` once the body text
+  outruns the last upstream checkpoint. PASS expected once the
+  upstream fix lands; until then this is the upstream regression
+  lock. Human will perform the upstream supertex fix
+  separately — autodev is halted by upstream blocker.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
