@@ -14,19 +14,23 @@ routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
 The remaining user-visible regression is **edit→preview**: live
-GT-3 and GT-5 are RED by design. Sidecar-side fallback that masked
-the bug was removed at iter 189; the live failure mode is
-`compile-status running` → `idle` with **no** `pdf-segment` frame.
-Iter 198 local probes confirmed the iter-724 `--daemon` protocol
-emits the expected `[rollback K] → [I+1.out]…[K.out] → [round-done]`
-sequence for both 1-page and 2-page fixtures, so the live failure
-is a *runtime* divergence (one of the three gates in
-`vendor/supertex/tools/supertex_daemon.c:1100-1260` returning
-WARN), not a protocol-shape divergence. Iter 199 shipped stderr +
-parsed-event forwarding to `process.stderr` from
-`apps/sidecar/src/compiler/supertexDaemon.ts` so the next live gold
-run produces `[supertex-daemon stderr]` and `[supertex-daemon
-event]` lines in Fly logs to identify which gate fires.
+GT-3 and GT-5 are RED by design. Iter 202 grep of post-iter-199 Fly
+logs confirms **Path 2** is the live failure mode:
+
+```
+supertex: WARN no usable rollback target for .../main.tex@73
+  (checkpoint=1 resumed_pid=-1)
+[supertex-daemon event] round-done
+```
+
+i.e. `process_event`'s `select_for` returns `eff_n=1` but the
+selected checkpoint's frozen sibling is gone (`resumed_pid=-1`),
+fired in `supertex_daemon.c:1230-1238` (handshake-mode `recompile,N`
+driver). The handshake path emits a bare `[round-done]` with **no
+recovery**, while the *post-handshake* watch-loop path
+(supertex_daemon.c:1695-1702) recovers from the same condition via
+iter-711's `WATCH_LOOP_RECOMPILE_RC` → in-process recompile. The
+asymmetry is the bug. Full diagnosis in `.autodev/logs/202.md`.
 
 ## 2. Milestones
 
@@ -50,30 +54,23 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — diagnose live edit→preview failure mode.** Blocks
-  live GT-3 and GT-5. Iter 198 confirmed the iter-724 daemon
-  protocol works locally; iter 199 shipped stderr+event
-  forwarding from `apps/sidecar/src/compiler/supertexDaemon.ts`
-  to `process.stderr` (prefixes `[supertex-daemon stderr] ` and
-  `[supertex-daemon event] `). Next iteration: run live gold
-  (after the sidecar image redeploys), capture Fly logs with
-  `flyctl logs -a <project-machine>` under the leaked-subprocess
-  hygiene rules below, grep for the new prefixes across a GT-3
-  failure window, and decide between three sidecar paths:
-    1. **path 1 (no edit detected)** — `run_baseline_diff` missed
-       the edit; upstream PR.
-    2. **path 2 (no usable rollback target)** — `run_process_event`
-       returns non-zero or `resumed_pid <= 0`; daemon emits
-       `[round-done]` only with a WARN line. Sidecar already short-
-       circuits correctly. Either an upstream PR or pre-warming
-       checkpoints, depending on root cause in WARN.
-    3. **path 3 (`wait_for_resumed` non-zero)** — `[rollback K]
-       [round-done]` with no chunks. Sidecar's current empty-
-       segments short-circuit treats this as no-op; the fix is in
-       `collectRound` in `apps/sidecar/src/compiler/supertexDaemon
-       .ts:283-307` to either re-ship the prior `1..K`/skip the
-       segment, or surface as an explicit error. Behaviour-
-       byte-identical to last good segment from the user's PoV.
+- **M7.4.x — upstream supertex_daemon.c recovery for handshake
+  `recompile,N`.** Blocks live GT-3 and GT-5. Diagnosis closed
+  in iter 202 (see `.autodev/logs/202.md`): Path 2 confirmed
+  live. Fix: mirror iter-711's `WATCH_LOOP_RECOMPILE_RC` →
+  in-process recompile recovery from the post-handshake watch
+  loop into the handshake-mode `recompile,N` driver's
+  no-usable-rollback else-branch
+  (`vendor/supertex/tools/supertex_daemon.c:1230-1238`). After
+  the recompile, discard old daemon-dir chunks and re-emit from
+  page 1, then close the round with `[round-done]`. Sidecar
+  layer needs no change — `assembleSegment` consumes the
+  recompile chunks just as it consumes a normal-rollback's
+  chunks. Workflow: commit in `vendor/supertex/` submodule
+  (`jamievicary/supertex` upstream), push, bump submodule
+  pointer in this repo. Pair with a unit test in
+  `test_supertex_daemon_real` driving the `recompile,N` path
+  through a forced `resumed_pid=-1`.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
