@@ -191,6 +191,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_debug_toasts_toggle(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "debugToastsToggle.test.mjs")
 
+    def test_web_editor_marks(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "editorMarks.test.mjs")
+
     def test_db_schema(self) -> None:
         _run_tsx(ROOT / "packages" / "db" / "test" / "schema.test.mjs")
 

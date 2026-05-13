@@ -17,6 +17,7 @@
     initDebugFlag,
     onDebugKeyShortcut,
   } from "$lib/debugToasts";
+  import { EDITOR_ROUTE_MOUNTED, markOnce } from "$lib/editorMarks";
 
   let { data } = $props();
 
@@ -45,6 +46,7 @@
   let detachKey: (() => void) | null = null;
 
   onMount(() => {
+    markOnce(EDITOR_ROUTE_MOUNTED);
     debug = initDebugFlag(
       new URLSearchParams(window.location.search),
       window.localStorage,

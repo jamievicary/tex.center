@@ -122,6 +122,18 @@ Single iteration. Local gold: drag → reload → widths persist.
   → Yjs sync complete → first text paint → first pdf-segment.
   Surface via iter-187 `?debug=1` toast fan-out. Local gold
   asserts mark ordering + monotonic timestamps.
+  - Iter 206 scaffolded: `apps/web/src/lib/editorMarks.ts`
+    exports name constants for all five marks plus a `markOnce(name)`
+    helper that guards against re-firing and SSR/no-Performance
+    environments; editor page wires `EDITOR_ROUTE_MOUNTED` in
+    `onMount`.
+  - Remaining: wire `EDITOR_WS_OPEN` (first 'connected' snapshot
+    from WsClient), `EDITOR_YJS_HYDRATED` (first `snapshot.hydrated`
+    true), `EDITOR_FIRST_TEXT_PAINT` (first non-null Y.Text bound
+    to the CodeMirror Editor — likely an effect when `text` first
+    flips non-null), `EDITOR_FIRST_PDF_SEGMENT` (first non-null
+    `snapshot.pdfBytes`). Then add the debug-toast bridge and the
+    local ordering spec.
 - **M13.2** single highest-impact fix indicated by M13.1 data.
   Likely overlaps M7.0.2 shared-sidecar pool if cold-start
   dominates; in that case M13.2 may collapse into M7.0.2
