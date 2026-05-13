@@ -1,9 +1,6 @@
 # tex.center — Plan
 
-Cron: `N%10==0` refactor, `N%10==1` plan-review. Iter 192 owes a
-refactor cron (190 deferred to fix the iter-189 gold regression;
-no further defer budget without a separately-justified critical
-bug).
+Cron: `N%10==0` refactor, `N%10==1` plan-review.
 
 ## 1. Current state
 
@@ -18,23 +15,34 @@ into the topbar (regression-locked).
 
 The remaining user-visible regression is **edit→preview**: live
 GT-3 and GT-5 are RED by design. Sidecar-side fallback that masked
-the bug was removed at iter 189; the live failure mode is now
+the bug was removed at iter 189; the live failure mode is
 `compile-status running` → `idle` with **no** `pdf-segment` frame.
-Root cause is upstream: supertex `--daemon` `process_event`
-rollback is a no-op when it finds no usable checkpoint after a
-post-initial-compile edit.
+Iter 198 local probes confirmed the iter-724 `--daemon` protocol
+emits the expected `[rollback K] → [I+1.out]…[K.out] → [round-done]`
+sequence for both 1-page and 2-page fixtures, so the live failure
+is a *runtime* divergence (one of the three gates in
+`vendor/supertex/tools/supertex_daemon.c:1100-1260` returning
+WARN), not a protocol-shape divergence. Iter 199 shipped stderr +
+parsed-event forwarding to `process.stderr` from
+`apps/sidecar/src/compiler/supertexDaemon.ts` so the next live gold
+run produces `[supertex-daemon stderr]` and `[supertex-daemon
+event]` lines in Fly logs to identify which gate fires.
 
 ## 2. Milestones
 
 ### M9.editor-ux — live editor UX bugs (TDD via gold)
 
 Done and locked: clickable logo, no-flash editor load, compile
-coalescer, sustained-typing safety, toast store + component
+coalescer (extracted to `apps/sidecar/src/compileCoalescer.ts`
+iter 200), sustained-typing safety, toast store + component
 scaffold, toast consumers for `file-op-error` and compile errors,
 debug-mode toggle (URL/localStorage/Ctrl+Shift+D) with protocol
 fan-out via `WsDebugEvent`. Sidecar `assembleSegment` directory-
 scan fallback removed; `compile()` short-circuits to
-`{ segments: [] }` on a no-op round.
+`{ segments: [] }` on a no-op round. Gold restructure (iter 197):
+`sharedLiveProject` runs a 180s warm-up to first `pdf-segment`,
+per-spec polls trimmed so GT-3/GT-5 RED fast (~10s) instead of
+~5min.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
@@ -42,53 +50,32 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M9.gold-restructure — warm-up vs per-spec timeouts — DONE (iter 197).**
-  `sharedLiveProject` now runs a one-shot warm-up after `createProject`:
-  mints a session, opens an authed `BrowserContext`, navigates to
-  `/editor/<id>`, and waits up to 180_000 for an initial `pdf-segment`
-  frame on the project WS (filtered via the existing `TAG_PDF_SEGMENT`
-  constant), logging elapsed-ms to stderr as a cold-start metric.
-  Per-spec polls retargeted: GT-1 cmContent attach 120s→10s; GT-2/3/4/5
-  initial-frame polls 240s→5s; GT-3 post-edit poll 60s→10s; GT-5
-  `expectPreviewCanvasChanged` 60s→10s; spec `setTimeout` envelopes
-  shrunk to match. GT-2 retained as a fresh-page hydrate re-check.
-  Expectation: live GT-3 / GT-5 still RED on the iter-724 daemon
-  protocol gap (M7.4.x), but fail in ~10s instead of ~5min.
-- **M7.4.x — sidecar adapts to iter-724 daemon protocol (iter 198).**
-  Deferred one iteration behind M9.gold-restructure because the
-  diagnostic loop here is dominated by gold-suite wallclock; with
-  fast failure in place this work becomes ~10× cheaper to
-  iterate on. Blocks live GT-3 and GT-5. The iter-189 "upstream
-  `process_event` no-rollback fix" framing is superseded: per
-  `.autodev/discussion/195_question.md` + `195_answer.md`, the
-  upstream protocol now signals rollback explicitly via
-  `[rollback I]` followed by `[I+1.out]…[K.out]`, and the submodule
-  has been advanced 702→724. `apps/sidecar/Dockerfile` already
-  rebuilds `supertex` from the submodule on every image build, so
-  no binary bump is needed — shipping a fresh image picks up the
-  new daemon. Iter-194 `targetPage` / edit-byte-distribution
-  hypotheses are also superseded. Iter-198 goal:
-  (1) build verification — `make -C vendor/supertex` locally and
-  spawn `--daemon` against a fixture to capture one recompile-
-  after-edit round; (2) diagnose which of the three gates in
-  `vendor/supertex/tools/supertex_daemon.c:1100-1260` (no-edit /
-  `run_process_event` no rollback target / `wait_for_resumed`
-  failure) the live failure hits, by running gold against the
-  rebuilt binary and inspecting daemon stderr. The iter-after
-  either tightens `collectRound` in `apps/sidecar/src/compiler/
-  supertexDaemon.ts:283-307` (a `[rollback K]` followed by
-  `[round-done]` with no chunks currently still trips the empty-
-  segments short-circuit, the one new failure mode the iter-189
-  logic doesn't model) or re-opens an upstream PR if a gate is
-  genuinely the live cause. Two prior question claims NOT to carry
-  into the fix: (a) `assembleSegment` already concatenates
-  `1..maxShipout`, not just the highest chunk, so it doesn't need
-  rewriting; (b) there is no baked supertex ELF to pin —
-  `vendor/engine/` carries the patched lualatex, not the supertex
-  CLI.
+- **M7.4.x — diagnose live edit→preview failure mode.** Blocks
+  live GT-3 and GT-5. Iter 198 confirmed the iter-724 daemon
+  protocol works locally; iter 199 shipped stderr+event
+  forwarding from `apps/sidecar/src/compiler/supertexDaemon.ts`
+  to `process.stderr` (prefixes `[supertex-daemon stderr] ` and
+  `[supertex-daemon event] `). Next iteration: run live gold
+  (after the sidecar image redeploys), capture Fly logs with
+  `flyctl logs -a <project-machine>` under the leaked-subprocess
+  hygiene rules below, grep for the new prefixes across a GT-3
+  failure window, and decide between three sidecar paths:
+    1. **path 1 (no edit detected)** — `run_baseline_diff` missed
+       the edit; upstream PR.
+    2. **path 2 (no usable rollback target)** — `run_process_event`
+       returns non-zero or `resumed_pid <= 0`; daemon emits
+       `[round-done]` only with a WARN line. Sidecar already short-
+       circuits correctly. Either an upstream PR or pre-warming
+       checkpoints, depending on root cause in WARN.
+    3. **path 3 (`wait_for_resumed` non-zero)** — `[rollback K]
+       [round-done]` with no chunks. Sidecar's current empty-
+       segments short-circuit treats this as no-op; the fix is in
+       `collectRound` in `apps/sidecar/src/compiler/supertexDaemon
+       .ts:283-307` to either re-ship the prior `1..K`/skip the
+       segment, or surface as an explicit error. Behaviour-
+       byte-identical to last good segment from the user's PoV.
 - **GT-E (local Playwright).** info/success/error spawn the right
-  toast; repeated `file-op-error` produces a `×N` aggregated
-  badge.
+  toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
   single keystroke produces a green Yjs-op toast and (after
   compile) a blue pdf-segment toast; rapid typing aggregates into
@@ -99,21 +86,6 @@ Remaining slices:
   success toast lives here and depends on the same ack — gated on
   a sidecar persistence-ack wire signal that doesn't exist yet.
   Local + live Playwright variants.
-
-### M10.branding — logo assets (post-MVP UX) — DONE (iter 194)
-
-Logo SVGs live in `apps/web/src/lib/logos/{linear,stacked}.svg`
-(copied from `assets/`; the originals remain there as source-of-
-truth). Inlined into both topbars and the `/projects` page header
-via Vite `?raw` import + `{@html}`. Brand wrapper is
-`<span role="img" aria-label="tex.center">` (the editor route uses
-`<a class="brand" aria-label="tex.center">` preserving the iter-177
-project-list link). `editor.spec.ts` swapped its
-`getByText("tex.center")` for `getByRole("img", { name: "tex.center" })`.
-Iter-185 indicator slot unchanged. `currentColor` theming is not
-yet wired (SVGs ship Inkscape-authored fills); the wrapper-based
-aria-label assertion is the contract gold tests anchor on, so a
-later cleanup pass that strips inline fills won't break tests.
 
 ### M11.file-tree — tree component + CRUD UX (post-MVP UX)
 
@@ -153,7 +125,6 @@ Single iteration. Local gold: drag → reload → widths persist.
 Default sequencing (M11–M13 all post-MVP, ordered after MVP-gap
 M7.4.x and the GT-E/GT-F/save-feedback work): M13.1 → M12 →
 M11.1–M11.4 → M13.2. M11.5 gated on binary-asset wire work.
-M10 landed iter 194.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
@@ -176,10 +147,16 @@ Rate limits, observability surface, narrower deploy tokens.
 
 ### Completed
 
-M0–M7.5.5, M8.smoke.0, M8.pw.0–M8.pw.4-reused, M9.observability
-(iter 163), M9.cold-start-retry (iter 164 + 168 TCP-probe),
+M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability
+(iter 163); M9.cold-start-retry (iter 164 + 168 TCP-probe);
 M9.resource-hygiene (iter 175 spec teardown + count guardrail;
-iter 176 idle-stop arm at startup). See git log and
+iter 176 idle-stop arm at startup); M9.gold-restructure (iter 197,
+warm-up + fast per-spec timeouts); M10.branding (iter 194, logo
+SVGs at `apps/web/src/lib/logos/{linear,stacked}.svg`, inlined via
+Vite `?raw` import; brand wrapper is
+`<span role="img" aria-label="tex.center">`, editor route uses
+`<a class="brand">`); iter-200 coalescer extraction
+(`apps/sidecar/src/compileCoalescer.ts`). See git log and
 `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
