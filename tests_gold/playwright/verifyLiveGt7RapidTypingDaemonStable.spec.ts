@@ -62,11 +62,18 @@ test.describe("live rapid-typing daemon stability (GT-7)", () => {
     liveProject,
   }) => {
     // Capture every TAG_CONTROL frame's JSON payload as a string,
-    // filter for the daemon-crash sentinels: a `compile-status`
-    // `error` frame whose `detail` contains `protocol violation`
-    // or `child exited` (the iter-202+ `supertexDaemon.ts` error
-    // shapes). `stdin not writable` is the iter-213 follow-on
-    // mode of the same root cause and is also flagged.
+    // filter for the sentinels that surface as red toasts in the UI.
+    // Three classes are flagged:
+    //   1. daemon-crash signatures from iter-202+ `supertexDaemon.ts`
+    //      (`protocol violation`, `child exited`),
+    //   2. `stdin not writable` — the iter-213 follow-on shape of (1),
+    //   3. `already in flight` — the iter-221 sidecar coalescer
+    //      failure (per `.autodev/discussion/220_answer.md`): the
+    //      per-project `CompileCoalescer` letting overlapping
+    //      `runCompile()` calls reach `SupertexDaemonCompiler.compile()`,
+    //      each one immediately rejected by the daemon-compiler's
+    //      `busy` guard. This was the actual user-visible regression
+    //      that prior iterations mis-pinned as a daemon crash.
     const crashFrames: string[] = [];
     authedPage.on("websocket", (ws) => {
       if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
@@ -78,7 +85,8 @@ test.describe("live rapid-typing daemon stability (GT-7)", () => {
         if (
           json.includes("protocol violation") ||
           json.includes("child exited") ||
-          json.includes("stdin not writable")
+          json.includes("stdin not writable") ||
+          json.includes("already in flight")
         ) {
           crashFrames.push(json);
         }
@@ -113,10 +121,10 @@ test.describe("live rapid-typing daemon stability (GT-7)", () => {
 
     expect(
       crashFrames,
-      "supertex-daemon emitted protocol-violation / child-exited / " +
-        "stdin-not-writable control frame(s) under rapid typing — " +
-        "the edit-batching layer is not gating edits during an " +
-        "active compile. First frame: " +
+      "sidecar emitted compile-status:error control frame(s) under " +
+        "rapid typing — daemon crash signature (protocol violation / " +
+        "child exited / stdin not writable) or coalescer-defect " +
+        "signature (already in flight). First frame: " +
         (crashFrames[0] ?? "(none)"),
     ).toEqual([]);
   });

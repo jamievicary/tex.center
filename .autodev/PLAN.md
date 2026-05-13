@@ -150,20 +150,38 @@ Remaining slices:
   (`supertexOversizeTarget`, `supertexFilewatcherRace`) bypass the
   coalescer and so could not see this failure mode either; they
   remain as upstream-tolerance regression locks.
-  **Next iteration plan (single coherent slice):**
-    1. Add a deterministic local `tests_gold/` reproducer that
-       drives the full sidecar with `SupertexDaemonCompiler`, the
-       real supertex binary (skipped when absent), and a
-       cold-start-spanning burst of doc-updates. Assert no
-       `compile-status state:"error"` frame containing
-       `already in flight` reaches the client.
-    2. Diagnose and fix the coalescer defect. The
-       `serverCompileCoalescer.test.mjs` case 1 already verifies
-       the gate works with `ManualCompiler`, so the failure mode
-       involves something specific to the real-daemon path; likely
-       candidates listed in `220_answer.md` §"Open question".
-    3. Augment GT-7's assertion to forbid `already in flight`
-       as well, so this regression is pinned at the live layer.
+  **Iter 222 partial progress:**
+  Sidecar-level gold case
+  `tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs` lands:
+  drives the full sidecar with the real `SupertexDaemonCompiler` +
+  real supertex binary, two-phase 80-update burst across the
+  cold-start window, asserts no `already in flight` frame reaches
+  the client. **Does not currently reproduce the production bug**
+  even with `COALESCER_SLOW_FIRST_MS=5000` (5 s forced first-compile
+  delay). Conclusion: the naive "slow cold-start × debounce ticks"
+  model is *not* the trigger — the coalescer's `inFlight` gate
+  holds under that pattern. The bug requires something
+  production-specific that isn't a pure timing artefact. GT-7
+  augmented to flag `already in flight` (iter 222).
+  **Next iteration plan:**
+    1. Add gated trace logging in the coalescer
+       (`SIDECAR_TRACE_COALESCER=1`) emitting
+       `{event,seq,inFlight,pending}` at every `maybeFire`, `run`
+       entry, and `.finally`. Deploy, re-trigger GT-7 (or wait for
+       the augmented spec to flag it), scrape `flyctl logs`. The
+       trace will reveal whether `inFlight` is observed false
+       during a slow first compile (logic bug) or whether some
+       other path is calling `runCompile`/`compile` directly
+       (state-pollution bug).
+    2. Stand up a local repro using `LocalFsBlobStore` with a
+       seeded main.tex and a WS connect/disconnect/reconnect
+       sequence mid-cold-start — the closest untested edge in the
+       state machine (`coalescer.cancel()` on last-viewer-out).
+    3. Once the trace pins the failing transition, fix it. If the
+       fix is small, the sidecar-level gold case stays as the
+       regression lock for the assertion shape; if it requires
+       wider invariants, augment the case to drive the failing
+       transition directly.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
