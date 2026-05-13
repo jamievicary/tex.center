@@ -35,6 +35,10 @@ import { setTimeout as wait } from "node:timers/promises";
 import type { Readable } from "node:stream";
 
 import { startLocalDb, type LocalDb } from "../lib/src/localDb.js";
+import {
+  bootstrapLiveProject,
+  exportProjectToEnv,
+} from "./fixtures/liveProjectBootstrap.js";
 
 const MIGRATIONS_DIR = join(
   __dirname,
@@ -72,7 +76,38 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   const child = await spawnDevServer(DEV_PORT, READY_TIMEOUT_MS, localSigningKey);
 
+  // Live-project bootstrap: create + warm up ONE Fly-backed
+  // project that the verifyLiveGt[1-5] specs share. Done here
+  // rather than in a worker fixture so per-test timeouts don't
+  // have to absorb the cold-start tail — see
+  // `fixtures/liveProjectBootstrap.ts` for the full rationale.
+  // Returns `null` if live creds / FLY_API_TOKEN are absent, in
+  // which case live specs skip via their own gates.
+  let liveTeardown: (() => Promise<void>) | null = null;
+  try {
+    const live = await bootstrapLiveProject();
+    if (live !== null) {
+      exportProjectToEnv(live.project);
+      liveTeardown = live.teardown;
+    }
+  } catch (err) {
+    // Bootstrap failure must surface — live gold specs depend on
+    // the project being there. Tear down everything we've already
+    // started before rethrowing so we don't leak the dev server.
+    await killChild(child);
+    await local.close();
+    throw err;
+  }
+
   return async () => {
+    if (liveTeardown) {
+      try {
+        await liveTeardown();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[globalSetup] live teardown failed:", err);
+      }
+    }
     await killChild(child);
     await local.close();
   };

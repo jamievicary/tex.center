@@ -45,9 +45,15 @@ debug-mode toggle (URL/localStorage/Ctrl+Shift+D) with protocol
 fan-out via `WsDebugEvent`. Sidecar `assembleSegment` directory-
 scan fallback removed; `compile()` short-circuits to
 `{ segments: [] }` on a no-op round. Gold restructure (iter 197):
-`sharedLiveProject` runs a 180s warm-up to first `pdf-segment`,
-per-spec polls trimmed so GT-3/GT-5 RED fast (~10s) instead of
-~5min.
+`sharedLiveProject` runs warm-up to first `pdf-segment`, per-spec
+polls trimmed so GT-3/GT-5 RED fast (~10s) instead of ~5min.
+Iter 210: warm-up + project creation moved from worker fixture
+into `globalSetup.ts` (`fixtures/liveProjectBootstrap.ts`); the
+fixture is now a thin reader of env vars set by globalSetup.
+Per-test `timeout` dropped from 240s → 45s. Per-test budgets are
+diagnostic again (a 45s GT-D blow-out is a regression, not
+"noise within a 4-minute ceiling"). Closes the commitment in
+`.autodev/discussion/207_answer.md`.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
