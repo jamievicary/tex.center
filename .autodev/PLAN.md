@@ -77,12 +77,33 @@ Remaining slices:
   (iter 222). `SIDECAR_TRACE_COALESCER` plumbing kept as passive
   diagnostic; consider removal if not used by next coalescer-area
   iteration.
-- **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
-  213's diagnostic-driven fix (`SupertexDaemonCompiler` now
-  detects dead-child state and re-spawns on next `compile()`,
-  with paired unit-test case 14) is the candidate. Waiting on
-  the next live gold pass to confirm GT-5 → GREEN. If still RED,
-  reopen the diagnostic — the iter-212 capture stays in place.
+- **M7.4.x — GT-5 only.** Iter 227 live gold: GT-5 RED again
+  (third recurrence). Iter-228 diagnostic narrowed the failure
+  mode: the inline GT-5 probe trace shows daemon ran two full
+  `compile-status running→idle` cycles after the edit, **no
+  error frames, no `stdin not writable`** — so iter-213's
+  dead-child re-spawn fix doesn't apply. Instead the symptom
+  matches the no-op path at `supertexDaemon.ts:141`
+  (`events.maxShipout < 0` → `{ok:true, segments:[]}`) — daemon
+  finished the round but produced no shipout events, sidecar
+  shipped no pdf-segment, idle frame closed the cycle. This is
+  the upstream-supertex "no usable rollback target" round shape
+  surfacing on the shared-`liveProject` whose body has been
+  polluted by GT-D/GT-7 cumulative typing before GT-5 runs (the
+  pre-edit doc tail in the trace is
+  `…padding bytes to extend the typing window.\\end{document}`,
+  cursor on the body line).
+  Iter 228 added `CompileSuccess.noopReason` + sidecar
+  `compile no-op (no pdf-segment shipped)` warn-log so the next
+  live failure is diagnosable from `flyctl logs` alone (no
+  per-machine guesswork). Next step: re-run live gold; on a
+  fresh GT-5 RED, pull the no-op warn lines + `[supertex-daemon
+  stderr]` around them. If confirmed, the fix is upstream
+  (supertex daemon must produce a shipout on every successful
+  recompile, not silently no-op when no rollback target is
+  found). The upstream iter-755–758 fix covered the related
+  cold-start scenario surfacing in GT-8 but does not cover this
+  body-edit-on-warm-polluted-doc path.
   Open upstream question (separable, not blocking): *why* does
   the daemon process exit between GT-4 and GT-5? Hypotheses:
   daemon crash on specific GT-4 input, idle timeout, Fly OOM

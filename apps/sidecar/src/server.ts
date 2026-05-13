@@ -389,15 +389,28 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     ) {
       p.coalescer.highestEmittedShipoutPage = result.shipoutPage;
     }
-    app.log.info(
-      {
-        projectId: p.id,
-        elapsedMs: Date.now() - compileStart,
-        segments: result.segments.length,
-        bytesShipped,
-      },
-      "compile ok",
-    );
+    if (result.segments.length === 0 && result.noopReason) {
+      app.log.warn(
+        {
+          projectId: p.id,
+          elapsedMs: Date.now() - compileStart,
+          sourceLen: source.length,
+          targetPage: maxViewingPage(p),
+          noopReason: result.noopReason,
+        },
+        "compile no-op (no pdf-segment shipped)",
+      );
+    } else {
+      app.log.info(
+        {
+          projectId: p.id,
+          elapsedMs: Date.now() - compileStart,
+          segments: result.segments.length,
+          bytesShipped,
+        },
+        "compile ok",
+      );
+    }
     broadcast(p, encodeControl({ type: "compile-status", state: "idle" }));
   }
 

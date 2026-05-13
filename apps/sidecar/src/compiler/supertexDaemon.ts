@@ -139,7 +139,13 @@ export class SupertexDaemonCompiler implements Compiler {
       // the upstream no-op behind a byte-identical "fresh" PDF and
       // is the iter 188 edit→preview regression. See 188_answer.md.
       if (events.maxShipout < 0) {
-        return { ok: true, segments: [] };
+        return {
+          ok: true,
+          segments: [],
+          noopReason:
+            "supertex daemon round-done with no shipout events " +
+            "(no usable rollback target for this edit)",
+        };
       }
       const segment = await this.assembleSegment(events.maxShipout);
       return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
