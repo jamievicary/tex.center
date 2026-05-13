@@ -22,7 +22,7 @@
 // `verifyLiveGt[1-5]_*` file-sort order.
 
 import { expect, test } from "./fixtures/sharedLiveProject.js";
-import { captureFrames } from "./fixtures/wireFrames.js";
+import { captureFrames, TAG_CONTROL } from "./fixtures/wireFrames.js";
 import {
   expectPreviewCanvasChanged,
   expectPreviewCanvasPainted,
@@ -30,6 +30,12 @@ import {
 } from "./fixtures/previewCanvas.js";
 
 const EDIT_PAYLOAD = "\n\\section{New Section}\n";
+
+// How long to wait for the post-edit pdf-segment in the diagnostic
+// loop. Matches the previous expect.poll timeout so behaviour is
+// unchanged on the success path; the manual loop only exists to
+// surface a richer error message on timeout (M7.4.x probes 1 + 2).
+const POST_EDIT_PDF_TIMEOUT_MS = 30_000;
 
 test.describe("live edit updates preview canvas (GT-5)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -51,6 +57,40 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
       authedPage,
       liveProject.id,
     );
+
+    // GT-5-specific inline probe capture (M7.4.x diagnostic, per
+    // `.autodev/PLAN.md` and the iter-211 plan-review notes). When
+    // the post-edit pdf-segment fails to arrive, we want enough
+    // signal in the failure message to distinguish:
+    //   - probe #1: cross-spec state pollution (cursor lands past
+    //     `\end{document}`, or document text already mutated past
+    //     the expected hello-world body) — surfaced by the pre-edit
+    //     cm-content snapshot + cursor info captured just before
+    //     `keyboard.type`.
+    //   - probe #2: Yjs ops didn't reach the WS (sidecar never sees
+    //     the edit) — surfaced by the `framesSent` delta during the
+    //     type. A near-zero delta here, compared to a healthy GT-3
+    //     pass of ~one frame per keystroke, would localise the
+    //     failure to the page → WS edge.
+    //   - probe #3 (partial): a sidecar `compile-status state:error`
+    //     that isn't the overlap-error class — surfaced by capturing
+    //     ALL control frames, not just `already in flight` ones.
+    let framesSent = 0;
+    const controlFrames: string[] = [];
+    authedPage.on("websocket", (ws) => {
+      if (!ws.url().includes(`/ws/project/${liveProject.id}`)) return;
+      ws.on("framesent", ({ payload }) => {
+        if (payload.length === 0) return;
+        framesSent += 1;
+      });
+      ws.on("framereceived", ({ payload }) => {
+        if (typeof payload === "string") return;
+        if (payload.length === 0) return;
+        if (payload[0] === TAG_CONTROL) {
+          controlFrames.push(payload.subarray(1).toString("utf8"));
+        }
+      });
+    });
 
     await authedPage.goto(`/editor/${liveProject.id}`);
 
@@ -115,21 +155,60 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     await authedPage.keyboard.press("ArrowUp");
     await authedPage.keyboard.press("ArrowUp");
     await authedPage.keyboard.press("End");
+
+    // Probe #1: snapshot the document + cursor state at the moment
+    // we're about to type. If the cursor has landed past
+    // `\end{document}` (the cross-spec-state-pollution hypothesis),
+    // the focused-line text will reveal it; if the doc has been
+    // mutated past recognition by GT-C/D, the full text will too.
+    const preEditDoc = (await cmContent.textContent()) ?? "";
+    const cursorInfo = await authedPage.evaluate(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const r = sel.getRangeAt(0);
+      const node = r.startContainer;
+      const lineText =
+        node.nodeType === 3
+          ? node.textContent ?? ""
+          : (node as Element).textContent ?? "";
+      return { startOffset: r.startOffset, line: lineText.slice(0, 240) };
+    });
+    const framesSentBeforeEdit = framesSent;
+
     await authedPage.keyboard.type(EDIT_PAYLOAD, { delay: 5 });
+
+    const framesSentAfterType = framesSent;
 
     // First: a post-edit pdf-segment frame must arrive. If this
     // times out, the failure is in the keystroke → Yjs → sidecar
-    // → daemon → wire path, not the canvas-paint path.
-    await expect
-      .poll(() => pdfSegmentFrames.length, {
-        timeout: 30_000,
-        message:
-          "no post-edit pdf-segment frame arrived within timeout — " +
-          "keystroke → Yjs → sidecar → daemon → wire path broken " +
-          "for the GT-5 edit shape (compile error, coalescer drop, " +
-          "or daemon short-circuit)",
-      })
-      .toBeGreaterThan(pdfSegmentCountBeforeEdit);
+    // → daemon → wire path, not the canvas-paint path. We use a
+    // manual bounded poll instead of `expect.poll` so the timeout
+    // message can include the probe-#1/probe-#2 diagnostic state
+    // captured above (Playwright's `message` is a static string,
+    // evaluated at construction time before the typing happened).
+    const deadline = Date.now() + POST_EDIT_PDF_TIMEOUT_MS;
+    while (
+      Date.now() < deadline &&
+      pdfSegmentFrames.length <= pdfSegmentCountBeforeEdit
+    ) {
+      await authedPage.waitForTimeout(250);
+    }
+    if (pdfSegmentFrames.length <= pdfSegmentCountBeforeEdit) {
+      const diagnostic = [
+        `no post-edit pdf-segment frame arrived within ${POST_EDIT_PDF_TIMEOUT_MS}ms`,
+        `pdfSegmentFrames: pre-edit=${pdfSegmentCountBeforeEdit}, post-wait=${pdfSegmentFrames.length}`,
+        `framesSent: pre-edit=${framesSentBeforeEdit}, post-type=${framesSentAfterType}, now=${framesSent}`,
+        `  (delta during type=${framesSentAfterType - framesSentBeforeEdit}; a healthy GT-C run sends ≥1 frame per keystroke)`,
+        `cursor at edit: startOffset=${cursorInfo?.startOffset ?? "null"}, focused line="${cursorInfo?.line ?? "null"}"`,
+        `pre-edit doc length=${preEditDoc.length}, tail(120)=${JSON.stringify(preEditDoc.slice(-120))}`,
+        `overlapErrors=${overlapErrors.length}, controlFrames=${controlFrames.length}`,
+        ...controlFrames
+          .slice(0, 10)
+          .map((c, i) => `  ctrl[${i}]=${c.slice(0, 240)}`),
+      ].join("\n");
+      throw new Error(diagnostic);
+    }
+    expect(pdfSegmentFrames.length).toBeGreaterThan(pdfSegmentCountBeforeEdit);
 
     // Then: the canvas hash must diverge. If this times out after
     // the previous poll succeeded, a fresh pdf-segment was on the
