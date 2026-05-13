@@ -13,47 +13,35 @@ with `app`-tagged deployment machines) exists alongside but isn't
 routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
-The remaining user-visible regression is **edit→preview**: live
-GT-3 / GT-4 / GT-5 RED. Two contributors, both addressed:
+As of iter 210 live gold, **GT-A/B/C/D all GREEN, only GT-5 RED**.
+The upstream daemon fix (`vendor/supertex` at `439c5b4`) and the
+iter-203 in-body edit positioning are both proven by the GT-B/C/D
+greens. GT-5's residual failure is narrow: "no post-edit
+pdf-segment arrived" — the wire path is broken specifically for
+its `\n\\section{New Section}\n` payload while GT-C's `!` and
+GT-D's sustained ASCII body each produce fresh segments. Probably
+not the previously-suspected daemon rollback; more likely
+cross-spec state pollution (GT-3/4/5 share `liveProject`, so by
+GT-5 the buffer is doubly-mutated and the navigation hint may
+land the insert past `\end{document}` again). Diagnostic plan
+under M7.4.x below.
 
-1. **Upstream daemon bug (fixed).** Iter 202 grep confirmed Path 2
-   (`resumed_pid=-1` in handshake `recompile,N` with no recovery,
-   `supertex_daemon.c:1230-1238`). Per iter-203 discussion, the
-   user has manually `git pull`ed the upstream fix into
-   `vendor/supertex` (now at `439c5b4`). Pending: re-run gold
-   against live to confirm.
-2. **Unrealistic gold edit position (fixed iter 203).** GT-3/4/5
-   previously typed *past* `\end{document}` (`Control+End` lands
-   on the trailing-newline empty line). Specs now navigate
-   `Control+End` → `ArrowUp` × 2 → `End` so typing lands on the
-   "Hello, world!" line, inside the document body. Matches real
-   user behaviour and side-steps the (now-fixed) past-terminator
-   codepath.
-
-Full diagnosis in `.autodev/logs/202.md`; discussion resolution
-in `.autodev/discussion/202_answer.md`.
+Full original diagnosis in `.autodev/logs/202.md`.
 
 ## 2. Milestones
 
 ### M9.editor-ux — live editor UX bugs (TDD via gold)
 
 Done and locked: clickable logo, no-flash editor load, compile
-coalescer (extracted to `apps/sidecar/src/compileCoalescer.ts`
-iter 200), sustained-typing safety, toast store + component
-scaffold, toast consumers for `file-op-error` and compile errors,
-debug-mode toggle (URL/localStorage/Ctrl+Shift+D) with protocol
-fan-out via `WsDebugEvent`. Sidecar `assembleSegment` directory-
-scan fallback removed; `compile()` short-circuits to
-`{ segments: [] }` on a no-op round. Gold restructure (iter 197):
-`sharedLiveProject` runs warm-up to first `pdf-segment`, per-spec
-polls trimmed so GT-3/GT-5 RED fast (~10s) instead of ~5min.
-Iter 210: warm-up + project creation moved from worker fixture
-into `globalSetup.ts` (`fixtures/liveProjectBootstrap.ts`); the
-fixture is now a thin reader of env vars set by globalSetup.
-Per-test `timeout` dropped from 240s → 45s. Per-test budgets are
-diagnostic again (a 45s GT-D blow-out is a regression, not
-"noise within a 4-minute ceiling"). Closes the commitment in
-`.autodev/discussion/207_answer.md`.
+coalescer (extracted iter 200), sustained-typing safety, toast
+store + component scaffold, toast consumers for `file-op-error`
+and compile errors, debug-mode toggle
+(URL/localStorage/Ctrl+Shift+D) with protocol fan-out via
+`WsDebugEvent`. Sidecar `assembleSegment` directory-scan fallback
+removed. Gold restructure (iter 197 + 210): warm-up + project
+creation in `globalSetup.ts`
+(`fixtures/liveProjectBootstrap.ts`), test-scoped fixture reads
+env, per-test `timeout` = 45s — budgets are diagnostic again.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
@@ -61,30 +49,27 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — confirm live GT-B/3/4/5 green.** Three contributors
-  now addressed:
-  1. Upstream daemon fix for handshake `recompile,N`
-     no-usable-rollback recovery (`vendor/supertex` at `439c5b4`,
-     manually pulled by user).
-  2. Gold specs moved to in-body edits before `\end{document}`
-     (iter 203).
-  3. Sidecar segment-replay on WS connect (iter 205,
-     `server.ts:ProjectState.lastSegments`): a fresh subscriber to
-     a project whose initial compile was consumed by the warm-up
-     now receives the cached PDF segment without needing an edit.
-     This is what was making GT-B fail at the 5s budget even with
-     the daemon healthy.
-  Next harness gold pass is the signal:
-  - All green → close M7.4.x.
-  - GT-B GREEN, GT-3/4/5 still RED → post-edit compile path is
-    broken, not the initial-state path. Re-investigate the daemon
-    rollback codepath.
-  - GT-B still RED → re-grep Fly logs for the iter-202 WARN
-    signature. Absent ⇒ submodule pointer not yet baked into
-    deployed image (rebuild). Present ⇒ new diagnosis required.
-  Post-MVP follow-up: a clean fix to keep the frozen sibling
-  alive across `recompile,N` rounds (chain-bookkeeping root
-  cause) rather than the recovery patch; not on critical path.
+- **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. GT-5
+  fails on "no post-edit pdf-segment arrived" with its specific
+  `\n\\section{New Section}\n` payload. Diagnostic probes, in
+  order of cheapness:
+  1. **Cross-spec state pollution.** GT-3/4/5 share `liveProject`;
+     by GT-5 the buffer has been mutated twice. `Control+End →
+     ArrowUp×2 → End` may land *past* `\end{document}` again.
+     Probe: log `cm-content` text at GT-5 entry; either assert
+     cursor lands on a body line or give GT-5 its own freshly-
+     seeded project (drop the shared-liveProject reuse for GT-5
+     and pay the second warm-up).
+  2. **Yjs op shape for newline + braces.** Probe by counting Yjs
+     `update` frames during the GT-5 type. If zero/one rather
+     than per-keystroke, the input itself isn't reaching the WS.
+  3. **Silent compile-error short-circuit.** `\section{...}` in a
+     document with no sectioning context — check Fly logs for the
+     post-edit compile round.
+  Post-MVP follow-up: the `recompile,N` no-usable-rollback fix in
+  upstream daemon is currently a recovery patch; the clean fix
+  (keep the frozen sibling alive across rounds via chain-
+  bookkeeping) is not on critical path.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
@@ -193,8 +178,7 @@ Vite `?raw` import; brand wrapper is
 - **Per-project vs shared-sidecar routing.** Current model is
   per-project Machine. Shared-pool app-tagged machines exist but
   aren't routed to. Decision deferred to post-MVP.
-- **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. Can be
-  picked up by an iter when no critical-path work is queued.
+- **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`.
 
 ## Leaked-subprocess hygiene (per `150_answer.md`)
 
