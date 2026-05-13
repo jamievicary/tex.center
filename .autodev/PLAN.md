@@ -98,14 +98,28 @@ Remaining slices:
   writer is `runCompile()` (`apps/sidecar/src/server.ts:334`),
   which is the coalescer's `run` callback — writes already happen
   exactly once per round, before `recompile,T\n`, and Yjs
-  doc-updates during a round only set `pending`. Next probe (TDD):
-  unit-test `CompileCoalescer` with a slow fake `Compiler` and
-  high-frequency concurrent `kick()` callers, asserting strict
-  non-overlap of `run` invocations. If that passes the coalescer
-  is exonerated and GT-7 is an upstream `supertex --daemon` crash
-  on specific input patterns produced by zero-delay typing — at
-  which point the work is to isolate a minimal `.tex` repro and
-  file upstream.
+  doc-updates during a round only set `pending`.
+  **Iter 217 probe result (negative):** new gold test
+  `test_supertex_oversize_target`
+  (`tests_gold/lib/test/supertexOversizeTarget.test.mjs`) drives
+  a real `supertex --daemon` directly with (a) `recompile,T`
+  where T ∈ {3, 5, 10, 100} against a 2-page doc, and (b) a
+  single large-paste edit growing the source by 30 `\newpage X`
+  lines. Both pass cleanly — no SIGABRT, no protocol violation,
+  all rounds complete. **The "T past page count" and
+  "paste-of-newpages" hypotheses are killed.** Also: the test
+  stderr surfaced an unexpected fact — supertex daemon emits
+  `supertex: edit detected at .../main.tex:49` lines, i.e. it
+  watches the source file *in addition to* the stdin
+  `recompile,…` protocol. The iter-215 claim that the daemon is
+  "stdin-driven only" is therefore wrong. Next probe candidate:
+  race between sidecar's `writeMain(source)` and the subsequent
+  `recompile,T\n` — the daemon's own file-watcher may fire,
+  starting a round, before the stdin command arrives. Probe
+  this directly by writing the source file rapidly multiple
+  times *before* the daemon completes a round (no intervening
+  stdin command), to see whether the watcher trips an assert
+  when re-entered.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
@@ -188,13 +202,6 @@ Code complete. Operator-gated: create test OAuth client in GCP
 (redirect `http://localhost:4567/oauth-callback`), run
 `scripts/google-refresh-token.mjs`, push `TEST_OAUTH_BYPASS_KEY`
 to Fly secrets. Then `verifyLiveOauthCallback.spec.ts` un-skips.
-
-### M7.4.2 — upstream supertex serialise/restore
-
-PR against `github.com/jamievicary/supertex` adding state
-serialisation. Gates checkpoint persistence ever being observable.
-**Deferred**, post-MVP hardening. Distinct from M7.4.x above
-(which is the rollback-target bug, not serialisation).
 
 ### M7.5 — daemon-adoption hardening
 
