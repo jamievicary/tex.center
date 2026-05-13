@@ -74,6 +74,7 @@ export class SupertexDaemonCompiler implements Compiler {
     null;
   private spawnError: Error | null = null;
   private stderrBuf = "";
+  private stderrLineBuf = "";
   private stdoutBuf = new DaemonLineBuffer();
   private eventQueue: DaemonEvent[] = [];
   private eventWaiter: ((ev: DaemonEvent) => void) | null = null;
@@ -208,6 +209,7 @@ export class SupertexDaemonCompiler implements Compiler {
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
       this.stderrBuf += chunk;
+      this.forwardStderrLines(chunk);
     });
     child.stdout?.on("data", (chunk: Buffer) => {
       for (const ev of this.stdoutBuf.push(chunk)) this.enqueueEvent(ev);
@@ -333,7 +335,18 @@ export class SupertexDaemonCompiler implements Compiler {
     return { totalLength: total, offset: 0, bytes };
   }
 
+  private forwardStderrLines(chunk: string): void {
+    this.stderrLineBuf += chunk;
+    let nl: number;
+    while ((nl = this.stderrLineBuf.indexOf("\n")) !== -1) {
+      const line = this.stderrLineBuf.slice(0, nl);
+      this.stderrLineBuf = this.stderrLineBuf.slice(nl + 1);
+      process.stderr.write(`[supertex-daemon stderr] ${line}\n`);
+    }
+  }
+
   private enqueueEvent(ev: DaemonEvent): void {
+    process.stderr.write(`[supertex-daemon event] ${describeEvent(ev)}\n`);
     if (this.eventWaiter) {
       const w = this.eventWaiter;
       this.eventWaiter = null;
@@ -398,4 +411,19 @@ function sleep(ms: number): Promise<void> {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n) + "…";
+}
+
+function describeEvent(ev: DaemonEvent): string {
+  switch (ev.kind) {
+    case "shipout":
+      return `shipout n=${ev.n}`;
+    case "rollback":
+      return `rollback k=${ev.k}`;
+    case "error":
+      return `error reason=${ev.reason}`;
+    case "round-done":
+      return "round-done";
+    case "violation":
+      return `violation raw=${truncate(ev.raw, 200)}`;
+  }
 }
