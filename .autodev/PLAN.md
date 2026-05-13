@@ -105,21 +105,34 @@ Remaining slices:
   a real `supertex --daemon` directly with (a) `recompile,T`
   where T ∈ {3, 5, 10, 100} against a 2-page doc, and (b) a
   single large-paste edit growing the source by 30 `\newpage X`
-  lines. Both pass cleanly — no SIGABRT, no protocol violation,
-  all rounds complete. **The "T past page count" and
-  "paste-of-newpages" hypotheses are killed.** Also: the test
-  stderr surfaced an unexpected fact — supertex daemon emits
-  `supertex: edit detected at .../main.tex:49` lines, i.e. it
-  watches the source file *in addition to* the stdin
-  `recompile,…` protocol. The iter-215 claim that the daemon is
-  "stdin-driven only" is therefore wrong. Next probe candidate:
-  race between sidecar's `writeMain(source)` and the subsequent
-  `recompile,T\n` — the daemon's own file-watcher may fire,
-  starting a round, before the stdin command arrives. Probe
-  this directly by writing the source file rapidly multiple
-  times *before* the daemon completes a round (no intervening
-  stdin command), to see whether the watcher trips an assert
-  when re-entered.
+  lines. Both pass cleanly. **The "T past page count" and
+  "paste-of-newpages" hypotheses are killed.** Also surfaced the
+  fact that the daemon emits `supertex: edit detected at …`
+  lines — it watches the source file in addition to stdin.
+  **Iter 218 probe result (also negative):** new gold test
+  `test_supertex_filewatcher_race`
+  (`tests_gold/lib/test/supertexFilewatcherRace.test.mjs`)
+  drives the daemon directly with (1) 10 rapid `main.tex` writes
+  with *no* intervening stdin command, then a liveness compile;
+  (2) 10 iterations of `writeFile(main.tex); writeStdin("recompile,1\n")`
+  in the same microtask. Both pass — no SIGABRT, no protocol
+  violation. The watcher coalesces rapid writes (single
+  `edit detected` after the loop); the write/recompile race
+  produces `WARN no usable rollback target` no-op rounds (the
+  same upstream rollback-target-missing path from iter 188), not
+  crashes. Stderr surfaced another marker:
+  `supertex: watching (daemon mode; stdin event-loop)` — the
+  file-watcher and stdin loop share a main loop, so a coalesced
+  write before round-done does not re-enter. **The daemon's
+  stdin/file-watch surface is therefore not the GT-7 culprit.**
+  Next probe candidates: (a) **sidecar-side audit** — re-read
+  `apps/sidecar/src/compileCoalescer.ts` and `runCompile` in
+  `apps/sidecar/src/server.ts` for any path that can issue a
+  second `recompile,T` before the previous round-done arrives,
+  which *would* surface as a protocol-violation flavour error;
+  (b) the original PLAN step 1 (real-browser repro by pasting
+  `\newpage X` lines), which now has a much smaller hypothesis
+  space to investigate.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
