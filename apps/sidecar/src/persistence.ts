@@ -63,10 +63,19 @@ export function projectFilesDir(projectId: string): string {
 }
 
 /**
+ * Blob-store key for a named project file. The canonical key shape
+ * for every source file under `projects/<id>/files/`. Callers must
+ * pass a single path segment; this helper does not validate.
+ */
+export function projectFileKey(projectId: string, name: string): string {
+  return `${projectFilesDir(projectId)}/${name}`;
+}
+
+/**
  * Blob-store key for the canonical source of a project's main file.
  */
 export function mainTexKey(projectId: string): string {
-  return `${projectFilesDir(projectId)}/main.tex`;
+  return projectFileKey(projectId, MAIN_DOC_NAME);
 }
 
 /**
@@ -259,7 +268,7 @@ export function createProjectPersistence(args: {
       const loaded = await Promise.all(
         files.map(async (name) => ({
           name,
-          bytes: await blobStore.get(`${projectFilesDir(projectId)}/${name}`),
+          bytes: await blobStore.get(projectFileKey(projectId, name)),
         })),
       );
       // A brand-new project has no `main.tex` blob; seed the
@@ -331,8 +340,8 @@ export function createProjectPersistence(args: {
       if (canPersist && blobStore) {
         try {
           await blobStore.put(
-            `${projectFilesDir(projectId)}/${name}`,
-            body.length === 0 ? new Uint8Array(0) : new TextEncoder().encode(body),
+            projectFileKey(projectId, name),
+            new TextEncoder().encode(body),
           );
           persistedByName.set(name, body);
         } catch (e) {
@@ -357,7 +366,7 @@ export function createProjectPersistence(args: {
       if (!knownFiles.has(name)) return { ok: false, reason: "no such file" };
       if (canPersist && blobStore) {
         try {
-          await blobStore.delete(`${projectFilesDir(projectId)}/${name}`);
+          await blobStore.delete(projectFileKey(projectId, name));
         } catch (e) {
           log.warn(
             { err: e instanceof Error ? e.message : String(e), projectId },
@@ -381,10 +390,12 @@ export function createProjectPersistence(args: {
       if (knownFiles.has(newName)) return { ok: false, reason: "already exists" };
       const oldText = doc.getText(oldName);
       const contents = oldText.toString();
-      const dir = projectFilesDir(projectId);
       if (canPersist && blobStore) {
         try {
-          await blobStore.put(`${dir}/${newName}`, new TextEncoder().encode(contents));
+          await blobStore.put(
+            projectFileKey(projectId, newName),
+            new TextEncoder().encode(contents),
+          );
         } catch (e) {
           log.warn(
             { err: e instanceof Error ? e.message : String(e), projectId },
@@ -393,7 +404,7 @@ export function createProjectPersistence(args: {
           return { ok: false, reason: "blob create failed" };
         }
         try {
-          await blobStore.delete(`${dir}/${oldName}`);
+          await blobStore.delete(projectFileKey(projectId, oldName));
         } catch (e) {
           // New key is already written and in-memory truth will
           // move to it; orphan the old blob rather than rolling
@@ -419,12 +430,11 @@ export function createProjectPersistence(args: {
     async maybePersist(): Promise<void> {
       if (!canPersist || !blobStore) return;
       const enc = new TextEncoder();
-      const dir = projectFilesDir(projectId);
       for (const name of knownFiles) {
         const source = doc.getText(name).toString();
         if (persistedByName.get(name) === source) continue;
         try {
-          await blobStore.put(`${dir}/${name}`, enc.encode(source));
+          await blobStore.put(projectFileKey(projectId, name), enc.encode(source));
           persistedByName.set(name, source);
         } catch (e) {
           log.warn(
