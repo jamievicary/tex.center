@@ -64,14 +64,22 @@ Remaining slices:
   (`verifyLiveGt7RapidTypingDaemonStable.spec.ts`, iter 214) types
   ~570 chars at 0 ms inter-key and asserts no control frame
   matches `protocol violation` / `child exited` /
-  `stdin not writable`. Expected RED on next gold pass. Likely
-  root cause: sidecar writes source bytes to disk per Yjs
-  doc-update without coordinating with the coalescer's in-flight
-  gate, so supertex's auto-edit-detection re-enters mid-round and
-  aborts (SIGABRT). Fix probe: trace source-write call sites in
-  `apps/sidecar/src/`, gate disk writes behind the same coalescer
-  the `recompile,N` line uses; one batched write per compile
-  round. See `213_answer.md`.
+  `stdin not writable`. Expected RED on next gold pass.
+  **Revised diagnosis (iter 215, see `214_answer.md`):** supertex
+  in `--daemon` mode is stdin-driven only and does not auto-reload
+  on disk edits, so the iter-213 "unbatched disk writes race the
+  in-flight round" theory does not apply. The only `main.tex`
+  writer is `runCompile()` (`apps/sidecar/src/server.ts:334`),
+  which is the coalescer's `run` callback — writes already happen
+  exactly once per round, before `recompile,T\n`, and Yjs
+  doc-updates during a round only set `pending`. Next probe (TDD):
+  unit-test `CompileCoalescer` with a slow fake `Compiler` and
+  high-frequency concurrent `kick()` callers, asserting strict
+  non-overlap of `run` invocations. If that passes the coalescer
+  is exonerated and GT-7 is an upstream `supertex --daemon` crash
+  on specific input patterns produced by zero-delay typing — at
+  which point the work is to isolate a minimal `.tex` repro and
+  file upstream.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
