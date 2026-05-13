@@ -49,6 +49,29 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
+- **M9.editor-ux.regress.gt6 — slow `.cm-content` appearance.**
+  User-reported on v213: after `/editor/<id>` navigation, the
+  seeded `.tex` source can take up to a minute to appear. GT-6
+  (`verifyLiveGt6FastContentAppearance.spec.ts`, iter 214) pins a
+  2 s upper bound on warm-project content appearance. Expected
+  RED on next gold pass. Fix probe: instrument the Yjs hydrate
+  path with M13.1 marks, identify whether connect, sync, or
+  CodeMirror bind dominates. See `213_answer.md`.
+- **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.**
+  User-reported on v213: zero-delay typing reliably produces a red
+  toast (`supertex-daemon: protocol violation: child exited
+  (code=134)`). GT-7
+  (`verifyLiveGt7RapidTypingDaemonStable.spec.ts`, iter 214) types
+  ~570 chars at 0 ms inter-key and asserts no control frame
+  matches `protocol violation` / `child exited` /
+  `stdin not writable`. Expected RED on next gold pass. Likely
+  root cause: sidecar writes source bytes to disk per Yjs
+  doc-update without coordinating with the coalescer's in-flight
+  gate, so supertex's auto-edit-detection re-enters mid-round and
+  aborts (SIGABRT). Fix probe: trace source-write call sites in
+  `apps/sidecar/src/`, gate disk writes behind the same coalescer
+  the `recompile,N` line uses; one batched write per compile
+  round. See `213_answer.md`.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
