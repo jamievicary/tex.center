@@ -57,175 +57,26 @@ Remaining slices:
   RED on next gold pass. Fix probe: instrument the Yjs hydrate
   path with M13.1 marks, identify whether connect, sync, or
   CodeMirror bind dominates. See `213_answer.md`.
-- **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.**
-  User-reported on v213: zero-delay typing reliably produces a red
-  toast (`supertex-daemon: protocol violation: child exited
-  (code=134)`). GT-7
-  (`verifyLiveGt7RapidTypingDaemonStable.spec.ts`, iter 214) types
-  ~570 chars at 0 ms inter-key and asserts no control frame
-  matches `protocol violation` / `child exited` /
-  `stdin not writable`. GT-7 went GREEN on iter 215's live pass
-  — meaning the zero-delay-`type` recipe does **not** reproduce
-  the user's crash, so the spec as-committed pins nothing
-  (see `215_answer.md`). Two recipe defects: `delay: 0` is not
-  realistic typing (no time for WS round-trip between keys),
-  and the real-world trigger is *pasting* lines like
-  `\newpage X` that swell page count rapidly — implying the
-  crash is page-count- / compile-target-dependent, not pure
-  keystroke-rate-dependent. Strongest current hypothesis: the
-  sidecar sends `recompile,T\n` with a T past the current
-  document's page count after a paste of `\newpage`s, hitting
-  an assert in supertex's incremental engine.
-  **Next probe (TDD, no shortcuts):**
-    1. Reproduce the crash manually in a real browser by pasting
-       a block of `\newpage X` lines into the seeded project;
-       capture the cursor position, page count at crash, and
-       the full WS control-frame trace into the iteration log.
-       I should do this myself as the agent without involving
-       the human.
-    2. Only after step 1 produces a concrete recipe, encode it
-       in a replacement gold spec and confirm it goes RED with
-       the same control-frame shape before committing as the
-       pin.
-  Coalescer non-overlap unit test demoted to a confidence
-  follow-up — it is no longer the next diagnostic. Existing
-  GT-7 stays in the tree (cheap, assertion shape is correct)
-  until the replacement supersedes or augments it.
-  **Revised diagnosis (iter 215, see `214_answer.md`):** supertex
-  in `--daemon` mode is stdin-driven only and does not auto-reload
-  on disk edits, so the iter-213 "unbatched disk writes race the
-  in-flight round" theory does not apply. The only `main.tex`
-  writer is `runCompile()` (`apps/sidecar/src/server.ts:334`),
-  which is the coalescer's `run` callback — writes already happen
-  exactly once per round, before `recompile,T\n`, and Yjs
-  doc-updates during a round only set `pending`.
-  **Iter 217 probe result (negative):** new gold test
-  `test_supertex_oversize_target`
-  (`tests_gold/lib/test/supertexOversizeTarget.test.mjs`) drives
-  a real `supertex --daemon` directly with (a) `recompile,T`
-  where T ∈ {3, 5, 10, 100} against a 2-page doc, and (b) a
-  single large-paste edit growing the source by 30 `\newpage X`
-  lines. Both pass cleanly. **The "T past page count" and
-  "paste-of-newpages" hypotheses are killed.**
-  **Iter 218 probe result (also negative):** new gold test
-  `test_supertex_filewatcher_race`
-  (`tests_gold/lib/test/supertexFilewatcherRace.test.mjs`)
-  drives the daemon directly with (1) 10 rapid `main.tex` writes
-  with *no* intervening stdin command, then a liveness compile;
-  (2) 10 iterations of `writeFile(main.tex); writeStdin("recompile,1\n")`
-  in the same microtask. Both pass — no SIGABRT, no protocol
-  violation. Sequence (2) produces `WARN no usable rollback
-  target` no-op rounds (the same upstream rollback-target-missing
-  path from iter 188) for the rapid back-to-back rounds, not
-  crashes.
-  **Model correction (iter 219, see `218_answer.md`):** the
-  iter-217 reading of `supertex: edit detected at …/main.tex:NN`
-  as evidence of an *asynchronous* file-watcher was wrong. Those
-  lines are emitted **inside `recompile,T` handling** when the
-  daemon inspects input files to choose a resume checkpoint;
-  there is no inotify-style watcher. The "stdin event-loop"
-  stderr marker is exactly what it says — stdin only. The
-  iter-215 invariant — *supertex `--daemon` is stdin-driven
-  only* — therefore stands. The iter-218 probes still serve as
-  regression locks on stdin-side tolerance under paired
-  disk-write + recompile sequences (which is what the sidecar
-  actually does), but they don't probe an asynchronous-watcher
-  race because there isn't one to probe.
-  **Iter 224 — live repro on fresh cold project; iter-220 diagnosis
-  retracted.** New gold spec
-  `tests_gold/playwright/verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts`
-  creates its own fresh project (cold sidecar Machine) and drives
-  the user's literal repro from `220_question.md` (500 ms
-  `\newpage XX` cadence). On the very first live run it caught a
-  `compile-status state:"error"` frame containing
-  `protocol violation: child exited (code=134 signal=null)` —
-  i.e. the **original iter-213 daemon-crash shape**, not the
-  `already in flight` coalescer-defect shape iter-220 hypothesised.
-  Captured stderr shows three successful `recompile,T` rounds
-  (`edit detected at .../main.tex:56`, `:163`, `:187`) before the
-  supertex binary aborts with SIGABRT. The sidecar's coalescer is
-  doing its job; supertex is the defective party.
-  Why this took five iterations: every prior pinning attempt used
-  the SHARED warmed project from globalSetup, which has already
-  cleared its cold-start before any spec runs. GT-8 mints a fresh
-  project per invocation, recovering the cold-start window the user
-  hits. The "load-bearing variable is cold-start" claim from
-  220_answer.md was correct; the "what fires inside cold-start"
-  claim (coalescer) was wrong.
-  **Next iteration plan (M9.editor-ux.regress.gt7, now an upstream
-  supertex bug):**
-    1. Build a fast local repro inside `tests_gold/lib/test/` (no
-       Fly, no Playwright): spawn `supertex --daemon` directly,
-       feed the exact stdin sequence (seeded `Hello, world!` doc,
-       then 20 `recompile,T` rounds at 500 ms with `T` covering
-       the growing `\newpage NN`-padded body). Assert the daemon
-       does not exit with code 134. This is the regression lock
-       for the upstream fix.
-    2. Once that fast repro reliably triggers code 134, debug
-       supertex locally (Rust panic / abort handler). Strongest
-       hypothesis given the `edit detected at .../main.tex:NN`
-       trail: a checkpoint-resume path that asserts on a
-       newly-disappeared resume target after rapid back-to-back
-       recompiles.
-    3. PR the fix upstream into `vendor/supertex` (in scope per
-       CLAUDE.md). After the bumped submodule lands in the
-       sidecar image, GT-8 and the new fast repro both flip
-       green; remove the iter-223 `SIDECAR_TRACE_COALESCER`
-       plumbing **only if** the coalescer-trace turned out
-       unnecessary in retrospect (it likely did — keep it for now
-       as a passive diagnostic).
-  **Iter 225 — local fast repro built, both probes pass (negative
-  finding).** New gold case
-  `tests_gold/lib/test/supertexColdNewpageCrash.test.mjs` spawns a
-  real `supertex --daemon` against the `MAIN_DOC_HELLO_WORLD` seed
-  and runs two probes:
-    (a) steady ramp — 20 rounds × (+1 `\newpage NN`, `recompile,T`)
-        at 500 ms cadence;
-    (b) coalesced big-paste — baseline, then +15 `\newpage` lines in
-        one delta (modelling what the sidecar coalescer presents
-        after a slow cold first compile), then 5 single-newpage
-        follow-up rounds.
-  **Both probes PASS.** The user's literal stdin sequence does NOT
-  trigger code 134 in a local headless daemon. The bug requires
-  *something the live environment adds beyond the in-process stdin
-  protocol* — step 1 of the iter-224 plan is therefore complete but
-  does not produce a debuggable repro.
-  **Revised next-iteration plan (hypotheses, in cheapest-to-probe
-  order):**
-    1. **R2 chunk hydration delta.** Pre-create `chunks/` with the
-       artefacts the sidecar's hydrate path would leave for a
-       brand-new project (it restores from R2 even when R2 has
-       nothing for this project id) and re-run the local probes.
-       Cheap to try.
-    2. **Yjs hydration racing `writeMain`.** Instrument `runCompile`
-       with a pre/post source-bytes assertion; if the source mutates
-       *during* the daemon's `recompile,T` round (because a Yjs
-       chunk applied to the live doc mid-compile), the daemon may
-       see a torn read of `main.tex`. Either capture the race in a
-       new local probe (spawn a write thread mid-`recompile,T`) or
-       add a sidecar-side mutex.
-    3. **CPU/memory pressure on Fly's shared-cpu-1x.** A local probe
-       can run inside `taskset -c 0` + `prlimit --as=$((1024*1024*1024))`
-       to simulate the 1 vCPU / 1 GB Fly Machine. Worth trying
-       only if (1) and (2) come up empty.
-    4. **Subtle source-byte difference.** Diff the live cold-start
-       transcript's main.tex against the local probe's main.tex
-       at the moment of the supposed line 56 / 163 / 187 inspection;
-       if the user's typed source includes characters our local
-       Playwright path doesn't, that's a low-effort gap to close.
-  Local probe stays green as a regression lock on the
-  "stdin-only sequence doesn't crash" invariant.
-
-  Pre-iter-224 prior framings retained for archival reference:
-  the iter-217..219 stdin-only / file-watcher narrative was
-  correct (supertex IS stdin-driven only). The iter-220..223
-  coalescer narrative was wrong but produced useful side
-  artefacts: the trace plumbing
-  (`apps/sidecar/src/compileCoalescer.ts`, gated on
-  `SIDECAR_TRACE_COALESCER=1`) and the sidecar-level gold case
-  (`tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs`) both
-  remain as regression locks against future *coalescer* changes
-  even though they don't pin the gt7 bug.
+- **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.
+  CLOSED iter 227.** Root cause was an upstream supertex bug
+  (`tools/supertex_daemon.c` had no usable rollback target when
+  a coalesced edit landed past every extant checkpoint during the
+  cold-start window). Upstream fix landed in `vendor/supertex`
+  iters 755–758; submodule bumped to `2fb543e` in iter-227 start
+  commit; sidecar redeployed iter 227 and the live `SIDECAR_IMAGE`
+  digest pinned on `tex-center`. Live verification: GT-8
+  (`verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts`) GREEN on
+  iter-227 gold pass — `errorFrames=0`, 26 control frames clean.
+  Five-iteration narrative compressed: see `225_answer.md`,
+  `226_question.md`, `226_answer.md`. Retained regression locks:
+  GT-8 (live, cold-project Playwright spec, iter 224),
+  `tests_gold/lib/test/supertexColdNewpageCrash.test.mjs` (local,
+  iter 225), `tests_gold/lib/test/supertexFilewatcherRace.test.mjs`
+  (iter 218), `tests_gold/lib/test/supertexOversizeTarget.test.mjs`
+  (iter 217), `tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs`
+  (iter 222). `SIDECAR_TRACE_COALESCER` plumbing kept as passive
+  diagnostic; consider removal if not used by next coalescer-area
+  iteration.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
