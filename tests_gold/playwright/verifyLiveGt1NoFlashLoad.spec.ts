@@ -47,8 +47,6 @@ test.describe("live no-flash editor load (GT-A)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(60_000);
-
     await authedPage.goto(`/editor/${liveProject.id}`);
 
     // Warm-up has already cold-started the Machine and observed

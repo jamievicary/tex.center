@@ -47,8 +47,6 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(90_000);
-
     const { pdfSegmentFrames, overlapErrors } = captureFrames(
       authedPage,
       liveProject.id,

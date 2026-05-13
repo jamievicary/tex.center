@@ -54,8 +54,6 @@ test.describe("live sustained typing (GT-D)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(120_000);
-
     // Shared frame-capture helper (see `fixtures/wireFrames.ts`).
     const { pdfSegmentFrames, overlapErrors } = captureFrames(
       authedPage,

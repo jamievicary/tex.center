@@ -49,6 +49,19 @@ function resolveOutputDir(): string {
 
 const LOCAL_PORT = 3000;
 
+// Per-test timeout budget. Must absorb the worker-scoped
+// `sharedLiveProject` warm-up (WARMUP_TIMEOUT_MS = 180s — cold Fly
+// Machine boot + sidecar start + first lualatex round) plus the
+// first test's own work. The warm-up fixture setup happens lazily
+// inside the FIRST test that requests `liveProject`, and
+// `test.setTimeout(...)` inside a test body does NOT retroactively
+// cover fixture setup that already ran. The default 30s is therefore
+// not enough for that first spec — iter 206 GT-A failed exactly
+// this way ("Test timeout of 30000ms exceeded while setting up
+// 'liveProject'"). Local specs are unaffected: their own internal
+// waitFor timeouts still bound them to their natural durations.
+const TEST_TIMEOUT_MS = 240_000;
+
 export default defineConfig({
   testDir: "./playwright",
   outputDir: resolveOutputDir(),
@@ -58,6 +71,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: [["list"]],
+  timeout: TEST_TIMEOUT_MS,
   use: {
     trace: "off",
   },

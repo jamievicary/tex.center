@@ -41,8 +41,6 @@ test.describe("live initial PDF for seeded content (GT-B)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(60_000);
-
     const { pdfSegmentFrames } = captureFrames(authedPage, liveProject.id);
 
     await authedPage.goto(`/editor/${liveProject.id}`);

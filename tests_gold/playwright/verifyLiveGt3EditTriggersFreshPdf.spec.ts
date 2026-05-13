@@ -42,8 +42,6 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
     authedPage,
     liveProject,
   }) => {
-    test.setTimeout(60_000);
-
     // Shared helper buckets pdf-segment frames and the
     // "already in flight" overlap-error control frames (see
     // `fixtures/wireFrames.ts`); attach before navigation.
