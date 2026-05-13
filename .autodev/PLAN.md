@@ -131,60 +131,59 @@ Remaining slices:
   disk-write + recompile sequences (which is what the sidecar
   actually does), but they don't probe an asynchronous-watcher
   race because there isn't one to probe.
-  **Root cause identified (iter 221, see `220_answer.md`):** this is
-  **not** a supertex daemon crash. Live logs from machine
-  `d892d45be33608` (GT-7 cold-start, 13:31:47Z) show six
-  `compile-status state:"error" detail:"supertex-daemon: another
-  compile already in flight"` frames broadcast in 700 ms — one per
-  100 ms debounce tick during the daemon's 4.25 s cold-start
-  window. The sidecar's per-project `CompileCoalescer` is failing
-  to hold off overlapping `runCompile()` invocations, so each tick
-  re-enters the underlying `SupertexDaemonCompiler.compile()` which
-  rejects with the `busy=true` guard. Each error frame renders as a
-  red toast. The user's 15-newpage repro produces the same shape
-  via the same mechanism (slow first compile × 100 ms debounce ×
-  rapid doc-updates).
-  GT-7 went GREEN because its assertion only matches
-  `protocol violation`/`child exited`/`stdin not writable` — not
-  `already in flight`. Existing supertex probes
-  (`supertexOversizeTarget`, `supertexFilewatcherRace`) bypass the
-  coalescer and so could not see this failure mode either; they
-  remain as upstream-tolerance regression locks.
-  **Iter 222 partial progress:**
-  Sidecar-level gold case
-  `tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs` lands:
-  drives the full sidecar with the real `SupertexDaemonCompiler` +
-  real supertex binary, two-phase 80-update burst across the
-  cold-start window, asserts no `already in flight` frame reaches
-  the client. **Does not currently reproduce the production bug**
-  even with `COALESCER_SLOW_FIRST_MS=5000` (5 s forced first-compile
-  delay). Conclusion: the naive "slow cold-start × debounce ticks"
-  model is *not* the trigger — the coalescer's `inFlight` gate
-  holds under that pattern. The bug requires something
-  production-specific that isn't a pure timing artefact. GT-7
-  augmented to flag `already in flight` (iter 222).
-  **Iter 223 landed step 1 (trace plumbing):** coalescer emits
-  `{seq,event,inFlight,pending,hasTimer}` at every state-machine
-  transition when `SIDECAR_TRACE_COALESCER=1`; off by default. Sink
-  is `app.log.info(..., "coalescer-trace")`. Unit-test
-  `apps/sidecar/test/coalescerTrace.test.mjs` pins the contract.
-  **Operator step required before iter 224 can act:** set
-  `SIDECAR_TRACE_COALESCER=1` on the sidecar app (or per-project
-  Machine env), trigger GT-7 (or wait for natural recurrence),
-  scrape `flyctl logs`.
-  **Remaining iteration plan:**
-    2. Stand up a local repro using `LocalFsBlobStore` with a
-       seeded main.tex and a WS connect/disconnect/reconnect
-       sequence mid-cold-start — the closest untested edge in the
-       state machine (`coalescer.cancel()` on last-viewer-out).
-       This is independent of step 1 and can land before the
-       trace data arrives.
-    3. Once the trace pins the failing transition (one of three
-       shapes — see iter-223 log "Notes for future iterations"),
-       fix it. If the fix is small, the sidecar-level gold case
-       stays as the regression lock for the assertion shape; if it
-       requires wider invariants, augment the case to drive the
-       failing transition directly.
+  **Iter 224 — live repro on fresh cold project; iter-220 diagnosis
+  retracted.** New gold spec
+  `tests_gold/playwright/verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts`
+  creates its own fresh project (cold sidecar Machine) and drives
+  the user's literal repro from `220_question.md` (500 ms
+  `\newpage XX` cadence). On the very first live run it caught a
+  `compile-status state:"error"` frame containing
+  `protocol violation: child exited (code=134 signal=null)` —
+  i.e. the **original iter-213 daemon-crash shape**, not the
+  `already in flight` coalescer-defect shape iter-220 hypothesised.
+  Captured stderr shows three successful `recompile,T` rounds
+  (`edit detected at .../main.tex:56`, `:163`, `:187`) before the
+  supertex binary aborts with SIGABRT. The sidecar's coalescer is
+  doing its job; supertex is the defective party.
+  Why this took five iterations: every prior pinning attempt used
+  the SHARED warmed project from globalSetup, which has already
+  cleared its cold-start before any spec runs. GT-8 mints a fresh
+  project per invocation, recovering the cold-start window the user
+  hits. The "load-bearing variable is cold-start" claim from
+  220_answer.md was correct; the "what fires inside cold-start"
+  claim (coalescer) was wrong.
+  **Next iteration plan (M9.editor-ux.regress.gt7, now an upstream
+  supertex bug):**
+    1. Build a fast local repro inside `tests_gold/lib/test/` (no
+       Fly, no Playwright): spawn `supertex --daemon` directly,
+       feed the exact stdin sequence (seeded `Hello, world!` doc,
+       then 20 `recompile,T` rounds at 500 ms with `T` covering
+       the growing `\newpage NN`-padded body). Assert the daemon
+       does not exit with code 134. This is the regression lock
+       for the upstream fix.
+    2. Once that fast repro reliably triggers code 134, debug
+       supertex locally (Rust panic / abort handler). Strongest
+       hypothesis given the `edit detected at .../main.tex:NN`
+       trail: a checkpoint-resume path that asserts on a
+       newly-disappeared resume target after rapid back-to-back
+       recompiles.
+    3. PR the fix upstream into `vendor/supertex` (in scope per
+       CLAUDE.md). After the bumped submodule lands in the
+       sidecar image, GT-8 and the new fast repro both flip
+       green; remove the iter-223 `SIDECAR_TRACE_COALESCER`
+       plumbing **only if** the coalescer-trace turned out
+       unnecessary in retrospect (it likely did — keep it for now
+       as a passive diagnostic).
+  Pre-iter-224 prior framings retained for archival reference:
+  the iter-217..219 stdin-only / file-watcher narrative was
+  correct (supertex IS stdin-driven only). The iter-220..223
+  coalescer narrative was wrong but produced useful side
+  artefacts: the trace plumbing
+  (`apps/sidecar/src/compileCoalescer.ts`, gated on
+  `SIDECAR_TRACE_COALESCER=1`) and the sidecar-level gold case
+  (`tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs`) both
+  remain as regression locks against future *coalescer* changes
+  even though they don't pin the gt7 bug.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
