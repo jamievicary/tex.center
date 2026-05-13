@@ -89,6 +89,17 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
       .toBe(true);
     expect(preEditHash).not.toBeNull();
 
+    // Capture pdf-segment count just before typing. After the
+    // edit we wait for the count to increase *first*, then for
+    // the canvas hash to diverge. This separates two failure
+    // modes the previous single-assert form conflated:
+    //   - no new pdf-segment after the edit → compile/wire path
+    //     broken (distinct from GT-C, which only types one char)
+    //   - new pdf-segment arrived but canvas hash matches → the
+    //     iter-188 byte-identical regression class this spec was
+    //     written to catch.
+    const pdfSegmentCountBeforeEdit = pdfSegmentFrames.length;
+
     // Type a visually distinctive payload just before
     // `\end{document}` (end of the "Hello, world!" line of the
     // seeded template). A \section header forces a heading-sized
@@ -106,10 +117,26 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
     await authedPage.keyboard.press("End");
     await authedPage.keyboard.type(EDIT_PAYLOAD, { delay: 5 });
 
-    // Assert the canvas hash diverged. 60s budget covers the
-    // sidecar's compile coalescer + supertex round + PDF.js paint.
+    // First: a post-edit pdf-segment frame must arrive. If this
+    // times out, the failure is in the keystroke → Yjs → sidecar
+    // → daemon → wire path, not the canvas-paint path.
+    await expect
+      .poll(() => pdfSegmentFrames.length, {
+        timeout: 30_000,
+        message:
+          "no post-edit pdf-segment frame arrived within timeout — " +
+          "keystroke → Yjs → sidecar → daemon → wire path broken " +
+          "for the GT-5 edit shape (compile error, coalescer drop, " +
+          "or daemon short-circuit)",
+      })
+      .toBeGreaterThan(pdfSegmentCountBeforeEdit);
+
+    // Then: the canvas hash must diverge. If this times out after
+    // the previous poll succeeded, a fresh pdf-segment was on the
+    // wire but its bytes matched the prior segment (or PDF.js
+    // re-rendered to identical pixels) — the iter-188 class.
     await expectPreviewCanvasChanged(authedPage, preEditHash!, {
-      timeoutMs: 10_000,
+      timeoutMs: 30_000,
     });
 
     // Sanity: no overlap error during the edit either (covered by
