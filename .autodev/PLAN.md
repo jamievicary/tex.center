@@ -14,23 +14,24 @@ routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
 The remaining user-visible regression is **edit→preview**: live
-GT-3 and GT-5 are RED by design. Iter 202 grep of post-iter-199 Fly
-logs confirms **Path 2** is the live failure mode:
+GT-3 / GT-4 / GT-5 RED. Two contributors, both addressed:
 
-```
-supertex: WARN no usable rollback target for .../main.tex@73
-  (checkpoint=1 resumed_pid=-1)
-[supertex-daemon event] round-done
-```
+1. **Upstream daemon bug (fixed).** Iter 202 grep confirmed Path 2
+   (`resumed_pid=-1` in handshake `recompile,N` with no recovery,
+   `supertex_daemon.c:1230-1238`). Per iter-203 discussion, the
+   user has manually `git pull`ed the upstream fix into
+   `vendor/supertex` (now at `439c5b4`). Pending: re-run gold
+   against live to confirm.
+2. **Unrealistic gold edit position (fixed iter 203).** GT-3/4/5
+   previously typed *past* `\end{document}` (`Control+End` lands
+   on the trailing-newline empty line). Specs now navigate
+   `Control+End` → `ArrowUp` × 2 → `End` so typing lands on the
+   "Hello, world!" line, inside the document body. Matches real
+   user behaviour and side-steps the (now-fixed) past-terminator
+   codepath.
 
-i.e. `process_event`'s `select_for` returns `eff_n=1` but the
-selected checkpoint's frozen sibling is gone (`resumed_pid=-1`),
-fired in `supertex_daemon.c:1230-1238` (handshake-mode `recompile,N`
-driver). The handshake path emits a bare `[round-done]` with **no
-recovery**, while the *post-handshake* watch-loop path
-(supertex_daemon.c:1695-1702) recovers from the same condition via
-iter-711's `WATCH_LOOP_RECOMPILE_RC` → in-process recompile. The
-asymmetry is the bug. Full diagnosis in `.autodev/logs/202.md`.
+Full diagnosis in `.autodev/logs/202.md`; discussion resolution
+in `.autodev/discussion/202_answer.md`.
 
 ## 2. Milestones
 
@@ -54,23 +55,19 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — upstream supertex_daemon.c recovery for handshake
-  `recompile,N`.** Blocks live GT-3 and GT-5. Diagnosis closed
-  in iter 202 (see `.autodev/logs/202.md`): Path 2 confirmed
-  live. Fix: mirror iter-711's `WATCH_LOOP_RECOMPILE_RC` →
-  in-process recompile recovery from the post-handshake watch
-  loop into the handshake-mode `recompile,N` driver's
-  no-usable-rollback else-branch
-  (`vendor/supertex/tools/supertex_daemon.c:1230-1238`). After
-  the recompile, discard old daemon-dir chunks and re-emit from
-  page 1, then close the round with `[round-done]`. Sidecar
-  layer needs no change — `assembleSegment` consumes the
-  recompile chunks just as it consumes a normal-rollback's
-  chunks. Workflow: commit in `vendor/supertex/` submodule
-  (`jamievicary/supertex` upstream), push, bump submodule
-  pointer in this repo. Pair with a unit test in
-  `test_supertex_daemon_real` driving the `recompile,N` path
-  through a forced `resumed_pid=-1`.
+- **M7.4.x — confirm live GT-3/4/5 green.** Upstream daemon fix
+  for handshake `recompile,N` no-usable-rollback recovery has
+  been git-pulled into `vendor/supertex` (`439c5b4`) by the
+  user, and the gold specs have been moved to insert edits
+  *before* `\end{document}` (iter 203). Next harness gold pass
+  is the signal:
+  - All green → close M7.4.x.
+  - Still RED → re-grep Fly logs for the iter-202 WARN
+    signature. Absent ⇒ submodule pointer not yet baked into
+    deployed image (rebuild). Present ⇒ new diagnosis required.
+  Post-MVP follow-up: a clean fix to keep the frozen sibling
+  alive across `recompile,N` rounds (chain-bookkeeping root
+  cause) rather than the recovery patch; not on critical path.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a

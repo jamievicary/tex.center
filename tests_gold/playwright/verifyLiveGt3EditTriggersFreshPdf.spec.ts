@@ -70,11 +70,18 @@ test.describe("live edit triggers fresh PDF (GT-C)", () => {
 
     // Focus the editor and emit a single keystroke. End-of-line
     // append avoids tripping over CodeMirror's auto-closer
-    // wrappers around `{` `}`.
+    // wrappers around `{` `}`. Position the caret just before
+    // `\end{document}` (end of the "Hello, world!" line of the
+    // seeded template) — typing past `\end{document}` is not a
+    // realistic user edit and is also where iter-202's daemon
+    // chain-exhaustion path was originally tripped.
     const cmContent = authedPage.locator(".cm-content");
     await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
     await authedPage.keyboard.press("Control+End");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("End");
     await authedPage.keyboard.type("!", { delay: 5 });
 
     // Expect a *new* pdf-segment after the keystroke. With the

@@ -77,7 +77,14 @@ test.describe("live sustained typing (GT-D)", () => {
     const cmContent = authedPage.locator(".cm-content");
     await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
+    // Position before `\end{document}` (end of "Hello, world!"
+    // line) rather than past the document terminator — the latter
+    // is not a realistic user edit and was the original surface of
+    // the iter-202 daemon chain-exhaustion path.
     await authedPage.keyboard.press("Control+End");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("End");
 
     // ~30 ms inter-keystroke × ~150 chars ≈ 4.5 s of typing.
     await authedPage.keyboard.type(TYPING_BODY, { delay: 30 });

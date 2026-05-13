@@ -91,14 +91,21 @@ test.describe("live edit updates preview canvas (GT-5)", () => {
       .toBe(true);
     expect(preEditHash).not.toBeNull();
 
-    // Type a visually distinctive payload at end-of-document. A
-    // \section header forces a heading-sized block of ink in a
-    // y-region the seeded "Hello, world!" line doesn't occupy, so
-    // any non-broken re-render will pixel-diff against the initial.
+    // Type a visually distinctive payload just before
+    // `\end{document}` (end of the "Hello, world!" line of the
+    // seeded template). A \section header forces a heading-sized
+    // block of ink in a y-region the seeded line doesn't occupy,
+    // so any non-broken re-render will pixel-diff against the
+    // initial. Inserting inside the document body is the realistic
+    // user edit and avoids the past-`\end{document}` codepath that
+    // the iter-202 daemon fix targets.
     const cmContent = authedPage.locator(".cm-content");
     await cmContent.waitFor({ state: "visible", timeout: 10_000 });
     await cmContent.click();
     await authedPage.keyboard.press("Control+End");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("ArrowUp");
+    await authedPage.keyboard.press("End");
     await authedPage.keyboard.type(EDIT_PAYLOAD, { delay: 5 });
 
     // Assert the canvas hash diverged. 60s budget covers the
