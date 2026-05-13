@@ -77,39 +77,35 @@ Remaining slices:
   (iter 222). `SIDECAR_TRACE_COALESCER` plumbing kept as passive
   diagnostic; consider removal if not used by next coalescer-area
   iteration.
-- **M7.4.x — GT-5 only.** Iter 227 live gold: GT-5 RED again
-  (third recurrence). Iter-228 diagnostic narrowed the failure
-  mode: the inline GT-5 probe trace shows daemon ran two full
-  `compile-status running→idle` cycles after the edit, **no
-  error frames, no `stdin not writable`** — so iter-213's
-  dead-child re-spawn fix doesn't apply. Instead the symptom
-  matches the no-op path at `supertexDaemon.ts:141`
-  (`events.maxShipout < 0` → `{ok:true, segments:[]}`) — daemon
-  finished the round but produced no shipout events, sidecar
-  shipped no pdf-segment, idle frame closed the cycle. This is
-  the upstream-supertex "no usable rollback target" round shape
-  surfacing on the shared-`liveProject` whose body has been
-  polluted by GT-D/GT-7 cumulative typing before GT-5 runs (the
-  pre-edit doc tail in the trace is
+- **M7.4.x — GT-5 only. Root cause CONFIRMED upstream (iter
+  229).** Iter 228 deployed a diagnostic seam:
+  `CompileSuccess.noopReason` set when `events.maxShipout < 0`
+  (`apps/sidecar/src/compiler/supertexDaemon.ts:141`), plus a
+  warn-level `compile no-op (no pdf-segment shipped)` log line
+  in `server.ts`. Iter 229 redeployed the sidecar
+  (`deployment-01KRHJ9A9KZ1YVYXPDAB4NEM4T`,
+  sha `3007bde71cda…`), reran live gold, and confirmed: GT-5 RED
+  produced four consecutive `compile no-op` log entries on the
+  globalSetup warm-up project, `elapsedMs=36`, noopReason
+  `"supertex daemon round-done with no shipout events (no
+  usable rollback target for this edit)"`. The daemon
+  completes its `recompile` round fast with zero `[N.out]`
+  shipout events; sidecar ships zero pdf-segments; client sees
+  `running → idle` and no preview update.
+  Failing input shape: *warm doc body-edit past every extant
+  checkpoint*. Trace tail
   `…padding bytes to extend the typing window.\\end{document}`,
-  cursor on the body line).
-  Iter 228 added `CompileSuccess.noopReason` + sidecar
-  `compile no-op (no pdf-segment shipped)` warn-log so the next
-  live failure is diagnosable from `flyctl logs` alone (no
-  per-machine guesswork). Next step: re-run live gold; on a
-  fresh GT-5 RED, pull the no-op warn lines + `[supertex-daemon
-  stderr]` around them. If confirmed, the fix is upstream
-  (supertex daemon must produce a shipout on every successful
-  recompile, not silently no-op when no rollback target is
-  found). The upstream iter-755–758 fix covered the related
-  cold-start scenario surfacing in GT-8 but does not cover this
-  body-edit-on-warm-polluted-doc path.
-  Open upstream question (separable, not blocking): *why* does
-  the daemon process exit between GT-4 and GT-5? Hypotheses:
-  daemon crash on specific GT-4 input, idle timeout, Fly OOM
-  reaper. Add a sidecar-side ring buffer of `[supertex-daemon
-  stderr]` lines around the death event in a future iteration
-  if recurrence justifies it.
+  doc length 218→311 as typing continues, cursor in body. The
+  upstream iter-755–758 fix covered the GT-8 cold-start
+  `\newpage` shape but **not** this warm-doc body-edit shape.
+  **Next step is an upstream supertex fix**, paralleling iters
+  755–758: ensure `recompile,end` always produces ≥1 shipout on
+  success when no rollback target is usable (fall back to a
+  full cold rebuild, or re-emit the existing PDF unchanged).
+  Author in `vendor/supertex` with an upstream test fixture for
+  the warm-doc body-edit input shape, bump submodule, redeploy
+  sidecar. See iter-229 findings and `supertexColdNewpageCrash`
+  for the regression-lock pattern to mirror.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
