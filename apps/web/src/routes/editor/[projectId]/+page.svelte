@@ -109,7 +109,9 @@
 <div class="shell">
   <header class="topbar">
     <div class="brand-group">
-      <a href="/projects" class="brand" aria-label="tex.center">{@html linearLogo}</a>
+      <a href="/projects" class="brand"
+        ><span role="img" aria-label="tex.center">{@html linearLogo}</span></a
+      >
       <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
     </div>
     {#if data.user}
