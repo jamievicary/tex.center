@@ -1,5 +1,11 @@
 # Future ideas
 
+- **Remove the iter-228 GT-5 diagnostic seam.** Once GT-5 has
+  stayed green for 2–3 consecutive full gold passes after the
+  iter-231 M7.4.x close, delete `CompileSuccess.noopReason`
+  (`apps/sidecar/src/compiler/supertexDaemon.ts`) and the
+  `compile no-op (no pdf-segment shipped)` warn log line in
+  `apps/sidecar/src/server.ts`. One-iteration janitorial slice.
 - **`--cold` gold flag to exercise the cold-start path explicitly.**
   Once M9.gold-restructure (iter 197) separates warm-up from
   per-spec assertions, the warm path becomes the default and

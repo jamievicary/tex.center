@@ -13,20 +13,15 @@ with `app`-tagged deployment machines) exists alongside but isn't
 routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
-As of iter 210 live gold, **GT-A/B/C/D all GREEN, only GT-5 RED**.
-Iter 212 added inline diagnostic capture to GT-5; iter 213's live
-pass produced a definitive trace: framesSent delta healthy (~1
-frame/keystroke), cursor on a body line, three consecutive
-`compile-status state:error detail:"supertex-daemon: stdin not
-writable"` control frames. Root cause is NOT any of the three
-probes the plan predicted — it is missing recovery in the sidecar:
-`SupertexDaemonCompiler` cached `readyPromise` forever and never
-re-spawned the child after the daemon process died. Iter 213
-landed the fix (detect dead-child at top of `compile()` and reset
-for re-spawn) plus a respawn test (case 14). Awaiting next live
-gold pass to confirm GT-5 → GREEN.
+As of iter 231 live gold, **GT-A/B/C/D/5/7/8 all GREEN**. M7.4.x
+closed iter 231 (warm-doc body-edit silent no-op fixed upstream
+in `vendor/supertex` iters 759–764, submodule bumped to `8c3dec0`,
+sidecar redeployed and `SIDECAR_IMAGE` repinned, GT-5 verified
+GREEN). Live focus moves to **GT-6** (slow `.cm-content`
+appearance, M9.editor-ux.regress.gt6) as the next open RED.
 
-Full original diagnosis in `.autodev/logs/202.md`.
+Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
+closing narrative in `.autodev/discussion/230_answer.md`.
 
 ## 2. Milestones
 
@@ -77,47 +72,30 @@ Remaining slices:
   (iter 222). `SIDECAR_TRACE_COALESCER` plumbing kept as passive
   diagnostic; consider removal if not used by next coalescer-area
   iteration.
-- **M7.4.x — GT-5 only. Root cause CONFIRMED upstream (iter
-  229).** Iter 228 deployed a diagnostic seam:
-  `CompileSuccess.noopReason` set when `events.maxShipout < 0`
-  (`apps/sidecar/src/compiler/supertexDaemon.ts:141`), plus a
-  warn-level `compile no-op (no pdf-segment shipped)` log line
-  in `server.ts`. Iter 229 redeployed the sidecar
-  (`deployment-01KRHJ9A9KZ1YVYXPDAB4NEM4T`,
-  sha `3007bde71cda…`), reran live gold, and confirmed: GT-5 RED
-  produced four consecutive `compile no-op` log entries on the
-  globalSetup warm-up project, `elapsedMs=36`, noopReason
-  `"supertex daemon round-done with no shipout events (no
-  usable rollback target for this edit)"`. The daemon
-  completes its `recompile` round fast with zero `[N.out]`
-  shipout events; sidecar ships zero pdf-segments; client sees
-  `running → idle` and no preview update.
-  Failing input shape: *warm doc body-edit past every extant
-  checkpoint*. Trace tail
-  `…padding bytes to extend the typing window.\\end{document}`,
-  doc length 218→311 as typing continues, cursor in body. The
-  upstream iter-755–758 fix covered the GT-8 cold-start
-  `\newpage` shape but **not** this warm-doc body-edit shape.
-  **Next step is an upstream supertex fix**, paralleling iters
-  755–758: ensure `recompile,end` always produces ≥1 shipout on
-  success when no rollback target is usable (fall back to a
-  full cold rebuild, or re-emit the existing PDF unchanged).
-  Author in `vendor/supertex` with an upstream test fixture for
-  the warm-doc body-edit input shape, bump submodule, redeploy
-  sidecar. See iter-229 findings and `supertexColdNewpageCrash`
-  for the regression-lock pattern to mirror.
-  Iter 230: local headless repro landed —
-  `tests_gold/lib/test/supertexWarmDocBodyEditNoop.test.mjs` +
-  `tests_gold/cases/test_supertex_warm_doc_body_edit_noop.py`.
-  Drives `supertex --daemon` directly through
-  `SupertexDaemonCompiler` with the GT-D `Coalescer probe …`
-  typing build-up followed by GT-5's `\section{New Section}`
-  insertion; deterministically surfaces 5 consecutive silent
-  no-op rounds starting at `sourceLen≈190` once the body text
-  outruns the last upstream checkpoint. PASS expected once the
-  upstream fix lands; until then this is the upstream regression
-  lock. Human will perform the upstream supertex fix
-  separately — autodev is halted by upstream blocker.
+- **M7.4.x — GT-5. CLOSED iter 231.** Root cause was a second
+  upstream supertex no-op shape (warm-doc body-edit past every
+  extant checkpoint), distinct from the GT-8 cold-start
+  `\newpage` shape M7.4 closed for. Upstream fix landed in
+  `vendor/supertex` iters 759–764 with two new regression cases
+  (`test_cli_daemon_warm_body_edit_noop.sh`,
+  `test_cli_daemon_warm_body_edit_long_chain.sh`). Submodule
+  bumped to `8c3dec0` in the iter-231 start commit. Sidecar
+  redeployed iter 231
+  (`deployment-01KRHQ3PE6KY61ZD89XMD7P6YB`,
+  sha `b10d59ce82cc…`); `SIDECAR_IMAGE` pinned and control plane
+  redeployed
+  (`deployment-01KRHQ6ZDCFZFMWGY922VK2QEV`,
+  sha `6aa67217b34b…`). Live verification: GT-5
+  (`verifyLiveGt5EditUpdatesPreview.spec.ts`) GREEN on iter-231
+  isolated run (4.6 s). Retained regression locks:
+  GT-5 (live), `supertexWarmDocBodyEditNoop.test.mjs` (local,
+  iter 230, deterministic warm-doc body-edit repro driving
+  `supertex --daemon` directly). Diagnostic seam from iter 228
+  (`CompileSuccess.noopReason` +
+  `compile no-op (no pdf-segment shipped)` warn log in
+  `apps/sidecar/src/server.ts`) kept in place pending 2–3 full
+  gold passes confirming GT-5 stays green; removal tracked in
+  `FUTURE_IDEAS.md`.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
