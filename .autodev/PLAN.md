@@ -14,17 +14,17 @@ routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
 As of iter 210 live gold, **GT-A/B/C/D all GREEN, only GT-5 RED**.
-The upstream daemon fix (`vendor/supertex` at `439c5b4`) and the
-iter-203 in-body edit positioning are both proven by the GT-B/C/D
-greens. GT-5's residual failure is narrow: "no post-edit
-pdf-segment arrived" — the wire path is broken specifically for
-its `\n\\section{New Section}\n` payload while GT-C's `!` and
-GT-D's sustained ASCII body each produce fresh segments. Probably
-not the previously-suspected daemon rollback; more likely
-cross-spec state pollution (GT-3/4/5 share `liveProject`, so by
-GT-5 the buffer is doubly-mutated and the navigation hint may
-land the insert past `\end{document}` again). Diagnostic plan
-under M7.4.x below.
+Iter 212 added inline diagnostic capture to GT-5; iter 213's live
+pass produced a definitive trace: framesSent delta healthy (~1
+frame/keystroke), cursor on a body line, three consecutive
+`compile-status state:error detail:"supertex-daemon: stdin not
+writable"` control frames. Root cause is NOT any of the three
+probes the plan predicted — it is missing recovery in the sidecar:
+`SupertexDaemonCompiler` cached `readyPromise` forever and never
+re-spawned the child after the daemon process died. Iter 213
+landed the fix (detect dead-child at top of `compile()` and reset
+for re-spawn) plus a respawn test (case 14). Awaiting next live
+gold pass to confirm GT-5 → GREEN.
 
 Full original diagnosis in `.autodev/logs/202.md`.
 
@@ -49,27 +49,18 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. GT-5
-  fails on "no post-edit pdf-segment arrived" with its specific
-  `\n\\section{New Section}\n` payload. Diagnostic probes, in
-  order of cheapness:
-  1. **Cross-spec state pollution.** GT-3/4/5 share `liveProject`;
-     by GT-5 the buffer has been mutated twice. `Control+End →
-     ArrowUp×2 → End` may land *past* `\end{document}` again.
-     Probe: log `cm-content` text at GT-5 entry; either assert
-     cursor lands on a body line or give GT-5 its own freshly-
-     seeded project (drop the shared-liveProject reuse for GT-5
-     and pay the second warm-up).
-  2. **Yjs op shape for newline + braces.** Probe by counting Yjs
-     `update` frames during the GT-5 type. If zero/one rather
-     than per-keystroke, the input itself isn't reaching the WS.
-  3. **Silent compile-error short-circuit.** `\section{...}` in a
-     document with no sectioning context — check Fly logs for the
-     post-edit compile round.
-  Post-MVP follow-up: the `recompile,N` no-usable-rollback fix in
-  upstream daemon is currently a recovery patch; the clean fix
-  (keep the frozen sibling alive across rounds via chain-
-  bookkeeping) is not on critical path.
+- **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
+  213's diagnostic-driven fix (`SupertexDaemonCompiler` now
+  detects dead-child state and re-spawns on next `compile()`,
+  with paired unit-test case 14) is the candidate. Waiting on
+  the next live gold pass to confirm GT-5 → GREEN. If still RED,
+  reopen the diagnostic — the iter-212 capture stays in place.
+  Open upstream question (separable, not blocking): *why* does
+  the daemon process exit between GT-4 and GT-5? Hypotheses:
+  daemon crash on specific GT-4 input, idle timeout, Fly OOM
+  reaper. Add a sidecar-side ring buffer of `[supertex-daemon
+  stderr]` lines around the death event in a future iteration
+  if recurrence justifies it.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a

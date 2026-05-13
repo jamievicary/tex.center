@@ -107,6 +107,16 @@ export class SupertexDaemonCompiler implements Compiler {
     }
     this.busy = true;
     try {
+      // If a prior round died with the child (crash, killed by OS,
+      // upstream-daemon self-exit), the cached `readyPromise` would
+      // resolve instantly and `writeStdin` would surface "stdin not
+      // writable" with no path back. Detect dead-child state and
+      // reset so `ensureReady` respawns. Loses upstream incremental
+      // state — the next compile re-runs from scratch — but that's
+      // strictly better than wedging every subsequent edit.
+      if (this.isChildDead()) {
+        this.resetForRespawn();
+      }
       await this.ensureReady();
       // recompile,<N> with N = targetPage; "end" if no target.
       const target = req.targetPage > 0 ? String(req.targetPage) : "end";
@@ -172,6 +182,27 @@ export class SupertexDaemonCompiler implements Compiler {
   }
 
   async restore(_blob: Uint8Array): Promise<void> {}
+
+  private isChildDead(): boolean {
+    if (this.spawnError) return true;
+    if (this.childExited) return true;
+    if (!this.child) return false;
+    if (!this.child.stdin || this.child.stdin.destroyed) return true;
+    return false;
+  }
+
+  private resetForRespawn(): void {
+    this.child = null;
+    this.childExited = null;
+    this.spawnError = null;
+    this.stderrBuf = "";
+    this.stderrLineBuf = "";
+    this.stdoutBuf = new DaemonLineBuffer();
+    this.eventQueue = [];
+    this.eventWaiter = null;
+    this.stdoutEnded = false;
+    this.readyPromise = null;
+  }
 
   private ensureReady(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;

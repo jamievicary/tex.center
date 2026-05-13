@@ -394,4 +394,46 @@ const require = createRequire(import.meta.url);
   await c.close();
 }
 
+// 14. Recovery from daemon child death: if the underlying child
+//     process exits (crash, OS kill, upstream daemon self-exit)
+//     between rounds, the next `compile()` MUST detect the dead-
+//     child state and respawn rather than surfacing
+//     "stdin not writable" indefinitely. GT-5 (iter 213) caught
+//     exactly this: three consecutive `compile-status state:error
+//     detail:"supertex-daemon: stdin not writable"` frames, no path
+//     to recovery without restarting the sidecar process.
+{
+  const workDir = await makeWorkDir("respawn-after-death");
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({ FAKE_TOTAL: "2" }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+    gracefulTimeoutMs: 500,
+    killTimeoutMs: 500,
+  });
+  const r1 = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r1.ok, true, "first compile ok");
+
+  // Reach in and kill the child to simulate daemon death between
+  // rounds. Wait for the `exit` event so `childExited` is set.
+  const child = c.child;
+  assert.ok(child, "child spawned");
+  await new Promise((resolve) => {
+    child.once("exit", resolve);
+    child.kill("SIGKILL");
+  });
+  // Give the compiler a tick to process the exit event.
+  await new Promise((r) => setImmediate(r));
+
+  const r2 = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r2.ok, true, "recovery compile ok after daemon death");
+  const text = Buffer.from(r2.segments[0].bytes).toString("utf8");
+  assert.match(text, /^CHUNK-1\nCHUNK-2\n$/);
+  // Ensure a different child is now in place.
+  assert.notEqual(c.child, child, "respawned a fresh child");
+  await c.close();
+}
+
 console.log("supertex-daemon compiler test: OK");
