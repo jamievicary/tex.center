@@ -64,7 +64,33 @@ Remaining slices:
   (`verifyLiveGt7RapidTypingDaemonStable.spec.ts`, iter 214) types
   ~570 chars at 0 ms inter-key and asserts no control frame
   matches `protocol violation` / `child exited` /
-  `stdin not writable`. Expected RED on next gold pass.
+  `stdin not writable`. GT-7 went GREEN on iter 215's live pass
+  — meaning the zero-delay-`type` recipe does **not** reproduce
+  the user's crash, so the spec as-committed pins nothing
+  (see `215_answer.md`). Two recipe defects: `delay: 0` is not
+  realistic typing (no time for WS round-trip between keys),
+  and the real-world trigger is *pasting* lines like
+  `\newpage X` that swell page count rapidly — implying the
+  crash is page-count- / compile-target-dependent, not pure
+  keystroke-rate-dependent. Strongest current hypothesis: the
+  sidecar sends `recompile,T\n` with a T past the current
+  document's page count after a paste of `\newpage`s, hitting
+  an assert in supertex's incremental engine.
+  **Next probe (TDD, no shortcuts):**
+    1. Reproduce the crash manually in a real browser by pasting
+       a block of `\newpage X` lines into the seeded project;
+       capture the cursor position, page count at crash, and
+       the full WS control-frame trace into the iteration log.
+       I should do this myself as the agent without involving
+       the human.
+    2. Only after step 1 produces a concrete recipe, encode it
+       in a replacement gold spec and confirm it goes RED with
+       the same control-frame shape before committing as the
+       pin.
+  Coalescer non-overlap unit test demoted to a confidence
+  follow-up — it is no longer the next diagnostic. Existing
+  GT-7 stays in the tree (cheap, assertion shape is correct)
+  until the replacement supersedes or augments it.
   **Revised diagnosis (iter 215, see `214_answer.md`):** supertex
   in `--daemon` mode is stdin-driven only and does not auto-reload
   on disk edits, so the iter-213 "unbatched disk writes race the
