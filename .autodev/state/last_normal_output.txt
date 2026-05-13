@@ -11,8 +11,8 @@ Done in 1.2s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
 packages/blobs typecheck: Done
 packages/auth typecheck: Done
@@ -212,7 +212,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 186 tests in 105.566s
+Ran 186 tests in 109.105s
 
 OK
 tests_normal/run_tests.sh: PASS
