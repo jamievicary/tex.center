@@ -131,19 +131,39 @@ Remaining slices:
   disk-write + recompile sequences (which is what the sidecar
   actually does), but they don't probe an asynchronous-watcher
   race because there isn't one to probe.
-  **Next probe candidates (revised priority):**
-  (a) **Sidecar-side audit** — re-read
-  `apps/sidecar/src/compileCoalescer.ts` and `runCompile` in
-  `apps/sidecar/src/server.ts` for any path that can issue a
-  second `recompile,T` before the previous round-done arrives,
-  or any path that mutates `main.tex` after `recompile,T` has
-  been sent but before `round-done`. Either *would* surface as a
-  protocol-violation flavour error and is consistent with the
-  stdin-only model.
-  (b) **Real-browser repro** by pasting `\newpage X` lines into
-  the seeded project (the original PLAN step 1). Sidecar audit
-  may already explain it; if not, this captures the actual
-  user-reported sequence with cursor + page count + WS trace.
+  **Root cause identified (iter 221, see `220_answer.md`):** this is
+  **not** a supertex daemon crash. Live logs from machine
+  `d892d45be33608` (GT-7 cold-start, 13:31:47Z) show six
+  `compile-status state:"error" detail:"supertex-daemon: another
+  compile already in flight"` frames broadcast in 700 ms — one per
+  100 ms debounce tick during the daemon's 4.25 s cold-start
+  window. The sidecar's per-project `CompileCoalescer` is failing
+  to hold off overlapping `runCompile()` invocations, so each tick
+  re-enters the underlying `SupertexDaemonCompiler.compile()` which
+  rejects with the `busy=true` guard. Each error frame renders as a
+  red toast. The user's 15-newpage repro produces the same shape
+  via the same mechanism (slow first compile × 100 ms debounce ×
+  rapid doc-updates).
+  GT-7 went GREEN because its assertion only matches
+  `protocol violation`/`child exited`/`stdin not writable` — not
+  `already in flight`. Existing supertex probes
+  (`supertexOversizeTarget`, `supertexFilewatcherRace`) bypass the
+  coalescer and so could not see this failure mode either; they
+  remain as upstream-tolerance regression locks.
+  **Next iteration plan (single coherent slice):**
+    1. Add a deterministic local `tests_gold/` reproducer that
+       drives the full sidecar with `SupertexDaemonCompiler`, the
+       real supertex binary (skipped when absent), and a
+       cold-start-spanning burst of doc-updates. Assert no
+       `compile-status state:"error"` frame containing
+       `already in flight` reaches the client.
+    2. Diagnose and fix the coalescer defect. The
+       `serverCompileCoalescer.test.mjs` case 1 already verifies
+       the gate works with `ManualCompiler`, so the failure mode
+       involves something specific to the real-daemon path; likely
+       candidates listed in `220_answer.md` §"Open question".
+    3. Augment GT-7's assertion to forbid `already in flight`
+       as well, so this regression is pinned at the live layer.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
