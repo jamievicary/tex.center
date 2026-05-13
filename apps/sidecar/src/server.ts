@@ -40,7 +40,7 @@ declare module "fastify" {
   }
 }
 
-import type { Compiler } from "./compiler/types.js";
+import type { Compiler, PdfSegment } from "./compiler/types.js";
 import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { SupertexDaemonCompiler } from "./compiler/supertexDaemon.js";
@@ -74,6 +74,13 @@ interface ProjectState {
   restorePromise: Promise<void> | null;
   // Edge-triggered compile state machine. See `compileCoalescer.ts`.
   coalescer: CompileCoalescer;
+  // Last non-empty PDF segments emitted by `runCompile`. Replayed
+  // to a fresh WS subscriber on connect so a viewer arriving after
+  // the initial compile (e.g. a gold spec opening a project the
+  // warm-up already compiled) sees the current PDF state without
+  // requiring an edit. Empty until the first successful, non-no-op
+  // compile.
+  lastSegments: PdfSegment[];
 }
 
 interface ProjectClient {
@@ -243,6 +250,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       restorePromise: null,
       // Late-bound below: `runCompile` needs `state` in scope.
       coalescer: null as unknown as CompileCoalescer,
+      lastSegments: [],
     };
     state.coalescer = new CompileCoalescer({
       debounceMs: COMPILE_DEBOUNCE_MS,
@@ -359,6 +367,9 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       bytesShipped += seg.bytes.byteLength;
       broadcast(p, encodePdfSegment(seg));
     }
+    if (result.segments.length > 0) {
+      p.lastSegments = result.segments;
+    }
     if (
       typeof result.shipoutPage === "number" &&
       result.shipoutPage > p.coalescer.highestEmittedShipoutPage
@@ -451,6 +462,17 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         client.send(
           encodeControl({ type: "file-list", files: project.persistence.files() }),
         );
+        // Replay the last-emitted PDF segment(s) so a viewer that
+        // joins after the initial compile sees the current PDF
+        // state without needing an edit. The supertex daemon
+        // short-circuits an unchanged-source `recompile` to
+        // `{segments: []}`, so without this replay a fresh
+        // subscriber on a quiescent project would never receive a
+        // pdf-segment frame.
+        for (const seg of project.lastSegments) {
+          if (socket.readyState !== socket.OPEN) return;
+          client.send(encodePdfSegment(seg));
+        }
         project.coalescer.kick();
       });
 

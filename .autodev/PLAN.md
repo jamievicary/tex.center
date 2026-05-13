@@ -55,14 +55,25 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M7.4.x — confirm live GT-3/4/5 green.** Upstream daemon fix
-  for handshake `recompile,N` no-usable-rollback recovery has
-  been git-pulled into `vendor/supertex` (`439c5b4`) by the
-  user, and the gold specs have been moved to insert edits
-  *before* `\end{document}` (iter 203). Next harness gold pass
-  is the signal:
+- **M7.4.x — confirm live GT-B/3/4/5 green.** Three contributors
+  now addressed:
+  1. Upstream daemon fix for handshake `recompile,N`
+     no-usable-rollback recovery (`vendor/supertex` at `439c5b4`,
+     manually pulled by user).
+  2. Gold specs moved to in-body edits before `\end{document}`
+     (iter 203).
+  3. Sidecar segment-replay on WS connect (iter 205,
+     `server.ts:ProjectState.lastSegments`): a fresh subscriber to
+     a project whose initial compile was consumed by the warm-up
+     now receives the cached PDF segment without needing an edit.
+     This is what was making GT-B fail at the 5s budget even with
+     the daemon healthy.
+  Next harness gold pass is the signal:
   - All green → close M7.4.x.
-  - Still RED → re-grep Fly logs for the iter-202 WARN
+  - GT-B GREEN, GT-3/4/5 still RED → post-edit compile path is
+    broken, not the initial-state path. Re-investigate the daemon
+    rollback codepath.
+  - GT-B still RED → re-grep Fly logs for the iter-202 WARN
     signature. Absent ⇒ submodule pointer not yet baked into
     deployed image (rebuild). Present ⇒ new diagnosis required.
   Post-MVP follow-up: a clean fix to keep the frozen sibling

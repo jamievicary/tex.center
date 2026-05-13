@@ -9,64 +9,43 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-[globalSetup] DB ready (userId=423a1432-1137-4ce0-88b8-32e9ebd7e286); spawning dev server on :3000
+[globalSetup] DB ready (userId=3e5ba942-281d-401b-a3e1-79c62496ea5c); spawning dev server on :3000
 
 Running 30 tests using 1 worker
 
-  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.1s)
-  ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.1s)
-  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (493ms)
-  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (437ms)
-  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (540ms)
-  ✓  6 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (240ms)
-  ✓  7 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.8s)
-  ✘  8 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (5.4s)
-  ✓  9 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (1.8s)
+  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.1s)
+  ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.0s)
+  ✓  3 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (484ms)
+  ✓  4 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (450ms)
+  ✓  5 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (565ms)
+  ✓  6 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (237ms)
+  ✓  7 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (4.2s)
+  ✓  8 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (431ms)
+  ✓  9 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (635ms)
   -  10 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects
-  ✓  11 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (550ms)
-  ✓  12 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (202ms)
-  ✓  13 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (103ms)
-  ✓  14 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (1.1m)
-  ✓  15 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (10.7s)
+  ✓  11 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (639ms)
+  ✓  12 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (203ms)
+  ✓  13 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (115ms)
+  ✓  14 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (29.0s)
+  ✓  15 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (11.1s)
   -  16 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
   -  17 [live] › verifyLiveWsUpgrade.spec.ts:60:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  18 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (285ms)
-  ✓  19 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (90ms)
-  ✓  20 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (45ms)
-  ✓  21 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (58ms)
-  ✓  22 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (72ms)
-  ✓  23 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (162ms)
-  ✓  24 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (72ms)
-  ✓  25 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (53ms)
-  ✓  26 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (24.0s)
+  ✓  18 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (202ms)
+  ✓  19 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (92ms)
+  ✓  20 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (44ms)
+  ✓  21 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (59ms)
+  ✓  22 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (56ms)
+  ✓  23 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (167ms)
+  ✓  24 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (55ms)
+  ✓  25 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (80ms)
+  ✓  26 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (22.0s)
   ✘  27 [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input (5.1s)
-  ✘  28 [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error (25.7s)
-  ✘  29 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (21.0s)
-  ✘  30 [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas (27.5s)
+  ✘  28 [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error (25.2s)
+  ✘  29 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (28.9s)
+  ✘  30 [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas (25.2s)
 
 
-  1) [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project ─
-
-    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
-
-    Locator: getByRole('img', { name: 'tex.center' })
-    Expected: visible
-    Received: <element(s) not found>
-    Call log:
-    [2m  - expect.toBeVisible with timeout 5000ms[22m
-    [2m  - waiting for getByRole('img', { name: 'tex.center' })[22m
-
-
-      36 |
-      37 |     // Topbar.
-    > 38 |     await expect(authedPage.getByRole("img", { name: "tex.center" })).toBeVisible();
-         |                                                                       ^
-      39 |     await expect(
-      40 |       authedPage.locator('form[action="/auth/logout"] button[type="submit"]'),
-      41 |     ).toBeVisible();
-        at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/editor.spec.ts:38:71
-
-  2) [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input 
+  1) [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input 
 
     Error: no pdf-segment frame arrived for the seeded hello-world template without user input — the initial-compile path is broken
 
@@ -87,7 +66,7 @@ Running 30 tests using 1 worker
       58 |         message:
         at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveGt2InitialPdfSeeded.spec.ts:55:5
 
-  3) [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error 
+  2) [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error 
 
     Error: no initial pdf-segment frame (seeded template path broken)
 
@@ -108,7 +87,7 @@ Running 30 tests using 1 worker
       65 |         message: "no initial pdf-segment frame (seeded template path broken)",
         at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveGt3EditTriggersFreshPdf.spec.ts:62:5
 
-  4) [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment 
+  3) [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment 
 
     Error: no initial pdf-segment for the seeded template
 
@@ -129,7 +108,7 @@ Running 30 tests using 1 worker
       73 |         message: "no initial pdf-segment for the seeded template",
         at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveGt4SustainedTyping.spec.ts:70:5
 
-  5) [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas 
+  4) [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas 
 
     Error: no initial pdf-segment frame (seeded template path broken)
 
@@ -150,35 +129,34 @@ Running 30 tests using 1 worker
       66 |         message:
         at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveGt5EditUpdatesPreview.spec.ts:63:5
 
-  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (1.1m)
-  Slow test file: [live] › verifyLiveGt5EditUpdatesPreview.spec.ts (27.5s)
-  Slow test file: [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts (25.7s)
-  Slow test file: [live] › verifyLiveGt1NoFlashLoad.spec.ts (24.0s)
-  Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (21.0s)
+  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (29.0s)
+  Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (28.9s)
+  Slow test file: [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts (25.2s)
+  Slow test file: [live] › verifyLiveGt5EditUpdatesPreview.spec.ts (25.2s)
+  Slow test file: [live] › verifyLiveGt1NoFlashLoad.spec.ts (22.0s)
   Consider splitting slow test files to speed up parallel execution
-  5 failed
-    [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project ──
+  4 failed
     [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input 
     [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error 
     [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment 
     [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:46:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas 
   3 skipped
-  22 passed (4.0m)
-[dev] 10:09:03 AM [vite] ws proxy error:
+  23 passed (3.5m)
+[dev] 10:21:41 AM [vite] ws proxy error:
 Error: connect ECONNREFUSED 127.0.0.1:3001
     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
     at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
-sharedLiveProject warm-up: pdf-segment observed in 21978ms (project 6f214ae9-3831-4f3f-823b-b06755fd92ca)
-(node:13486) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+sharedLiveProject warm-up: pdf-segment observed in 19970ms (project 48b80c64-de6c-4732-be57-dae31028a52e)
+(node:11971) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-sharedLiveProject warm-up: pdf-segment observed in 18969ms (project 4fa86115-434d-4eb2-ace3-a2deb9b118d5)
-(node:14272) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+sharedLiveProject warm-up: pdf-segment observed in 18341ms (project 919c1ff5-0267-439e-bff8-33d381672c21)
+(node:13724) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-sharedLiveProject warm-up: pdf-segment observed in 13929ms (project f15fe90d-8fc6-482e-9c9e-ea36c6c5fca3)
-(node:14977) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+sharedLiveProject warm-up: pdf-segment observed in 22297ms (project 286de5e5-8631-4ba6-8562-d74593633371)
+(node:23067) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-sharedLiveProject warm-up: pdf-segment observed in 20983ms (project 6da3ae31-43b0-4eaa-b8b5-97dab2d602e6)
-(node:15587) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+sharedLiveProject warm-up: pdf-segment observed in 18347ms (project d96f7cab-3357-408d-b524-2809f2a91390)
+(node:2183) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 FAIL
 test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... ok
@@ -193,6 +171,6 @@ Traceback (most recent call last):
 AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
 ----------------------------------------------------------------------
-Ran 13 tests in 269.490s
+Ran 13 tests in 234.625s
 
 FAILED (failures=1)
