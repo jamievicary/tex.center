@@ -7,14 +7,14 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.3s
+Done in 1.2s
 Scope: 6 of 7 workspace projects
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
@@ -121,6 +121,7 @@ test_scripts_cloudflare_dns (test_node_suites.TestNodeSuites.test_scripts_cloudf
 test_sidecar_bind_host (test_node_suites.TestNodeSuites.test_sidecar_bind_host) ... ok
 test_sidecar_checkpoint_blob (test_node_suites.TestNodeSuites.test_sidecar_checkpoint_blob) ... ok
 test_sidecar_checkpoint_wiring (test_node_suites.TestNodeSuites.test_sidecar_checkpoint_wiring) ... ok
+test_sidecar_coalescer_trace (test_node_suites.TestNodeSuites.test_sidecar_coalescer_trace) ... ok
 test_sidecar_daemon_protocol (test_node_suites.TestNodeSuites.test_sidecar_daemon_protocol) ... ok
 test_sidecar_fixture_compiler (test_node_suites.TestNodeSuites.test_sidecar_fixture_compiler) ... ok
 test_sidecar_list_project_files (test_node_suites.TestNodeSuites.test_sidecar_list_project_files) ... ok
@@ -211,7 +212,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 185 tests in 112.507s
+Ran 186 tests in 107.858s
 
 OK
 tests_normal/run_tests.sh: PASS

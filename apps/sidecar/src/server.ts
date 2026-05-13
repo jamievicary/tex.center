@@ -45,7 +45,7 @@ import { FixtureCompiler } from "./compiler/fixture.js";
 import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { SupertexDaemonCompiler } from "./compiler/supertexDaemon.js";
 import { ProjectWorkspace } from "./workspace.js";
-import { CompileCoalescer } from "./compileCoalescer.js";
+import { CompileCoalescer, type CompileCoalescerOptions } from "./compileCoalescer.js";
 import {
   createProjectPersistence,
   defaultBlobStoreFromEnv,
@@ -163,6 +163,14 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const blobStore = opts.blobStore ?? defaultBlobStoreFromEnv();
 
+  // Per-iter-222 plan: gated structured trace of every
+  // CompileCoalescer state-machine transition. Off by default; flip
+  // `SIDECAR_TRACE_COALESCER=1` on a Fly Machine to capture the
+  // sequence of `{event,seq,inFlight,pending}` records that leads to
+  // the iter-221 "already in flight" toast cluster, then scrape via
+  // `flyctl logs`.
+  const traceCoalescer = process.env.SIDECAR_TRACE_COALESCER === "1";
+
   const projects = new Map<string, ProjectState>();
 
   // Idle-stop bookkeeping. `viewerCount` aggregates across every
@@ -252,10 +260,15 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       coalescer: null as unknown as CompileCoalescer,
       lastSegments: [],
     };
-    state.coalescer = new CompileCoalescer({
+    const coalescerOpts: CompileCoalescerOptions = {
       debounceMs: COMPILE_DEBOUNCE_MS,
       run: () => runCompile(state),
-    });
+    };
+    if (traceCoalescer) {
+      coalescerOpts.trace = (event) =>
+        app.log.info({ projectId: id, coalescer: event }, "coalescer-trace");
+    }
+    state.coalescer = new CompileCoalescer(coalescerOpts);
     projects.set(id, state);
     return state;
   }

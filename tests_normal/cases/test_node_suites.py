@@ -77,6 +77,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_compile_coalescer(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverCompileCoalescer.test.mjs")
 
+    def test_sidecar_coalescer_trace(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "coalescerTrace.test.mjs")
+
     def test_sidecar_server_idle_stop(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverIdleStop.test.mjs")
 

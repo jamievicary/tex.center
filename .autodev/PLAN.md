@@ -163,25 +163,28 @@ Remaining slices:
   holds under that pattern. The bug requires something
   production-specific that isn't a pure timing artefact. GT-7
   augmented to flag `already in flight` (iter 222).
-  **Next iteration plan:**
-    1. Add gated trace logging in the coalescer
-       (`SIDECAR_TRACE_COALESCER=1`) emitting
-       `{event,seq,inFlight,pending}` at every `maybeFire`, `run`
-       entry, and `.finally`. Deploy, re-trigger GT-7 (or wait for
-       the augmented spec to flag it), scrape `flyctl logs`. The
-       trace will reveal whether `inFlight` is observed false
-       during a slow first compile (logic bug) or whether some
-       other path is calling `runCompile`/`compile` directly
-       (state-pollution bug).
+  **Iter 223 landed step 1 (trace plumbing):** coalescer emits
+  `{seq,event,inFlight,pending,hasTimer}` at every state-machine
+  transition when `SIDECAR_TRACE_COALESCER=1`; off by default. Sink
+  is `app.log.info(..., "coalescer-trace")`. Unit-test
+  `apps/sidecar/test/coalescerTrace.test.mjs` pins the contract.
+  **Operator step required before iter 224 can act:** set
+  `SIDECAR_TRACE_COALESCER=1` on the sidecar app (or per-project
+  Machine env), trigger GT-7 (or wait for natural recurrence),
+  scrape `flyctl logs`.
+  **Remaining iteration plan:**
     2. Stand up a local repro using `LocalFsBlobStore` with a
        seeded main.tex and a WS connect/disconnect/reconnect
        sequence mid-cold-start — the closest untested edge in the
        state machine (`coalescer.cancel()` on last-viewer-out).
-    3. Once the trace pins the failing transition, fix it. If the
-       fix is small, the sidecar-level gold case stays as the
-       regression lock for the assertion shape; if it requires
-       wider invariants, augment the case to drive the failing
-       transition directly.
+       This is independent of step 1 and can land before the
+       trace data arrives.
+    3. Once the trace pins the failing transition (one of three
+       shapes — see iter-223 log "Notes for future iterations"),
+       fix it. If the fix is small, the sidecar-level gold case
+       stays as the regression lock for the assertion shape; if it
+       requires wider invariants, augment the case to drive the
+       failing transition directly.
 - **M7.4.x — GT-5 only.** GT-A/B/C/D green on iter 210. Iter
   213's diagnostic-driven fix (`SupertexDaemonCompiler` now
   detects dead-child state and re-spawns on next `compile()`,
