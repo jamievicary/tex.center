@@ -91,9 +91,20 @@ export type IdleHandler = (ctx: IdleHandlerContext) => void;
 //      ~1 s after every resume, defeating the optimisation entirely
 //      (live evidence: iter 255 log, reused-project Machine).
 //
+//      If the suspend call throws (Fly 5xx, bad token, network
+//      blip), we do NOT close the app or exit. Exiting would park
+//      the Machine in `stopped`, which is the 20 s+ cold-load path
+//      the user reported (`260_answer.md`) and is M13.2(b).5's R2
+//      target. Instead we log the failure and re-arm the idle gate
+//      — a future inactive window retries. The cost of staying up
+//      with a broken token is bounded (Fly bills sidecars at the
+//      shared-pool rate); the cost of dropping into `stopped` is a
+//      user-visible 20 s wait.
+//
 //   2. `suspendSelf` is null (local dev or missing creds). No
 //      suspend API to call; close the app and exit cleanly. This is
-//      the historical idle-stop path.
+//      the historical idle-stop path and the documented local-dev
+//      contract.
 export function createIdleHandler(deps: IdleHandlerDeps): IdleHandler {
   const log = deps.log ?? ((msg, err) => console.error(msg, err));
   const exit = deps.exit ?? ((code: number) => process.exit(code));
@@ -105,18 +116,20 @@ export function createIdleHandler(deps: IdleHandlerDeps): IdleHandler {
       if (deps.suspendSelf) {
         try {
           await deps.suspendSelf();
-          // Post-resume. Keep the listener bound; re-arm the idle
-          // gate so a future inactive window can suspend us again.
-          inFlight = false;
-          try {
-            ctx.rearm();
-          } catch (err) {
-            log("sidecar idle: rearm callback threw", err);
-          }
-          return;
         } catch (err) {
-          log("sidecar idle: suspend failed, falling back to clean exit", err);
+          log("sidecar idle: suspend failed, staying alive to retry next idle window", err);
         }
+        // Whether suspend succeeded (post-resume) or threw (still
+        // pre-suspend), the right move is the same: keep the
+        // listener bound and re-arm the idle gate. Never exit from
+        // this path — exit(0) is the route to `stopped`.
+        inFlight = false;
+        try {
+          ctx.rearm();
+        } catch (err) {
+          log("sidecar idle: rearm callback threw", err);
+        }
+        return;
       }
       const app = deps.getApp();
       try {

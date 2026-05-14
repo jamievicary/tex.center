@@ -23,10 +23,13 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-266): **M13.2(b).5 stopped-state
-fix → M15.multipage-preview → M11.1c headless-tree adoption →
-M16.aesthetic.** M14.title-bar landed iter 264. M13.2(b).4
-stopped-state pin landed iter 266 (RED gold case as expected).
+Active priority queue (post iter-267): **M13.2(b).5 R1 (SSR seed
+widening — needs shared blob store) → deploy R2 sidecar idle-
+handler fix from iter 267 → M15.multipage-preview → M11.1c
+headless-tree adoption → M16.aesthetic.** M14.title-bar landed
+iter 264. M13.2(b).4 stopped-state pin landed iter 266 (RED gold
+case as expected). M13.2(b).5 R2 (sidecar idle-handler stays
+alive on suspend-throw) landed iter 267.
 See
 `260_answer.md` for sequencing rationale and library/palette
 decisions.
@@ -232,18 +235,33 @@ candidate.
      Follow-up still owed: sidecar idle-handler test asserting
      `suspended` (not `stopped`) is the actual outcome of the
      idle-timer fallback. Park in M13.2(b).5 R2 work.
-  5. **M13.2(b).5 — fix for stopped-state cold load. OPEN.**
+  5. **M13.2(b).5 — fix for stopped-state cold load. PARTIAL —
+     R2 sidecar contribution landed iter 267, deploy + R1
+     outstanding.**
      Two candidate roots, addressable independently:
-     - **R1.** Widen SSR seed for non-fresh projects (already a
-       known follow-up below). Fetches persisted source from
-       shared blob store so `.cm-content` shows real content
-       during the Machine cold-start. Prerequisite for M13.2(b).4
-       flipping green. Requires shared `BLOB_STORE` binding.
-     - **R2.** Eliminate `stopped` as a reachable per-project
-       state. Either keep one Machine warm (shared-pool M7.0.2
-       work), or convert the idle-handler fallback from
-       `process.exit(0)` to a hard-error retry so Machines only
-       ever land in `suspended`.
+     - **R1. OPEN.** Widen SSR seed for non-fresh projects
+       (already a known follow-up below). Fetches persisted
+       source from shared blob store so `.cm-content` shows real
+       content during the Machine cold-start. Prerequisite for
+       `verifyLiveGt6LiveEditableStateStopped` flipping green
+       (the spec directly drives `/stop` and so reaches the
+       cold-restart path regardless of R2). Requires shared
+       `BLOB_STORE` binding.
+     - **R2. LANDED iter 267 (deploy outstanding).** Sidecar
+       `createIdleHandler` no longer exits on `suspendSelf`
+       failure. The throw path now logs and re-arms the idle
+       gate instead of `app.close()` + `exit(0)`; the next idle
+       window retries. Net: in production the sidecar itself can
+       no longer drop a Machine into `stopped`. Local-dev path
+       (`suspendSelf === null`) keeps the close-and-exit
+       behaviour. Unit test
+       (`apps/sidecar/test/idleSuspend.test.mjs`) now wired into
+       `tests_normal/cases/test_node_suites.py` and pins the new
+       contract (suspend-throw → no close, no exit, rearm; second
+       idle window retries). Stopped state is still reachable
+       externally (Fly host eviction, manual `flyctl machine
+       stop`, gold spec `/stop` API), so the gold pin remains RED
+       until R1 lands.
 
   **Known follow-ups for M13.2:**
 

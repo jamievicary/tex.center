@@ -86,6 +86,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_idle_stop(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverIdleStop.test.mjs")
 
+    def test_sidecar_idle_suspend(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "idleSuspend.test.mjs")
+
     def test_sidecar_server_segment_replay(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverSegmentReplay.test.mjs")
 

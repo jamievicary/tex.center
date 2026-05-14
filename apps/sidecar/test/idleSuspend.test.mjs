@@ -159,8 +159,11 @@ function fakeCtx() {
   assert.equal(rearms.length, 1, "post-resume must re-arm idle gate");
 }
 
-// Suspender throws: log and fall back to close + exit(0). This is
-// the "Fly returned 5xx" or "creds wrong" case.
+// Suspender throws (Fly 5xx / bad token / network blip). M13.2(b).5
+// R2: the handler must NOT close the app and must NOT exit, because
+// exit(0) would park the Machine in `stopped` (the 20 s+ cold-load
+// path). Log the failure and re-arm so the next idle window
+// retries.
 {
   const app = fakeApp();
   const exits = [];
@@ -178,11 +181,52 @@ function fakeCtx() {
   });
   handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
-  assert.equal(app.closes.length, 1);
-  assert.deepEqual(exits, [0]);
-  assert.equal(rearms.length, 0);
+  assert.equal(
+    app.closes.length,
+    0,
+    "suspend failure must not close the listener (R2: never reach `stopped`)",
+  );
+  assert.deepEqual(
+    exits,
+    [],
+    "suspend failure must not exit (R2: never reach `stopped`)",
+  );
+  assert.equal(
+    rearms.length,
+    1,
+    "suspend failure must re-arm the idle gate for retry",
+  );
   assert.equal(logs.length, 1);
   assert.match(logs[0][0], /suspend failed/);
+}
+
+// After a suspend-failure path, the handler is no longer in-flight
+// and the next idle window retries — exercising the
+// stay-alive-and-retry contract.
+{
+  const exits = [];
+  const suspendCalls = [];
+  const { ctx, rearms } = fakeCtx();
+  const handler = createIdleHandler({
+    getApp: () => fakeApp(),
+    suspendSelf: async () => {
+      suspendCalls.push(1);
+      throw new Error("flaky fly");
+    },
+    exit: (code) => exits.push(code),
+    log: () => {},
+  });
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 5));
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(
+    suspendCalls.length,
+    2,
+    "suspend failure must clear inFlight so the next idle window retries",
+  );
+  assert.equal(rearms.length, 2);
+  assert.deepEqual(exits, []);
 }
 
 // While a suspend is in flight, a second call is a no-op
