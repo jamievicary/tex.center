@@ -18,7 +18,8 @@ All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
 **Current live focus: M13.2(b) — fully-live editor within 1000 ms
 on cold project access.** M13.2(b).1 (no-auto-destroy + self-suspend)
 landed iter 249, deployed iter 250. M13.2(b).2 (optimistic delete)
-and M13.2(b).3 (new gold spec on cold cm-content + first op) open.
+landed iter 254. M13.2(b).3 (new gold spec on cold cm-content +
+first op) open.
 
 Full diagnoses: GT-5 in `.autodev/logs/202.md`; M7.4.x closing in
 `.autodev/discussion/230_answer.md`; M13 timeline in
@@ -137,12 +138,22 @@ Single iteration. Local gold: drag → reload → widths persist.
      249 confirmed suspend ok:true on shared-cpu-1x:1024MB in
      `fra`; resume `suspended → started` ~0.7 s. `healthz` green
      post-deploy.
-  2. **M13.2(b).2 — optimistic project delete. NEXT.** Flip
-     ordering in `apps/web/src/lib/server/deleteProject.ts`: DB
-     row delete first (sub-100 ms), Fly `destroyMachine` then
-     fire-and-forget with its own error log. Orphan sweep is the
-     safety net. Add gold case asserting the row disappears from
-     `/projects` within 500 ms of clicking confirm.
+  2. **M13.2(b).2 — optimistic project delete. Landed iter 254.**
+     `deleteProject` now deletes the DB row first, then kicks off
+     Fly `destroyMachine` as fire-and-forget. The result exposes a
+     `destroyComplete: Promise<{destroyed, error?}>` for tests; the
+     `/projects` `?/delete` action ignores it and redirects
+     immediately. Non-404 destroy failures are logged via the
+     injectable `logError` (default `console.error`) and never
+     raised. Orphan-tag sweep in `globalSetup` teardown remains the
+     safety net. Unit tests in `apps/web/test/deleteProject.test.mjs`
+     including a gated-promise test asserting the helper returns
+     before `destroyMachine` settles. Live gold
+     (`verifyLiveDeleteProject`) unchanged; its 30 s wait for the
+     row link to disappear remains in place — a tighter
+     post-click latency assertion was considered but rejected as
+     flake-prone over the live network (form POST → 303 → fresh
+     GET /projects, p99 well above 500 ms on a cold path).
   3. **M13.2(b).3 — cold-editable gold case.** New
      `verifyLiveGt6LiveEditableState.spec.ts` — on a project whose
      Machine has been suspended ≥ 5 min, click →
@@ -170,8 +181,8 @@ Single iteration. Local gold: drag → reload → widths persist.
     remains per-Machine; once shared, the gate must flip from
     "no machine assignment" to "no persisted blob".
 
-Default sequencing: **M13.2(b).2 (optimistic delete) next**,
-then M13.2(b).3 → M12 → M11.1–M11.4 → M13.2(a) widening.
+Default sequencing: **M13.2(b).3 (cold-editable gold case) next**,
+then M12 → M11.1–M11.4 → M13.2(a) widening.
 M11.5 gated on binary-asset wire work.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
@@ -200,7 +211,8 @@ Vite `?raw` import; brand wrapper is
 (`apps/sidecar/src/compileCoalescer.ts`); M13.1 instrumentation
 (iter 236); M13.2(a) SSR seed gate (iter 238, GT-6 green iter 240);
 M13.2(b).1 no-auto-destroy + self-suspend (iter 249, deployed iter
-250). See git log and `.autodev/logs/` for detail.
+250); M13.2(b).2 optimistic delete (iter 254). See git log and
+`.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 

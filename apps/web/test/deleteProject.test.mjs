@@ -1,48 +1,18 @@
 // Unit tests for the `deleteProject` server helper used by the
 // `/projects` dashboard's `?/delete` form action.
 //
-// The helper composes (a) Fly Machine destroy (best-effort via
-// `MachinesClient.destroyMachine`) and (b) `db.deleteProject` (which
-// cascades the `machine_assignments` row through the FK). These
-// tests stub both sides so the assertions stay deterministic.
+// Since M13.2(b).2 (iter 254) the helper is **optimistic**: the DB
+// row is deleted first, then Fly `destroyMachine` runs as a
+// fire-and-forget background task whose completion is exposed on
+// `result.destroyComplete`. These tests await that promise so the
+// assertions stay deterministic.
 
 import assert from "node:assert/strict";
 
 import { deleteProject } from "../src/lib/server/deleteProject.ts";
 import { FlyApiError } from "../src/lib/server/flyMachines.ts";
 
-const PROJECT_ID = "proj-abc";
 const MACHINE_ID = "mach-xyz";
-
-function makeStubDb(opts) {
-  const calls = { deletes: 0 };
-  const lookups = opts.assignments ?? new Map();
-  const projectsDeleted = opts.projectsDeleted ?? new Set();
-  // Minimal duck of DrizzleDb shape used by getMachineAssignmentByProjectId +
-  // deleteProject. We don't actually thread real drizzle; instead we
-  // monkey-patch via module mocks below — but here we just return an
-  // object whose own methods will be called by our stub layer.
-  return {
-    __stub: true,
-    assignments: lookups,
-    projectsDeleted,
-    calls,
-  };
-}
-
-// Patch the @tex-center/db exports the helper reaches for, by
-// shadowing via the import map: we re-import the helper with a
-// hand-rolled wrapper. Simplest approach: import the helper, then
-// pass a `makeMachinesClient` injection point + use a fake `db` and
-// stub the two db functions via Node module loader hooks. To stay
-// dependency-free, instead exercise the helper through the public
-// surface by stubbing the global `fetch` (MachinesClient uses
-// `fetch`) and using a real in-memory db via PGlite.
-
-// Pragmatic approach: re-implement the helper's dependencies
-// (getMachineAssignmentByProjectId, deleteProject) via a thin
-// passthrough using PGlite + drizzle, so this becomes a true
-// integration of the helper against its real db layer.
 
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -86,8 +56,10 @@ try {
       },
     });
     assert.equal(result.hadAssignment, false);
-    assert.equal(result.machineDestroyed, false);
     assert.equal(result.rowDeleted, true);
+    const bg = await result.destroyComplete;
+    assert.equal(bg.destroyed, false);
+    assert.equal(bg.error, undefined);
     assert.equal(
       machinesClientCalled,
       false,
@@ -96,7 +68,7 @@ try {
     assert.equal(await getProjectById(db, proj.id), null);
   }
 
-  // --- assignment present: destroys machine, cascades MA row -----
+  // --- assignment present: row gone immediately; destroy runs --
   {
     const proj = await createProject(db, {
       ownerId: owner.id,
@@ -120,11 +92,66 @@ try {
       }),
     });
     assert.equal(result.hadAssignment, true);
-    assert.equal(result.machineDestroyed, true);
     assert.equal(result.rowDeleted, true);
-    assert.deepEqual(calls, [{ id: MACHINE_ID, opts: { force: true } }]);
+    // Row + cascade must already be gone before destroyComplete
+    // settles — that is the whole point of the optimistic ordering.
     assert.equal(await getProjectById(db, proj.id), null);
     assert.equal(await getMachineAssignmentByProjectId(db, proj.id), null);
+    const bg = await result.destroyComplete;
+    assert.equal(bg.destroyed, true);
+    assert.equal(bg.error, undefined);
+    assert.deepEqual(calls, [{ id: MACHINE_ID, opts: { force: true } }]);
+  }
+
+  // --- optimism: helper resolves *before* destroyMachine settles --
+  {
+    const proj = await createProject(db, {
+      ownerId: owner.id,
+      name: "slow-destroy",
+    });
+    await upsertMachineAssignment(db, {
+      projectId: proj.id,
+      machineId: "slow-id",
+      region: "fra",
+      state: "started",
+    });
+    let destroyResolve = () => {};
+    const destroyGate = new Promise((res) => {
+      destroyResolve = res;
+    });
+    let destroyEntered = false;
+    const result = await deleteProject({
+      db,
+      projectId: proj.id,
+      env: { FLY_API_TOKEN: "tok", SIDECAR_APP_NAME: "app" },
+      makeMachinesClient: () => ({
+        destroyMachine: async () => {
+          destroyEntered = true;
+          await destroyGate;
+        },
+      }),
+    });
+    // The helper has returned: row is gone, but the destroy is
+    // still suspended on `destroyGate`.
+    assert.equal(result.rowDeleted, true);
+    assert.equal(await getProjectById(db, proj.id), null);
+    assert.equal(destroyEntered, true, "destroyMachine was kicked off");
+    // destroyComplete must not be settled yet.
+    let settled = false;
+    void result.destroyComplete.then(() => {
+      settled = true;
+    });
+    // Drain microtasks; the gate is still closed so the promise
+    // must remain pending.
+    await new Promise((r) => setImmediate(r));
+    assert.equal(
+      settled,
+      false,
+      "destroyComplete must still be pending while destroy is in-flight",
+    );
+    destroyResolve();
+    const bg = await result.destroyComplete;
+    assert.equal(bg.destroyed, true);
   }
 
   // --- 404 from destroy is swallowed (already gone) --------------
@@ -139,6 +166,7 @@ try {
       region: "fra",
       state: "destroyed",
     });
+    const errors = [];
     const result = await deleteProject({
       db,
       projectId: proj.id,
@@ -148,19 +176,23 @@ try {
           throw new FlyApiError(404, "https://example/x", { error: "gone" });
         },
       }),
+      logError: (msg, err) => errors.push({ msg, err }),
     });
     assert.equal(result.hadAssignment, true);
-    assert.equal(
-      result.machineDestroyed,
-      false,
-      "404 → machineDestroyed stays false (no successful destroy)",
-    );
     assert.equal(result.rowDeleted, true);
+    const bg = await result.destroyComplete;
+    assert.equal(
+      bg.destroyed,
+      false,
+      "404 → destroyed stays false (no successful destroy)",
+    );
+    assert.equal(bg.error, undefined);
+    assert.equal(errors.length, 0, "404 is not logged as an error");
     assert.equal(await getProjectById(db, proj.id), null);
     assert.equal(await getMachineAssignmentByProjectId(db, proj.id), null);
   }
 
-  // --- non-404 destroy errors propagate, row NOT deleted ---------
+  // --- non-404 destroy errors: logged, row still deleted ---------
   {
     const proj = await createProject(db, {
       ownerId: owner.id,
@@ -172,30 +204,37 @@ try {
       region: "fra",
       state: "started",
     });
-    let caught;
-    try {
-      await deleteProject({
-        db,
-        projectId: proj.id,
-        env: { FLY_API_TOKEN: "tok", SIDECAR_APP_NAME: "app" },
-        makeMachinesClient: () => ({
-          destroyMachine: async () => {
-            throw new FlyApiError(500, "https://example/x", { error: "boom" });
-          },
-        }),
-      });
-    } catch (err) {
-      caught = err;
-    }
-    assert.ok(caught, "non-404 destroy error must propagate");
+    const errors = [];
+    const result = await deleteProject({
+      db,
+      projectId: proj.id,
+      env: { FLY_API_TOKEN: "tok", SIDECAR_APP_NAME: "app" },
+      makeMachinesClient: () => ({
+        destroyMachine: async () => {
+          throw new FlyApiError(500, "https://example/x", { error: "boom" });
+        },
+      }),
+      logError: (msg, err) => errors.push({ msg, err }),
+    });
+    // Optimistic: row IS deleted even though the background destroy
+    // failed; the orphan-tag sweep is the safety net.
+    assert.equal(result.rowDeleted, true);
+    assert.equal(await getProjectById(db, proj.id), null);
+    const bg = await result.destroyComplete;
+    assert.equal(bg.destroyed, false);
     assert.ok(
-      caught instanceof FlyApiError && caught.status === 500,
-      "propagated error is the FlyApiError",
+      bg.error instanceof FlyApiError && bg.error.status === 500,
+      "non-404 propagated on the destroyComplete payload",
     );
-    // Row must still be present so the user can retry; cascade not
-    // fired.
-    const stillThere = await getProjectById(db, proj.id);
-    assert.ok(stillThere, "projects row preserved on destroy failure");
+    assert.equal(
+      errors.length,
+      1,
+      "non-404 destroy failure must be logged exactly once",
+    );
+    assert.ok(
+      errors[0].err instanceof FlyApiError && errors[0].err.status === 500,
+      "logged error carries the FlyApiError",
+    );
   }
 
   // --- env unset: Fly destroy is skipped, row still deleted ------
@@ -226,8 +265,9 @@ try {
     });
     assert.equal(constructed, false, "no token/app → no client built");
     assert.equal(result.hadAssignment, true);
-    assert.equal(result.machineDestroyed, false);
     assert.equal(result.rowDeleted, true);
+    const bg = await result.destroyComplete;
+    assert.equal(bg.destroyed, false);
     assert.equal(await getProjectById(db, proj.id), null);
   }
 
