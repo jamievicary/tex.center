@@ -92,6 +92,22 @@ Remaining slices:
   milestone is the delete-project verb (see
   `.autodev/discussion/241_answer.md`) which will key its destroy
   call off the same tag.
+
+  **Iter 247 follow-up — automatic orphan-tagged sweep.** The iter-246
+  live gold run failed `test_machine_count_under_threshold` again
+  (6 non-shared Machines): 4 fresh tagged orphans (texcenter_project
+  IDs no longer in `projects`) plus the 2 legacy untagged. Root cause
+  of the new leaks is the cleanup helper's deleted-row-but-failed-destroy
+  shape (or a spec dying between Machine create and assignment-row
+  upsert). Iter 247 adds `tests_gold/lib/src/sweepOrphanedSidecarMachines.ts`
+  (pure logic + unit tests under `tests_gold/cases/test_sweep_orphaned_sidecar_machines.py`)
+  and wires it into the globalSetup teardown closure in
+  `tests_gold/playwright/fixtures/liveProjectBootstrap.ts`. After the
+  bootstrap reaps its own project, the sweep lists every Fly Machine,
+  filters to those with a `texcenter_project` tag, and destroys any
+  whose tag is no longer in `projects.id` (via a new
+  `listAllProjectIds` db helper). Next live gold run should drop the
+  count to the 2 untagged legacy survivors, ≤ threshold.
 - **M9.live-hygiene.delete-project.** Endpoint + UI **LANDED
   iter 245**. New `?/delete` form action on
   `apps/web/src/routes/projects/+page.server.ts`: owner-check via

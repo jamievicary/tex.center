@@ -46,6 +46,7 @@ import {
   closeDb,
   createProject,
   deleteSession,
+  listAllProjectIds,
   projects,
   type DbHandle,
   type ProjectRow,
@@ -57,6 +58,7 @@ import {
   resolveLiveDbConfig,
 } from "../../lib/src/authedCookie.js";
 import { cleanupProjectMachine } from "../../lib/src/cleanupProjectMachine.js";
+import { sweepOrphanedSidecarMachines } from "../../lib/src/sweepOrphanedSidecarMachines.js";
 import { mintSession } from "../../lib/src/mintSession.js";
 import { startFlyProxy, type FlyProxyHandle } from "../../lib/src/flyProxy.js";
 import {
@@ -214,6 +216,46 @@ export async function bootstrapLiveProject(): Promise<LiveBootstrapResult | null
         .delete(projects)
         .where(eq(projects.id, project.id))
         .catch(() => {});
+      // Orphan-tagged sidecar sweep: after the bootstrap's own
+      // project row has been deleted, destroy any other Fly Machine
+      // tagged `texcenter_project=<id>` whose `<id>` is no longer
+      // in `projects`. Catches both leak shapes from
+      // `sweepOrphanedSidecarMachines.ts`'s header — a per-spec
+      // cleanup that deleted the row but lost the destroy, and a
+      // spec death after Machine create but before assignment-row
+      // upsert. Running here, with the bootstrap's DB + token still
+      // open, costs one Fly API list per gold run; the count
+      // guardrail (`test_sidecar_machine_count.py`) then only sees
+      // residual untagged legacy machines.
+      const token = process.env.FLY_API_TOKEN ?? "";
+      const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
+      if (token !== "") {
+        try {
+          const knownIds = new Set(await listAllProjectIds(db.db));
+          const report = await sweepOrphanedSidecarMachines({
+            machines: makeFlyMachineSweeper({ token, appName }),
+            projects: { async getKnownProjectIds() { return knownIds; } },
+          });
+          if (report.destroyed.length > 0 || report.failed.length > 0) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[globalSetup] orphan sweep: inspected=${report.inspected} ` +
+                `tagged=${report.tagged} destroyed=${report.destroyed.length} ` +
+                `failed=${report.failed.length}`,
+            );
+            for (const f of report.failed) {
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[globalSetup] orphan sweep failed: machine=${f.machineId} ` +
+                  `tag=${f.tag} error=${f.error}`,
+              );
+            }
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("[globalSetup] orphan sweep threw:", err);
+        }
+      }
     } finally {
       await closeDb(db).catch(() => {});
       await proxy.close().catch(() => {});
@@ -227,6 +269,54 @@ export async function bootstrapLiveProject(): Promise<LiveBootstrapResult | null
 // process boundary into worker fixtures. Spec fixtures read these
 // and reconstruct a `ProjectRow`. Keys are kept stable so a future
 // debug tool can attach to an in-progress run.
+// Adapter joining the Fly Machines REST list+destroy verbs into the
+// `MachineLister & MachineDestroyer` shape `sweepOrphanedSidecarMachines`
+// wants. Kept inline to avoid a second import-from-Playwright path for
+// a single use-site.
+function makeFlyMachineSweeper(opts: {
+  readonly token: string;
+  readonly appName: string;
+}) {
+  const base = `https://api.machines.dev/v1/apps/${opts.appName}/machines`;
+  const auth = { Authorization: `Bearer ${opts.token}` };
+  return {
+    async listMachines() {
+      const res = await fetch(base, { headers: auth });
+      if (!res.ok) {
+        throw new Error(
+          `Fly Machines list ${res.status}: ${await res.text()}`,
+        );
+      }
+      const body = (await res.json()) as Array<{
+        id: string;
+        config?: { metadata?: Record<string, string> | null } | null;
+      }>;
+      return body.map((m) => ({
+        id: m.id,
+        metadata: m.config?.metadata ?? null,
+      }));
+    },
+    async destroyMachine(
+      machineId: string,
+      destroyOpts?: { readonly force?: boolean },
+    ) {
+      const q = destroyOpts?.force ? "?force=true" : "";
+      const res = await fetch(`${base}/${machineId}${q}`, {
+        method: "DELETE",
+        headers: auth,
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        const err = new Error(
+          `destroyMachine ${res.status} ${base}/${machineId}: ${body}`,
+        ) as Error & { status: number };
+        err.status = res.status;
+        throw err;
+      }
+    },
+  };
+}
+
 export const ENV_PROJECT_ID = "TEXCENTER_GT_PROJECT_ID";
 export const ENV_PROJECT_OWNER_ID = "TEXCENTER_GT_PROJECT_OWNER_ID";
 export const ENV_PROJECT_NAME = "TEXCENTER_GT_PROJECT_NAME";

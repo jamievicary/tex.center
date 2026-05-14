@@ -62,6 +62,18 @@ export async function deleteProject(
   return rows.length > 0;
 }
 
+// Returns every `projects.id` currently in the table, in an
+// arbitrary order. Intended for the gold-side orphan-Machine sweep
+// (`sweepOrphanedSidecarMachines`) which compares the set of
+// `texcenter_project`-tagged Machines against the set of live
+// project IDs; sorting would only be wasted work.
+export async function listAllProjectIds(
+  db: DrizzleDb,
+): Promise<string[]> {
+  const rows = await db.select({ id: projects.id }).from(projects);
+  return rows.map((r) => r.id);
+}
+
 // Sorted by `created_at` ascending, then `id` ascending as a tie
 // breaker so the result is deterministic when two projects share
 // a `created_at` (PGlite's clock resolution can collide).

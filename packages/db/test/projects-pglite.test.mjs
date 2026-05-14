@@ -13,6 +13,7 @@ import {
   getProjectById,
   upsertMachineAssignment,
   getMachineAssignmentByProjectId,
+  listAllProjectIds,
   listProjectsByOwnerId,
   schema,
 } from '../src/index.ts';
@@ -126,6 +127,15 @@ try {
     false,
     'deleteProject returns false when no row matches',
   );
+
+  // --- listAllProjectIds: union of all rows, regardless of owner -
+  const allIds = new Set(await listAllProjectIds(db));
+  // p1, p2 (owner), pOther (other) survive; `victim` was deleted.
+  assert.equal(allIds.has(p1.id), true, 'p1 in listAllProjectIds');
+  assert.equal(allIds.has(p2.id), true, 'p2 in listAllProjectIds');
+  assert.equal(allIds.has(pOther.id), true, 'pOther in listAllProjectIds');
+  assert.equal(allIds.has(victim.id), false, 'deleted row absent from listAllProjectIds');
+  assert.equal(allIds.size, 3, 'exactly the surviving rows');
 
   console.log('projects PGlite test: OK');
 } finally {
