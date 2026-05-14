@@ -231,7 +231,8 @@ Vite `?raw` import; brand wrapper is
 (iter 236); M13.2(a) SSR seed gate (iter 238, GT-6 green iter 240);
 M13.2(b).1 no-auto-destroy + self-suspend (iter 249, deployed iter
 250); M13.2(b).2 optimistic delete (iter 254); boot-time session
-sweep (iter 258, `SWEEP_SESSIONS_ON_BOOT=1`). See git log and
+sweep (iter 258, `SWEEP_SESSIONS_ON_BOOT=1` set on `tex-center`
+iter 259 — first live sweep removed 16 legacy rows). See git log and
 `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
