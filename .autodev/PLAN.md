@@ -23,9 +23,15 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-271): **M17 Playwright pin
+Active priority queue (post iter-272): **M17 Playwright pin
 follow-up → M13.2(b).5 R1 (SSR seed widening — needs shared blob
-store) → M11.1c headless-tree adoption → M16.aesthetic.** M15
+store) → M11.1c headless-tree adoption → M16.aesthetic.** Iter 272
+landed gold-runner self-heal: port-3000 listener auto-kill in
+`spawnDevServer` + startup orphan-sidecar sweep in
+`bootstrapLiveProject` (was teardown-only). Closes the leak-loop
+where one runner crash wedged subsequent iterations on both
+`test_playwright` (port in use) and
+`test_machine_count_under_threshold` (orphans accumulate). M15
 sidecar fix + R2 sidecar idle-handler deployed as
 `tex-center-sidecar` v39 (verified iter 271). M17 implementation
 landed iter 271; local Playwright pin owed. M17 promoted from `269_question.md` /

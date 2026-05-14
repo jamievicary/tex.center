@@ -120,6 +120,45 @@ export async function bootstrapLiveProject(): Promise<LiveBootstrapResult | null
   });
   const db: DbHandle = createDb(bootstrapUrl);
 
+  // Startup orphan sweep: any per-project Machine whose
+  // `texcenter_project` tag points at a non-existent `projects.id`
+  // is leftover from a previous gold run whose teardown didn't
+  // fire (runner killed mid-spec, port-3000 reentry throw before
+  // teardown, etc.). Sweeping at startup as well as at teardown
+  // means a single broken iteration cannot cause the count
+  // guardrail to trip across subsequent iterations. Costs one Fly
+  // list+destroy round per gold run; benign duplication with the
+  // teardown sweep.
+  const token = process.env.FLY_API_TOKEN ?? "";
+  const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
+  if (token !== "") {
+    try {
+      const knownIds = new Set(await listAllProjectIds(db.db));
+      const report = await sweepOrphanedSidecarMachines({
+        machines: makeFlyMachineSweeper({ token, appName }),
+        projects: { async getKnownProjectIds() { return knownIds; } },
+      });
+      if (report.destroyed.length > 0 || report.failed.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[globalSetup] startup orphan sweep: inspected=${report.inspected} ` +
+            `tagged=${report.tagged} destroyed=${report.destroyed.length} ` +
+            `failed=${report.failed.length}`,
+        );
+        for (const f of report.failed) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[globalSetup] startup orphan sweep failed: machine=${f.machineId} ` +
+              `tag=${f.tag} error=${f.error}`,
+          );
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[globalSetup] startup orphan sweep threw:", err);
+    }
+  }
+
   let project: ProjectRow | null = null;
   let browser: Browser | null = null;
   try {

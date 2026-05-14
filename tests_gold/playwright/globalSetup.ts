@@ -28,7 +28,7 @@
 // dial localhost, so the running dev server is harmless to
 // them; booting once amortises the cost across all specs.
 
-import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { execFileSync, spawn, type ChildProcessByStdio } from "node:child_process";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
@@ -121,10 +121,18 @@ async function spawnDevServer(
   localSigningKey: string,
 ): Promise<DevChild> {
   if (await isPortInUse(port)) {
-    throw new Error(
-      `globalSetup: port ${port} is already in use. A previous dev server likely leaked. ` +
-        `Identify and kill it (e.g. \`ss -tlnp | grep ${port}\`) before retrying.`,
-    );
+    // Self-heal: a previous gold run's dev server leaked
+    // (teardown didn't fire — runner crashed, was SIGKILLed, etc.).
+    // The harness's process-group kill misses it because spawnDevServer
+    // sets `detached: true`. Identify the listener via `ss` and signal
+    // it, then re-poll. Bounded — give up after 5s.
+    await tryFreePort(port);
+    if (await isPortInUse(port)) {
+      throw new Error(
+        `globalSetup: port ${port} is already in use and self-heal could not free it. ` +
+          `Identify and kill it (e.g. \`ss -tlnp | grep ${port}\`) before retrying.`,
+      );
+    }
   }
   const child = spawn(
     "pnpm",
@@ -205,6 +213,59 @@ async function killChild(child: DevChild): Promise<void> {
       }
     }
     await exited;
+  }
+}
+
+async function tryFreePort(port: number): Promise<void> {
+  // `ss -lntpH 'sport = :PORT'` lists listeners on PORT, one per
+  // line, with the owning pid embedded as `pid=NNNN`. `-H` strips
+  // the header so every line is data. We extract every pid via
+  // regex (a single port can have multiple listening fds) and send
+  // SIGTERM, then SIGKILL after a brief grace period. Both calls
+  // are best-effort; the caller re-checks port state.
+  const pids = listenerPids(port);
+  if (pids.length === 0) return;
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[globalSetup] self-heal: killing stale port ${port} listener(s): ${pids.join(", ")}`,
+  );
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Already gone; fine.
+    }
+  }
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (!(await isPortInUse(port))) return;
+    await wait(100);
+  }
+  for (const pid of listenerPids(port)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already gone.
+    }
+  }
+  // Give the OS a beat to release the socket; caller re-checks.
+  await wait(200);
+}
+
+function listenerPids(port: number): number[] {
+  try {
+    const out = execFileSync(
+      "ss",
+      ["-lntpH", `sport = :${port}`],
+      { encoding: "utf8" },
+    );
+    const pids = new Set<number>();
+    for (const m of out.matchAll(/pid=(\d+)/g)) {
+      pids.add(parseInt(m[1]!, 10));
+    }
+    return [...pids];
+  } catch {
+    return [];
   }
 }
 
