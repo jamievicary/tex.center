@@ -88,12 +88,24 @@ Remaining slices:
 Native Svelte 5 component (no React island, no third-party tree
 lib). Sub-slices, each its own iteration:
 
-- **M11.1** read-only collapsible tree (folders inferred from
-  `/`-separated paths). Replaces flat picker.
+- **M11.1 rendering substrate. Landed iter 261.**
+  `apps/web/src/lib/fileTree.ts` (`buildFileTree` pure
+  path-grouping forest, folders-first/alphabetic sort) +
+  `apps/web/src/lib/FileTreeNode.svelte` (self-recursive
+  collapsible node) consumed by `FileTree.svelte`. Behavior on
+  today's flat names is unchanged (server's
+  `validateProjectFileName` still forbids `/`). Lock:
+  `apps/web/test/fileTree.test.mjs`. Folder collapse state lives
+  in `FileTree.svelte` as `Map<path, boolean>`; default expanded.
+- **M11.1b** relax `validateProjectFileName` to permit
+  `/`-separated segments, update sidecar persistence to
+  `mkdir -p` parent dirs on write/rename and reap empty parents
+  on delete. Folders become a live concept end-to-end. Required
+  before M11.3 has any effect.
 - **M11.2** create/delete/rename via context menu + keyboard
   (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
 - **M11.3** create folder via virtual-folder model (no sentinel
-  file; folder materialises on first child).
+  file; folder materialises on first child). Gated on M11.1b.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5** OS-drop upload. **Blocked by FUTURE_IDEAS "binary
   asset upload"** for non-UTF-8 payloads.

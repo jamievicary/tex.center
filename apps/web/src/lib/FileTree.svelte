@@ -1,5 +1,7 @@
 <script lang="ts">
   import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
+  import { buildFileTree } from "./fileTree.js";
+  import FileTreeNode from "./FileTreeNode.svelte";
 
   let {
     files,
@@ -26,14 +28,13 @@
   } = $props();
 
   let newName = $state("");
+  let collapsed = $state(new Map<string, boolean>());
 
-  // Mirror the server's `validateProjectFileName`, plus the
-  // duplicate-name and main-name rules that the server applies on
-  // top of pure validation. Returns a short reason when the candidate
-  // would be rejected, otherwise `null`.
+  let forest = $derived(buildFileTree(files));
+
   function rejectionReason(candidate: string, ignore?: string): string | null {
     const trimmed = candidate.trim();
-    if (!trimmed) return null; // empty input — caller treats as "no candidate yet"
+    if (!trimmed) return null;
     const base = validateProjectFileName(trimmed);
     if (base) return base;
     if (trimmed === MAIN_DOC_NAME) return "name reserved";
@@ -72,51 +73,45 @@
       const content = await file.text();
       onUploadFile(file.name, content);
     }
-    // Reset so re-selecting the same file fires `change` again.
     input.value = "";
   }
 
-  function promptRename(f: string): void {
+  function promptRename(path: string): void {
     if (!onRenameFile) return;
-    const next = window.prompt(`Rename ${f} to:`, f);
+    const next = window.prompt(`Rename ${path} to:`, path);
     const trimmed = next?.trim();
-    if (!trimmed || trimmed === f) return;
-    const reason = rejectionReason(trimmed, f);
+    if (!trimmed || trimmed === path) return;
+    const reason = rejectionReason(trimmed, path);
     if (reason) {
       window.alert(`Cannot rename to "${trimmed}": ${reason}.`);
       return;
     }
-    onRenameFile(f, trimmed);
+    onRenameFile(path, trimmed);
+  }
+
+  function toggleFolder(path: string): void {
+    const next = new Map(collapsed);
+    next.set(path, !(next.get(path) === true));
+    collapsed = next;
+  }
+
+  function selectFile(path: string): void {
+    selected = path;
   }
 </script>
 
-<ul>
-  {#each files as f (f)}
-    <li>
-      <button
-        type="button"
-        class:active={f === selected}
-        onclick={() => (selected = f)}
-      >
-        {f}
-      </button>
-      {#if onRenameFile && f !== MAIN_DOC_NAME}
-        <button
-          type="button"
-          class="ren"
-          aria-label={`rename ${f}`}
-          onclick={() => promptRename(f)}
-        >✎</button>
-      {/if}
-      {#if onDeleteFile && f !== MAIN_DOC_NAME}
-        <button
-          type="button"
-          class="del"
-          aria-label={`delete ${f}`}
-          onclick={() => onDeleteFile(f)}
-        >×</button>
-      {/if}
-    </li>
+<ul class="root">
+  {#each forest as node (node.path)}
+    <FileTreeNode
+      {node}
+      depth={0}
+      {selected}
+      collapsed={collapsed}
+      onToggleFolder={toggleFolder}
+      onSelect={selectFile}
+      onRename={onRenameFile ? promptRename : undefined}
+      onDelete={onDeleteFile}
+    />
   {/each}
 </ul>
 
@@ -156,45 +151,10 @@
 {/if}
 
 <style>
-  ul {
+  ul.root {
     list-style: none;
     margin: 0;
     padding: 0.5rem 0;
-  }
-  li {
-    margin: 0;
-    display: flex;
-    align-items: stretch;
-  }
-  ul button {
-    flex: 1;
-    min-width: 0;
-    padding: 0.4rem 0.75rem;
-    border: 0;
-    background: transparent;
-    text-align: left;
-    font: inherit;
-    cursor: pointer;
-  }
-  ul button.del,
-  ul button.ren {
-    flex: 0 0 auto;
-    padding: 0 0.5rem;
-    color: #9ca3af;
-  }
-  ul button.del:hover {
-    color: #b91c1c;
-    background: transparent;
-  }
-  ul button.ren:hover {
-    color: #1d4ed8;
-    background: transparent;
-  }
-  ul button:hover {
-    background: #f3f4f6;
-  }
-  ul button.active {
-    background: #e5e7eb;
   }
   .new {
     display: flex;
