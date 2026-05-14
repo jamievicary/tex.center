@@ -5,8 +5,18 @@ Asserts that `tex-center-sidecar` has no more Machines than
 live specs that fail to call `cleanupLiveProjectMachine` in
 `afterEach` (see `173b_question.md` / `173b_answer.md`).
 
-On breach the assertion message lists every Machine's id,
-created_at, and state so the operator can triage / destroy.
+M9.live-hygiene.leaked-machines (iter 243): Machines whose
+`config.metadata.fly_process_group == "app"` are the intentional
+shared-pool deployment machines (M7.0.2) Fly's deploy machinery
+mints from `apps/sidecar/fly.toml`; they are excluded from the
+count. Per-project sidecars created by the control plane now
+carry `config.metadata.texcenter_project=<projectId>`
+(`apps/web/src/lib/server/upstreamResolver.ts`); those + any
+metadata-less legacy machines remain in scope.
+
+On breach the assertion message lists every counted Machine's id,
+created_at, state, name, and metadata tags so the operator can
+triage / destroy.
 
 Skips silently if `creds/fly.token` is missing (e.g. a non-
 maintainer clone running the suite). All other failure modes
@@ -77,19 +87,31 @@ class TestSidecarMachineCount(unittest.TestCase):
         if not isinstance(machines, list):
             self.fail(f"Fly Machines API returned non-list body: {machines!r}")
 
-        if len(machines) <= max_count:
+        def is_shared_pool(m: dict) -> bool:
+            cfg = m.get("config") or {}
+            md = cfg.get("metadata") or {}
+            return md.get("fly_process_group") == "app"
+
+        counted = [m for m in machines if not is_shared_pool(m)]
+        if len(counted) <= max_count:
             return
 
         lines = [
-            f"{APP_NAME} has {len(machines)} Machines, threshold is "
-            f"{max_count} (TEXCENTER_MAX_SIDECAR_MACHINES). Likely "
-            "cause: a live spec failed to reap its per-project "
-            "Machine. Triage / destroy:"
+            f"{APP_NAME} has {len(counted)} non-shared Machines "
+            f"(of {len(machines)} total), threshold is {max_count} "
+            "(TEXCENTER_MAX_SIDECAR_MACHINES). Likely cause: a live "
+            "spec failed to reap its per-project Machine. "
+            "Triage / destroy:"
         ]
-        for m in machines:
+        for m in counted:
             mid = m.get("id", "<no id>")
             created = m.get("created_at", "<no created_at>")
             state = m.get("state", "<no state>")
             name = m.get("name", "<no name>")
-            lines.append(f"  - {mid} name={name} state={state} created={created}")
+            md = (m.get("config") or {}).get("metadata") or {}
+            tag = md.get("texcenter_project", "<untagged>")
+            lines.append(
+                f"  - {mid} name={name} state={state} "
+                f"created={created} texcenter_project={tag}"
+            )
         self.fail("\n".join(lines))

@@ -62,7 +62,7 @@ function makeMachinesStub({ initial = [], onCreate, onStart } = {}) {
       const state = onCreate?.(req) ?? "started";
       const m = { id, state, region: req.region };
       machines.set(id, m);
-      calls.push({ kind: "create", id, state });
+      calls.push({ kind: "create", id, state, req });
       return m;
     },
     async getMachine(id) {
@@ -129,6 +129,40 @@ const baseOpts = {
 
   const kinds = machines.calls.map((c) => c.kind);
   assert.deepEqual(kinds, ["create", "get"]);
+
+  // M9.live-hygiene.leaked-machines (iter 243): every per-project
+  // Machine the control plane creates must carry the
+  // `texcenter_project=<projectId>` metadata tag so the leak
+  // guardrail can distinguish it from the `app`-tagged shared pool.
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.equal(
+    createCall.req.config.metadata.texcenter_project,
+    "p1",
+    "createMachine must tag with texcenter_project=<projectId>",
+  );
+}
+
+// ---- case 1b: createMachine merges texcenter_project tag without
+// clobbering caller-supplied metadata ----
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    machineConfig: {
+      image: "registry.example/sidecar:latest",
+      metadata: { app: "shared", foo: "bar" },
+    },
+  });
+  await resolve("p1b");
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.deepEqual(createCall.req.config.metadata, {
+    app: "shared",
+    foo: "bar",
+    texcenter_project: "p1b",
+  });
 }
 
 // ---- case 2: missing row → createMachine returns starting → wait ----

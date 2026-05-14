@@ -189,9 +189,21 @@ export function createUpstreamResolver(
   const ensureMachineId = async (projectId: string): Promise<string> => {
     const cached = await opts.store.get(projectId);
     if (cached !== null) return cached.machineId;
+    // Tag every per-project Machine with `texcenter_project=<id>` so
+    // the gold-suite leak guardrail
+    // (`test_machine_count_under_threshold`) can programmatically
+    // distinguish per-project sidecars from the `app`-tagged shared
+    // pool, and so future iterations' delete-project verb can
+    // destroy by tag without consulting the assignments table.
+    const baseMetadata =
+      (opts.machineConfig.metadata as Record<string, string> | undefined) ?? {};
+    const config: MachineConfig = {
+      ...opts.machineConfig,
+      metadata: { ...baseMetadata, texcenter_project: projectId },
+    };
     const created = await opts.machines.createMachine({
       region: opts.sidecarRegion,
-      config: opts.machineConfig,
+      config,
     });
     await opts.store.upsert({
       projectId,

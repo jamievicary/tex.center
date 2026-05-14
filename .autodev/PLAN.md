@@ -21,11 +21,10 @@ green at the 500 ms bound on the iter-240 live run.** Iter-228
 diagnostic seam (`CompileSuccess.noopReason`) removed iter 240
 after GT-5 stayed green iters 231→239.
 
-**Current live focus: M9.live-hygiene.leaked-machines.** Iter
-239's gold run reported `tex-center-sidecar` at 6 machines (vs
-threshold-5 guardrail) — at least one live spec is letting a
-per-project Machine slip past its `afterEach`
-`cleanupLiveProjectMachine`. See M9.live-hygiene below.
+**Current live focus: delete-project verb + UI** (next slice of
+M9.live-hygiene per `.autodev/discussion/241_answer.md`). Iter 243
+landed the metadata-tagging primitive (fix shape (c)) so the
+guardrail is self-triaging and the delete verb has a stable key.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`; M13
@@ -77,24 +76,22 @@ Remaining slices:
   iter 231); sidecar + control plane redeployed. Locks retained:
   GT-5 (live) + `supertexWarmDocBodyEditNoop.test.mjs` (local,
   iter 230). Iter-228 diagnostic seam removed iter 240.
-- **M9.live-hygiene.leaked-machines.** Iter 239 gold logged
-  `tex-center-sidecar` at 6 machines (4 untagged + 2 `app`-tagged
-  shared-pool); 2 of the untagged were created during the iter-239
-  live gold run with no `texcenter_project` metadata. Some live
-  spec is missing `cleanupLiveProjectMachine` in `afterEach`, or
-  a fresh-project bootstrap flow is creating a Machine outside the
-  reapable path. Three candidate fix shapes (per iter-240 log
-  Notes): (a) audit every `tests_gold/playwright/*.spec.ts`
-  fresh-project flow for missing `afterEach` reap; (b)
-  final-teardown sweeper that destroys metadata-less machines
-  older than suite-start time; (c) tag every control-plane-created
-  machine with `texcenter_project=<id>` so the guardrail can
-  programmatically distinguish leaks from the shared pool.
-  **Preferred: (c)** — makes the guardrail self-triaging.
-  Implementation point: `apps/web/src/lib/server/machineAssignments.ts`
-  (or wherever the Machines API create is invoked) + a read in
-  `test_machine_count_under_threshold`. Shared-pool `app`-tagged
-  machines are intentional and must NOT be destroyed.
+- **M9.live-hygiene.leaked-machines.** Fix shape (c) **LANDED
+  iter 243**: `apps/web/src/lib/server/upstreamResolver.ts::ensureMachineId`
+  now tags every Machine it creates with
+  `config.metadata.texcenter_project=<projectId>`, and
+  `test_machine_count_under_threshold` excludes shared-pool
+  Machines (`config.metadata.fly_process_group=="app"`) from the
+  count and includes the `texcenter_project` tag in the breach
+  message. Guardrail GREEN as of iter 243 (was RED at 6 total in
+  iters 241–242 — 4 untagged legacy leaks + 2 shared-pool;
+  filtering drops it to 4 ≤ 5). The 4 untagged leakers remain
+  alive and must be destroyed by hand (`flyctl machines destroy`)
+  to fully reset state; new control-plane machines will all be
+  tagged and self-identify on future breaches. Next slice on this
+  milestone is the delete-project verb (see
+  `.autodev/discussion/241_answer.md`) which will key its destroy
+  call off the same tag.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
