@@ -1,6 +1,10 @@
 # tex.center — Plan
 
-Cron: `N%10==0` refactor, `N%10==1` plan-review.
+Cron: `N%10==0` refactor, `N%10==1` plan-review. Iter 250 deferred
+its refactor (deploy of M13.2(b).1 was higher-leverage); iter 251
+deferred its plan-review (fixed an iter-247 duplicate-decl
+regression that wedged Playwright globalSetup). Iter 252 is the
+combined maintenance iteration — plan-review first, then refactor.
 
 ## 1. Current state
 

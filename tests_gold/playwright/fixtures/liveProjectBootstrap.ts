@@ -227,8 +227,6 @@ export async function bootstrapLiveProject(): Promise<LiveBootstrapResult | null
       // open, costs one Fly API list per gold run; the count
       // guardrail (`test_sidecar_machine_count.py`) then only sees
       // residual untagged legacy machines.
-      const token = process.env.FLY_API_TOKEN ?? "";
-      const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
       if (token !== "") {
         try {
           const knownIds = new Set(await listAllProjectIds(db.db));
