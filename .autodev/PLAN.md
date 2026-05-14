@@ -21,10 +21,18 @@ green at the 500 ms bound on the iter-240 live run.** Iter-228
 diagnostic seam (`CompileSuccess.noopReason`) removed iter 240
 after GT-5 stayed green iters 231→239.
 
-**Current live focus: confirm the iter-244 delete-project pin
-flips GREEN on next live run.** Endpoint + UI landed iter 245
-(see M9.live-hygiene.delete-project below). The iter-243
-metadata-tagging primitive gives the destroy verb a stable key.
+**Current live focus: M13.2(b) — fully-live editor within 1000 ms
+on cold project access.** Diagnosis iter 248: per-project Machines
+are configured with `auto_destroy: true` and idle-exit destroys
+them, so every cold access pays a full `createMachine` + image
+pull (10–60 s observed). Live API query iter 248 confirms **zero
+per-project Machines currently exist** on `tex-center-sidecar`.
+Fix: drop `auto_destroy`, switch the sidecar idle path from
+`process.exit(0)` to a self-suspend (`POST /machines/{self}/suspend`)
+so Fly resumes from kernel snapshot in ~300 ms. See
+`.autodev/discussion/246_answer.md` for the full audit. GT-6
+currently green but only asserts the SSR-seed `<pre>` — does not
+verify a live editable state.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`; M13
@@ -203,6 +211,69 @@ Single iteration. Local gold: drag → reload → widths persist.
      drop input. GT-6 polls `.editor` textContent instead, which is
      the user-visible promise.
 
+- **M13.2(b) — fully-live within 1000 ms on cold access.
+  OPEN, scheduled next.** The current GT-6 green state is
+  misleading: the SSR-seed `<pre class="editor-seed">` is
+  visual-only — Yjs is not connected, CodeMirror is not
+  bound, typing is dropped. The real user-acceptance bar is
+  that clicking a project on `/projects` reaches a fully
+  live editable state within 1000 ms of click, regardless of
+  whether the project has been touched recently.
+
+  Root cause (iter-248 audit, `.autodev/discussion/246_answer.md`):
+  per-project Machines are created with `auto_destroy: true`
+  (`apps/web/src/lib/server/upstreamFromEnv.ts:59`), so the
+  sidecar's 10-min idle `process.exit(0)`
+  (`apps/sidecar/src/index.ts:42–50`) makes Fly destroy the
+  Machine. Next access does a full `createMachine` + image
+  pull (~5 GB, 10–60 s). `auto_stop_machines = "suspend"` is
+  not used anywhere; `suspend` is not called anywhere. Live
+  Machines API listing iter 248 confirms zero per-project
+  Machines exist — every project is in
+  "next-access-is-cold-provision" state.
+
+  **Plan (three iterations):**
+
+  1. **M13.2(b).1 (next iter, impl):** drop `auto_destroy:
+     true` from `machineConfig`; replace the sidecar's idle
+     `process.exit(0)` with a self-suspend (`POST
+     /v1/apps/{app}/machines/{self}/suspend`) using the
+     `FLY_API_TOKEN` already in the Machine's environment.
+     The dispatcher's `driveToStarted`
+     (`upstreamResolver.ts:237–261`) already handles
+     `suspended → started` correctly. Smoke-probe `flyctl
+     machine suspend` on a shared-cpu-1x:1024MB Machine
+     first; if suspend is refused for our config, fall back
+     to "stopped, not destroyed" (drop `auto_destroy`, keep
+     `process.exit(0)`) — still removes the dominant image-
+     pull leg even without the kernel-state win. Update
+     gold-spec teardown to explicitly destroy per-project
+     Machines (don't rely on idle-stop reaping them).
+  2. **M13.2(b).2 (impl):** optimistic project delete.
+     `apps/web/src/lib/server/deleteProject.ts` currently
+     awaits `destroyMachine(force:true)` *before* the DB
+     row delete; the `?/delete` form action awaits the
+     whole chain. Flip ordering: DB row delete first
+     (sub-100 ms), Fly destroy fire-and-forget with its
+     own error log. Orphan sweep is the safety net. Add a
+     gold case asserting the row disappears from
+     `/projects` within 500 ms of clicking confirm
+     (distinct from iter-244's eventual-reap spec).
+  3. **M13.2(b).3 (test):** new live gold
+     `verifyLiveGt6LiveEditableState.spec.ts` — on a
+     project whose Machine has been suspended ≥ 5 min,
+     click → `.cm-content` populated within 1000 ms +
+     keystroke produces a `Y.Doc` op frame within 1000 ms.
+     Keep current GT-6 ("seed `<pre>` within 500 ms") as
+     the regression lock on M13.2(a).
+
+  **Risks (carried into impl iteration):** suspend support
+  on shared-cpu-1x:1024MB in `fra` is unverified — Fly's
+  docs say yes as of late 2024 but smoke-probe first;
+  suspended-Machine storage costs are non-zero but small at
+  our scale; orphan-sweep filters by known-project-IDs not
+  state so already correct for suspended Machines.
+
   **Known follow-ups for M13.2:**
 
   - Non-fresh projects (those with a `machine_assignments` row)
@@ -224,9 +295,10 @@ Single iteration. Local gold: drag → reload → widths persist.
     remains per-Machine; once a shared blob store lands, the gate
     must flip from "no machine assignment" to "no persisted blob".
 
-Default sequencing: **M9.live-hygiene.leaked-machines next**, then
-M12 → M11.1–M11.4 → M13.2 widening. M11.5 gated on binary-asset
-wire work.
+Default sequencing: **M13.2(b).1 (suspend-not-destroy) next**,
+then M13.2(b).2 (optimistic delete) → M13.2(b).3 (new gold) →
+M9.live-hygiene.leaked-machines → M12 → M11.1–M11.4 → M13.2(a)
+widening. M11.5 gated on binary-asset wire work.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
