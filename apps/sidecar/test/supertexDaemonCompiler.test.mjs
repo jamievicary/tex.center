@@ -358,15 +358,6 @@ const require = createRequire(import.meta.url);
   assert.equal(r.ok, true, "noop compile ok");
   assert.deepEqual(r.segments, [], "noop emits no segments");
   assert.equal(r.shipoutPage, undefined, "noop has no shipoutPage");
-  assert.ok(
-    typeof r.noopReason === "string" && r.noopReason.length > 0,
-    "noop sets a noopReason so the server can log it",
-  );
-  assert.match(
-    r.noopReason,
-    /rollback|shipout/i,
-    "noopReason mentions the upstream cause class",
-  );
   await c.close();
 }
 

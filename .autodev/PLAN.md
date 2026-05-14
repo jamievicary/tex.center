@@ -117,12 +117,10 @@ Remaining slices:
   isolated run (4.6 s). Retained regression locks:
   GT-5 (live), `supertexWarmDocBodyEditNoop.test.mjs` (local,
   iter 230, deterministic warm-doc body-edit repro driving
-  `supertex --daemon` directly). Diagnostic seam from iter 228
-  (`CompileSuccess.noopReason` +
-  `compile no-op (no pdf-segment shipped)` warn log in
-  `apps/sidecar/src/server.ts`) kept in place pending 2–3 full
-  gold passes confirming GT-5 stays green; removal tracked in
-  `FUTURE_IDEAS.md`.
+  `supertex --daemon` directly). Iter-228 diagnostic seam
+  (`CompileSuccess.noopReason` + warn log) removed iter 240
+  after GT-5 stayed green iter 231→239 (well past the 2–3-pass
+  threshold).
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a

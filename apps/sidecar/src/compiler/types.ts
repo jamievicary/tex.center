@@ -36,15 +36,6 @@ export interface CompileSuccess {
    * omit it (then the gate degrades to "doc-updates only").
    */
   shipoutPage?: number;
-  /**
-   * Set when `segments` is empty and the implementation knows
-   * *why*. The server logs this at warn level so a live failure
-   * mode like GT-5 (compile ran, idled, but shipped no PDF
-   * delta) is diagnosable from sidecar app-logs alone without
-   * needing to spelunk supertex stderr. Free-form short string;
-   * absent when segments are non-empty.
-   */
-  noopReason?: string;
 }
 
 export interface CompileFailure {
