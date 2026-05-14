@@ -45,13 +45,29 @@ Toast store API (frozen iter 179):
 Remaining slices:
 
 - **M9.editor-ux.regress.gt6 — slow `.cm-content` appearance.**
-  User-reported on v213: after `/editor/<id>` navigation, the
-  seeded `.tex` source can take up to a minute to appear. GT-6
-  (`verifyLiveGt6FastContentAppearance.spec.ts`, iter 214) pins a
-  2 s upper bound on warm-project content appearance. Expected
-  RED on next gold pass. Fix probe: instrument the Yjs hydrate
-  path with M13.1 marks, identify whether connect, sync, or
-  CodeMirror bind dominates. See `213_answer.md`.
+  User-reported on v213 and reconfirmed on v231 (see
+  `231_question.md` / `231_answer.md`): after clicking a project
+  on `/projects` the editor route loads quickly but the seeded
+  `.tex` source can take tens of seconds to appear. Current
+  GT-6 (`verifyLiveGt6FastContentAppearance.spec.ts`, iter 214)
+  short-circuits the user-visible path — uses the pre-warmed
+  shared `liveProject` (Machine up + first PDF segment shipped),
+  direct `goto` instead of click-from-/projects, 2 s threshold
+  too lax — and is therefore consistently GREEN despite the bug.
+  Iter 232 plan: rewrite GT-6 to (a) create a fresh per-test
+  project via the `db` worker fixture, (b) navigate
+  `/projects` → `click` the project link (SvelteKit
+  client-side nav, mirrors the user mouse path), (c) bound
+  `.cm-content` containing the `documentclass` sentinel to
+  ~500 ms after editor route becomes interactive, (d)
+  `cleanupProjectMachine` + delete row in `afterEach`. Smoke
+  the spec against live in isolation (`TEXCENTER_FULL_PIPELINE=1`),
+  ship only if it goes RED with the user-reported magnitude.
+  Fix attempts deferred to iter 233+ once the spec is genuinely
+  RED. Fix probe (carry-over from iter 214): instrument the
+  Yjs hydrate path with M13.1 marks to identify whether
+  connect, sync, CodeMirror bind, or sidecar-readiness wait
+  dominates.
 - **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.
   CLOSED iter 227.** Root cause was an upstream supertex bug
   (`tools/supertex_daemon.c` had no usable rollback target when
