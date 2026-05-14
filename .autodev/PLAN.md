@@ -92,6 +92,20 @@ Remaining slices:
   milestone is the delete-project verb (see
   `.autodev/discussion/241_answer.md`) which will key its destroy
   call off the same tag.
+- **M9.live-hygiene.delete-project.** RED pin landed iter 244:
+  `tests_gold/playwright/verifyLiveDeleteProject.spec.ts` drives
+  the `/projects` delete flow on live and asserts the full reap
+  (projects row gone, machine_assignments row gone, no Fly Machine
+  tagged `texcenter_project=<id>`). Selector contract: each row
+  carries `data-project-id="<id>"` and contains an
+  accessibly-named `Delete` button; any native `confirm()` is
+  pre-accepted. The landing iter (next non-refactor) lands the
+  SvelteKit form action on `/projects` (`?/delete`) — owner-check
+  → `cleanupProjectMachine` against the assignment row → R2 blob
+  reap (best-effort if `BLOB_STORE` not yet hoisted to the web
+  app) → delete projects row → 303 redirect — plus the dashboard
+  UI. Acceptance criterion is the pin flipping green on the next
+  live run.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
