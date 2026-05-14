@@ -9,48 +9,36 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-[globalSetup] live warm-up: pdf-segment observed in 26567ms (project 22bec5d9-bc7a-4abd-bbb2-8366e319fe50)
-[dev] 5:50:30 PM [vite] ws proxy error:
-Error: connect ECONNREFUSED 127.0.0.1:3001
-    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
-    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
-[dev] 5:50:30 PM [vite] ws proxy error:
-Error: connect ECONNREFUSED 127.0.0.1:3001
-    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
-    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
-(node:1767) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-(Use `node --trace-warnings ...` to show where the warning was created)
-[globalSetup] orphan sweep: inspected=5 tagged=3 destroyed=2 failed=0
-[globalSetup] DB ready (userId=20de0bd4-2b06-43ea-8235-07eb57f33d20); spawning dev server on :3000
+[globalSetup] DB ready (userId=e32bfb45-e069-4072-951a-1f3c75f1774f); spawning dev server on :3000
 
 Running 36 tests using 1 worker
 
   ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.2s)
   ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.1s)
-  ✓  3 [local] › editorSeedPlaceholder.spec.ts:42:7 › editor seed placeholder (M13.2(a)) › fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts (445ms)
-  ✓  4 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (464ms)
-  ✓  5 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (428ms)
-  ✓  6 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (564ms)
+  ✓  3 [local] › editorSeedPlaceholder.spec.ts:42:7 › editor seed placeholder (M13.2(a)) › fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts (455ms)
+  ✓  4 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (461ms)
+  ✓  5 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (192ms)
+  ✓  6 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (567ms)
   ✓  7 [local] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (223ms)
-  ✓  8 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (2.3s)
-  ✓  9 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (430ms)
+  ✓  8 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.7s)
+  ✓  9 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (435ms)
   -  10 [live] › editorSeedPlaceholder.spec.ts:42:7 › editor seed placeholder (M13.2(a)) › fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts
-  ✓  11 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (622ms)
+  ✓  11 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (525ms)
   -  12 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects
-  ✓  13 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (591ms)
-  ✓  14 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (210ms)
-  ✓  15 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (107ms)
-  ✓  16 [live] › verifyLiveDeleteProject.spec.ts:103:7 › live delete-project (M9.live-hygiene delete verb) › dashboard delete reaps DB row, machine_assignments row, and tagged Fly Machine (10.8s)
-  ✓  17 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (28.1s)
-  ✓  18 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (26.1s)
-  ✓  19 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (415ms)
-  ✓  20 [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input (770ms)
+  ✓  13 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (552ms)
+  ✓  14 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (208ms)
+  ✓  15 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (120ms)
+  ✓  16 [live] › verifyLiveDeleteProject.spec.ts:103:7 › live delete-project (M9.live-hygiene delete verb) › dashboard delete reaps DB row, machine_assignments row, and tagged Fly Machine (3.5s)
+  ✓  17 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (21.8s)
+  ✘  18 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (30.3s)
+  ✓  19 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (2.1s)
+  ✓  20 [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input (732ms)
   ✓  21 [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error (2.5s)
   ✓  22 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (35.6s)
   ✓  23 [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:52:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas (2.9s)
-  ✓  24 [live] › verifyLiveGt6FastContentAppearance.spec.ts:55:7 › live fast .cm-content appearance after dashboard click (GT-6) › fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive (566ms)
-  ✓  25 [live] › verifyLiveGt7RapidTypingDaemonStable.spec.ts:60:7 › live rapid-typing daemon stability (GT-7) › zero-delay typing produces no daemon protocol-violation control frame (11.7s)
-[verifyLiveGt8] project=583105f6-4b36-414b-8c50-a4976b6f11d9 coldStartMs=18069 framesSent=257 pdfSegments=2 controlFrames=28 errorFrames=0
+  ✓  24 [live] › verifyLiveGt6FastContentAppearance.spec.ts:55:7 › live fast .cm-content appearance after dashboard click (GT-6) › fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive (541ms)
+  ✓  25 [live] › verifyLiveGt7RapidTypingDaemonStable.spec.ts:60:7 › live rapid-typing daemon stability (GT-7) › zero-delay typing produces no daemon protocol-violation control frame (11.6s)
+[verifyLiveGt8] project=5127a94e-ad81-4ff3-99a6-9cb95395ea1f coldStartMs=21049 framesSent=254 pdfSegments=2 controlFrames=26 errorFrames=0
 [verifyLiveGt8][control] {"type":"hello","protocol":1}
 [verifyLiveGt8][control] {"type":"file-list","files":["main.tex"]}
 [verifyLiveGt8][control] {"type":"compile-status","state":"running"}
@@ -77,28 +65,57 @@ Running 36 tests using 1 worker
 [verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
 [verifyLiveGt8][control] {"type":"compile-status","state":"running"}
 [verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
-[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
-[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
-  ✓  26 [live] › verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts:65:7 › live cold-project \newpage daemon-crash regression (GT-8) › fresh cold project: \newpage cadence does not crash the supertex daemon (30.3s)
+  ✓  26 [live] › verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts:65:7 › live cold-project \newpage daemon-crash regression (GT-8) › fresh cold project: \newpage cadence does not crash the supertex daemon (33.9s)
   -  27 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
   -  28 [live] › verifyLiveWsUpgrade.spec.ts:48:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
-  ✓  29 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (198ms)
-  ✓  30 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (111ms)
-  ✓  31 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (44ms)
-  ✓  32 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (37ms)
-  ✓  33 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (56ms)
-  ✓  34 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (186ms)
-  ✓  35 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (61ms)
-  ✓  36 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (69ms)
+  ✓  29 [live] › landing.spec.ts:10:5 › landing page has only a sign-in widget and no marketing copy (199ms)
+  ✓  30 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (115ms)
+  ✓  31 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (61ms)
+  ✓  32 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (29ms)
+  ✓  33 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (43ms)
+  ✓  34 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (149ms)
+  ✓  35 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (63ms)
+  ✓  36 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (65ms)
+
+
+  1) [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas 
+
+    TimeoutError: locator.waitFor: Timeout 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('.cm-content') to be visible[22m
+
+
+      113 |
+      114 |     const cmContent = authedPage.locator(".cm-content");
+    > 115 |     await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+          |                     ^
+      116 |     await cmContent.click();
+      117 |
+      118 |     // The Y.Doc carries whatever source the previous iteration
+        at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveFullPipelineReused.spec.ts:115:21
 
   Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (35.6s)
-  Slow test file: [live] › verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts (30.3s)
-  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (28.1s)
-  Slow test file: [live] › verifyLiveFullPipelineReused.spec.ts (26.1s)
+  Slow test file: [live] › verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts (33.9s)
+  Slow test file: [live] › verifyLiveFullPipelineReused.spec.ts (30.3s)
+  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (21.8s)
   Consider splitting slow test files to speed up parallel execution
+  1 failed
+    [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas 
   4 skipped
-  32 passed (3.7m)
-ok
+  31 passed (3.4m)
+[globalSetup] live warm-up: pdf-segment observed in 16134ms (project 9f07a3e1-f478-432f-a06f-e03a29c4fdf8)
+[dev] 6:09:52 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev] 6:09:52 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+(node:12841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[globalSetup] orphan sweep: inspected=6 tagged=4 destroyed=2 failed=0
+FAIL
 test_sidecar_cold_start_coalescer (test_sidecar_cold_start_coalescer.TestSidecarColdStartCoalescer.test_sidecar_cold_start_coalescer) ... ok
 test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... ok
 test_supertex_cold_newpage_crash (test_supertex_cold_newpage_crash.TestSupertexColdNewpageCrash.test_supertex_cold_newpage_crash) ... ok
@@ -108,8 +125,15 @@ test_supertex_oversize_target (test_supertex_oversize_target.TestSupertexOversiz
 test_supertex_warm_doc_body_edit_noop (test_supertex_warm_doc_body_edit_noop.TestSupertexWarmDocBodyEditNoop.test_supertex_warm_doc_body_edit_noop) ... ok
 test_sweep_orphaned_sidecar_machines (test_sweep_orphaned_sidecar_machines.TestSweepOrphanedSidecarMachines.test_sweep_orphaned_sidecar_machines) ... ok
 
+======================================================================
+FAIL: test_playwright (test_playwright.TestPlaywright.test_playwright)
 ----------------------------------------------------------------------
-Ran 19 tests in 280.648s
+Traceback (most recent call last):
+  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 192, in test_playwright
+    raise AssertionError(
+AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
-OK
-tests_gold/run_tests.sh: PASS
+----------------------------------------------------------------------
+Ran 19 tests in 263.265s
+
+FAILED (failures=1)
