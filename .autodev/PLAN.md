@@ -100,11 +100,17 @@ lib). Sub-slices, each its own iteration:
 
 ### M12.panels — draggable dividers (post-MVP UX)
 
-Native `<ResizableSplit>` Svelte component, no library. Pointer
-capture + CSS custom-property widths. Per-project widths persisted
-to `localStorage` keyed by `projectId`. Min widths: ~200px editor,
-~200px PDF; file picker collapsible to zero with a re-open chevron.
-Single iteration. Local gold: drag → reload → widths persist.
+Landed iter 257. Inline implementation in
+`apps/web/src/routes/editor/[projectId]/+page.svelte`: pointer-
+capture drag updates `--col-tree` / `--col-preview` CSS custom
+properties; editor pane is `1fr`. Min widths 150/200/200
+(tree/editor/preview). Per-project widths persisted to
+`localStorage["editor-widths:${projectId}"]`. Local gold lock:
+`tests_gold/playwright/editorPanelDividers.spec.ts` (two cases —
+drag tree, drag preview; both assert reload-persistence). The
+"file picker collapsible to zero with re-open chevron" was
+explicitly deferred for scope; recorded as a FUTURE_IDEAS
+candidate.
 
 ### M13.open-latency — instrument-then-fix
 
@@ -193,9 +199,10 @@ Single iteration. Local gold: drag → reload → widths persist.
     remains per-Machine; once shared, the gate must flip from
     "no machine assignment" to "no persisted blob".
 
-Default sequencing: **M13.2(b).3 (cold-editable gold case) next**,
-then M12 → M11.1–M11.4 → M13.2(a) widening.
-M11.5 gated on binary-asset wire work.
+Default sequencing: **M13.2(a) seed widening for non-fresh
+projects (M13.2(b).3 closer)** or **M11.1 read-only collapsible
+tree** next — M13.2(b).3 spec landed iter 256, M12 landed iter
+257. M11.5 gated on binary-asset wire work.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 

@@ -139,13 +139,148 @@
     client?.setViewingPage(page);
   }
 
+  // M12: draggable panel dividers. Three columns — tree, editor,
+  // preview — with two dividers between them. Tree and preview hold
+  // absolute px widths in CSS custom properties; editor takes the
+  // remaining `1fr`. Widths persist to localStorage keyed by
+  // projectId. Min widths defended on every drag so the editor pane
+  // can never collapse below MIN_EDITOR_PX.
+  const MIN_TREE_PX = 150;
+  const MIN_PREVIEW_PX = 200;
+  const MIN_EDITOR_PX = 200;
+  const DIVIDER_PX = 4;
+  const DEFAULT_TREE_PX = 220;
+
+  let treePx = $state(DEFAULT_TREE_PX);
+  let previewPx = $state<number | null>(null);
+  let shellEl: HTMLDivElement | null = $state(null);
+
+  function storageKey(): string | null {
+    const id = data.project?.id;
+    return id ? `editor-widths:${id}` : null;
+  }
+
+  function loadWidths(): void {
+    const key = storageKey();
+    if (!key) return;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        tree?: number;
+        preview?: number;
+      };
+      if (typeof parsed.tree === "number" && Number.isFinite(parsed.tree)) {
+        treePx = Math.max(MIN_TREE_PX, Math.round(parsed.tree));
+      }
+      if (
+        typeof parsed.preview === "number" &&
+        Number.isFinite(parsed.preview)
+      ) {
+        previewPx = Math.max(MIN_PREVIEW_PX, Math.round(parsed.preview));
+      }
+    } catch {
+      // Ignore corrupt localStorage.
+    }
+  }
+
+  function persistWidths(): void {
+    const key = storageKey();
+    if (!key || previewPx === null) return;
+    try {
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ tree: treePx, preview: previewPx }),
+      );
+    } catch {
+      // Quota or disabled — silently drop.
+    }
+  }
+
+  function shellWidth(): number {
+    return shellEl?.getBoundingClientRect().width ?? window.innerWidth;
+  }
+
+  function clampWidths(): void {
+    const total = shellWidth();
+    const dividers = DIVIDER_PX * 2;
+    // Initialise preview from layout if unset.
+    if (previewPx === null) {
+      previewPx = Math.max(
+        MIN_PREVIEW_PX,
+        Math.floor((total - treePx - dividers) / 2),
+      );
+    }
+    treePx = Math.max(MIN_TREE_PX, treePx);
+    previewPx = Math.max(MIN_PREVIEW_PX, previewPx);
+    // Defend editor min.
+    const maxTree = total - dividers - MIN_EDITOR_PX - previewPx;
+    if (maxTree < MIN_TREE_PX) {
+      // Window too narrow; give up on min-editor and just keep tree/preview minimal.
+      treePx = MIN_TREE_PX;
+      previewPx = MIN_PREVIEW_PX;
+    } else if (treePx > maxTree) {
+      treePx = maxTree;
+    }
+    const maxPreview = total - dividers - MIN_EDITOR_PX - treePx;
+    if (previewPx > maxPreview && maxPreview >= MIN_PREVIEW_PX) {
+      previewPx = maxPreview;
+    }
+  }
+
+  type DragKind = "tree" | "preview";
+  let dragging: DragKind | null = null;
+  let dragStartX = 0;
+  let dragStartValue = 0;
+
+  function onDividerPointerDown(kind: DragKind, e: PointerEvent): void {
+    if (e.button !== 0) return;
+    dragging = kind;
+    dragStartX = e.clientX;
+    dragStartValue = kind === "tree" ? treePx : (previewPx ?? 0);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+
+  function onDividerPointerMove(e: PointerEvent): void {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    if (dragging === "tree") {
+      treePx = dragStartValue + dx;
+    } else {
+      previewPx = dragStartValue - dx;
+    }
+    clampWidths();
+  }
+
+  function onDividerPointerUp(e: PointerEvent): void {
+    if (!dragging) return;
+    dragging = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    persistWidths();
+  }
+
+  onMount(() => {
+    loadWidths();
+    clampWidths();
+    const onResize = () => clampWidths();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  });
+
   onDestroy(() => {
     detachKey?.();
     client?.destroy();
   });
 </script>
 
-<div class="shell">
+<div
+  class="shell"
+  bind:this={shellEl}
+  style="--col-tree: {treePx}px;{previewPx !== null
+    ? ` --col-preview: ${previewPx}px;`
+    : ''}"
+>
   <header class="topbar">
     <div class="brand-group">
       <a href="/projects" class="brand"
@@ -179,6 +314,16 @@
       onUploadFile={(name, content) => client?.uploadFile(name, content)}
     />
   </aside>
+  <div
+    class="divider divider-tree"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize file tree"
+    data-divider="tree"
+    onpointerdown={(e) => onDividerPointerDown("tree", e)}
+    onpointermove={onDividerPointerMove}
+    onpointerup={onDividerPointerUp}
+  ></div>
   <section class="editor">
     {#if snapshot.hydrated && text}
       {#key text}
@@ -202,6 +347,16 @@
       <div class="editor-placeholder" aria-hidden="true"></div>
     {/if}
   </section>
+  <div
+    class="divider divider-preview"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize PDF preview"
+    data-divider="preview"
+    onpointerdown={(e) => onDividerPointerDown("preview", e)}
+    onpointermove={onDividerPointerMove}
+    onpointerup={onDividerPointerUp}
+  ></div>
   <section class="preview">
     <PdfViewer src={snapshot.pdfBytes} onPageChange={handlePageChange} />
     {#if snapshot.compileState === "running"}
@@ -215,13 +370,35 @@
 <style>
   .shell {
     display: grid;
-    grid-template-columns: 220px 1fr 1fr;
+    /* M12: tree/preview hold absolute px via custom properties;
+       editor takes the remaining 1fr. When --col-preview is 0
+       (pre-mount, before clampWidths runs) we degrade gracefully
+       to 1fr so the layout still renders. */
+    grid-template-columns:
+      var(--col-tree, 220px) 4px 1fr 4px
+      minmax(0, var(--col-preview, 1fr));
     grid-template-rows: 36px 1fr;
     grid-template-areas:
-      "top top top"
-      "tree editor preview";
+      "top top top top top"
+      "tree dtree editor dpreview preview";
     height: 100vh;
     width: 100vw;
+  }
+  .divider {
+    background: #e5e7eb;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+  }
+  .divider:hover,
+  .divider:active {
+    background: #9ca3af;
+  }
+  .divider-tree {
+    grid-area: dtree;
+  }
+  .divider-preview {
+    grid-area: dpreview;
   }
   .topbar {
     grid-area: top;

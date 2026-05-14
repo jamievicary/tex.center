@@ -60,3 +60,9 @@
   still wants a real local stack. Spin Postgres + MinIO behind a
   compose file with a CI host that has Docker; gold cases gate
   on `which docker`.
+- **File-tree collapse-to-zero chevron.** M12 landed three
+  resizable panes with min widths; the original spec called for
+  a collapse-to-zero affordance on the tree column with a re-open
+  chevron. Deferred from iter 257 for scope. Worth folding into
+  a future left-rail UX iteration alongside any project switcher
+  / sidebar additions rather than as a stand-alone affordance.
