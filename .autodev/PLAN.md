@@ -23,9 +23,11 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-264): **M13.2(b).4 stopped-state
-pin → M15.multipage-preview → M11.1c headless-tree adoption →
-M16.aesthetic.** M14.title-bar landed iter 264. See
+Active priority queue (post iter-266): **M13.2(b).5 stopped-state
+fix → M15.multipage-preview → M11.1c headless-tree adoption →
+M16.aesthetic.** M14.title-bar landed iter 264. M13.2(b).4
+stopped-state pin landed iter 266 (RED gold case as expected).
+See
 `260_answer.md` for sequencing rationale and library/palette
 decisions.
 
@@ -218,21 +220,18 @@ candidate.
      (`verifyLiveGt6FastContentAppearance`) as the regression lock
      on M13.2(a).
 
-  4. **M13.2(b).4 — stopped-state cold-editable pin. OPEN (iter 262).**
-     The existing M13.2(b).3 spec drives the Machine into
-     `suspended` via Fly's `/suspend` endpoint, which exercises only
-     the optimistic resume path. User reports 20 s+ on `ererg` —
-     the `stopped`-state path (sidecar idle-handler fallback
-     `exit(0)` lands a Machine in `stopped`, not `suspended`).
-     Live read iter 262: 0 suspended, 4 started, 0 stopped per-
-     project — the suspend handler may be unreliable in practice.
-     Slice: add a sibling case to `verifyLiveGt6LiveEditableState`
-     that calls `POST /machines/{id}/stop` instead of `/suspend`,
-     polls until `state === 'stopped'`, clicks the dashboard link,
-     asserts the same 1000 ms `.cm-content` budget. Expected RED
-     on landing (pin-first). Pair with a sidecar idle-handler test
-     asserting `suspended` (not `stopped`) is the actual outcome.
-     See `260_answer.md` for full audit.
+  4. **M13.2(b).4 — stopped-state cold-editable pin. Landed iter 266.**
+     `tests_gold/playwright/verifyLiveGt6LiveEditableStateStopped.spec.ts`
+     drives the per-project Machine into `stopped` via Fly's
+     `POST /machines/{id}/stop` (rather than `/suspend` as
+     M13.2(b).3 does), polls until `state === "stopped"`, then
+     measures `cmContentReadyMs` / `keystrokeAckMs` against the
+     1000 ms budget. Expected RED until M13.2(b).5 lands the fix;
+     pin gives M13.2(b).5 work a concrete target separable from
+     the suspended-resume path.
+     Follow-up still owed: sidecar idle-handler test asserting
+     `suspended` (not `stopped`) is the actual outcome of the
+     idle-timer fallback. Park in M13.2(b).5 R2 work.
   5. **M13.2(b).5 — fix for stopped-state cold load. OPEN.**
      Two candidate roots, addressable independently:
      - **R1.** Widen SSR seed for non-fresh projects (already a
@@ -267,7 +266,7 @@ candidate.
     "no machine assignment" to "no persisted blob".
 
 Default sequencing (updated iter 262 per `260_answer.md`):
-**M14 → M13.2(b).4 → M15 → M11.1c → M16.** R1 (SSR seed widening)
+**M13.2(b).5 → M15 → M11.1c → M16.** R1 (SSR seed widening)
 is M13.2(b).5 fix work, runs after the M13.2(b).4 pin lands RED.
 M11.5 still gated on binary-asset wire work.
 
