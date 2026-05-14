@@ -234,8 +234,8 @@ Single iteration. Local gold: drag → reload → widths persist.
 
   **Plan (three iterations):**
 
-  1. **M13.2(b).1 — code LANDED iter 249, awaiting
-     deploy.** `auto_destroy: false` in
+  1. **M13.2(b).1 — code LANDED iter 249, deployed
+     live iter 250.** `auto_destroy: false` in
      `upstreamFromEnv.ts` (was `true`); sidecar idle path
      replaced with `createIdleHandler` +
      `buildSuspendSelfFromEnv` in
@@ -249,14 +249,21 @@ Single iteration. Local gold: drag → reload → widths persist.
      `tex-center-sidecar/080d909a19d938` (shared-cpu-1x,
      1024 MB, `fra`); resume `suspended → started` ~0.7 s.
      The "stopped not destroyed" fallback is not needed.
-     **`FLY_API_TOKEN` secret staged on
-     `tex-center-sidecar` iter 249** (`flyctl secrets set
-     --stage`); applies on next deploy. **Next iter's
-     first step: build + deploy new sidecar image,
-     repin `SIDECAR_IMAGE` on `tex-center` control
-     plane.** Gold-spec teardown update (explicit destroy
-     per-project Machines) deferred to ride with
-     M13.2(b).3 if needed.
+     **Deployed iter 250:** sidecar rebuilt
+     (`registry.fly.io/tex-center-sidecar@sha256:05cb1ec5c0e55ae5e80594d4612ef9fcee7f2bb87029996ba0003d17ce241bd0`,
+     image deployment `01KRKMTM1KSQZVEP93DPJQFDRS`, 1.9 GB),
+     `SIDECAR_IMAGE` repinned on `tex-center`, control plane
+     redeployed
+     (`registry.fly.io/tex-center:deployment-01KRKNDSNFRR4GY4FZTD0VSBW8`).
+     `https://tex.center/healthz` green post-deploy. The two
+     untagged legacy orphans on `tex-center-sidecar`
+     (`080d909a19d938`, `d892d45be33608`) were destroyed —
+     the app now holds exactly its two deployment Machines
+     (`683437eb1e3378`, `d895e7ea479958`), 0 per-project
+     Machines, 0 orphans. New cold-access path is now live;
+     measurement (route → first ws frame) lands with M13.2(b).3.
+     Gold-spec teardown update (explicit destroy per-project
+     Machines) deferred to ride with M13.2(b).3 if needed.
   2. **M13.2(b).2 (impl):** optimistic project delete.
      `apps/web/src/lib/server/deleteProject.ts` currently
      awaits `destroyMachine(force:true)` *before* the DB
@@ -303,8 +310,8 @@ Single iteration. Local gold: drag → reload → widths persist.
     remains per-Machine; once a shared blob store lands, the gate
     must flip from "no machine assignment" to "no persisted blob".
 
-Default sequencing: **M13.2(b).1 (suspend-not-destroy) next**,
-then M13.2(b).2 (optimistic delete) → M13.2(b).3 (new gold) →
+Default sequencing: **M13.2(b).2 (optimistic delete) next**,
+then M13.2(b).3 (new gold) →
 M9.live-hygiene.leaked-machines → M12 → M11.1–M11.4 → M13.2(a)
 widening. M11.5 gated on binary-asset wire work.
 

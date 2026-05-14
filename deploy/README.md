@@ -84,11 +84,12 @@ verified end-to-end at iteration 93.
 - **Region:** `fra`
 - **Topology:** 6PN-only, no public IPs. Reachable only at
   `tex-center-sidecar.internal:3001`.
-- **Image:** `tex-center-sidecar:deployment-01KRCV7CHZSCYDTGVPWEHKWEGH`
-  (sha256 `cf00052c1cda0633f08933cd757ae52450b7e25272b8c6801fa64089fa677f40`).
-  Redeployed iter 108 to pick up the iter-107 Dockerfile fix
-  (`make … all`, `SUPERTEX_BIN=/opt/supertex/build/supertex`). First
-  deploy was iter 93 (sha `f31ef7be…`).
+- **Image:** `tex-center-sidecar:deployment-01KRKMTM1KSQZVEP93DPJQFDRS`
+  (sha256 `05cb1ec5c0e55ae5e80594d4612ef9fcee7f2bb87029996ba0003d17ce241bd0`).
+  Redeployed iter 250 to ship M13.2(b).1 — sidecar idle path now
+  self-suspends via the Fly Machines API instead of `process.exit(0)`;
+  per-project Machines created with `auto_destroy: false`. Prior
+  images: iter 108 (sha `cf00052c…`), iter 93 (sha `f31ef7be…`).
 - **Machines:**
   - `d895e7ea479958` (primary)
   - `683437eb1e3378` (standby)
@@ -160,7 +161,7 @@ attach command.
 | `RUN_MIGRATIONS_ON_BOOT` | `1` — enables `runBootMigrations` (M7.1.3.0)                            |
 | `FLY_API_TOKEN`          | personal `creds/fly.token` (deploy-scoped token denied; see PLAN/IDEAS) |
 | `SIDECAR_APP_NAME`       | `tex-center-sidecar`                                                    |
-| `SIDECAR_IMAGE`          | `registry.fly.io/tex-center-sidecar@sha256:cf00052c…` (iter 108)         |
+| `SIDECAR_IMAGE`          | `registry.fly.io/tex-center-sidecar@sha256:05cb1ec5…` (iter 250)         |
 
 ## Verification
 
