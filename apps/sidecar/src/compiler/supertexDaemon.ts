@@ -29,6 +29,7 @@ import {
   type DaemonEvent,
 } from "./daemonProtocol.js";
 import { type SpawnFn, defaultSpawnFn } from "./supertexShared.js";
+import { errorMessage } from "../errors.js";
 import type {
   Compiler,
   CompileRequest,
@@ -144,10 +145,7 @@ export class SupertexDaemonCompiler implements Compiler {
       const segment = await this.assembleSegment(events.maxShipout);
       return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
     } catch (e) {
-      return {
-        ok: false,
-        error: e instanceof Error ? e.message : String(e),
-      };
+      return { ok: false, error: errorMessage(e) };
     } finally {
       this.busy = false;
     }

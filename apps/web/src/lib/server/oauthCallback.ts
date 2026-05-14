@@ -31,6 +31,7 @@ import {
 } from "@tex-center/auth";
 
 import { formatClearCookie, formatSetCookie } from "./cookies.js";
+import { errorMessage } from "../errors.js";
 
 /** Already-verified ID token claims surfaced by `verifyIdToken`. */
 export interface VerifiedIdToken {
@@ -289,10 +290,6 @@ function errorWith(
   setCookies: readonly string[],
 ): GoogleCallbackResolution {
   return { kind: "error", status, body, setCookies };
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** Google `error` codes are short tokens (e.g. `access_denied`); echo them verbatim if alnum/_. */

@@ -4,6 +4,7 @@
 
 import { readFile } from "node:fs/promises";
 
+import { errorMessage } from "../errors.js";
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
 
 export class FixtureCompiler implements Compiler {
@@ -19,7 +20,7 @@ export class FixtureCompiler implements Compiler {
         segments: [{ totalLength: pdf.length, offset: 0, bytes: pdf }],
       };
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      return { ok: false, error: errorMessage(e) };
     }
   }
 

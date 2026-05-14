@@ -46,6 +46,8 @@ import {
   validateProjectFileName,
 } from "@tex-center/protocol";
 
+import { errorMessage } from "./errors.js";
+
 export { validateProjectFileName };
 
 export interface PersistenceLogger {
@@ -315,7 +317,7 @@ export function createProjectPersistence(args: {
           persistedByName.set(MAIN_DOC_NAME, MAIN_DOC_HELLO_WORLD);
         } catch (e) {
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             "main.tex seed PUT failed; in-memory seed only this session",
           );
         }
@@ -323,7 +325,7 @@ export function createProjectPersistence(args: {
       canPersist = true;
     } catch (e) {
       log.warn(
-        { err: e instanceof Error ? e.message : String(e), projectId },
+        { err: errorMessage(e), projectId },
         "blob hydration failed; persistence disabled this session",
       );
     }
@@ -346,7 +348,7 @@ export function createProjectPersistence(args: {
           persistedByName.set(name, body);
         } catch (e) {
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             `blob create failed for ${name}`,
           );
           return { ok: false, reason: "blob create failed" };
@@ -369,7 +371,7 @@ export function createProjectPersistence(args: {
           await blobStore.delete(projectFileKey(projectId, name));
         } catch (e) {
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             `blob delete failed for ${name}`,
           );
           return { ok: false, reason: "blob delete failed" };
@@ -398,7 +400,7 @@ export function createProjectPersistence(args: {
           );
         } catch (e) {
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             `blob rename PUT failed for ${newName}`,
           );
           return { ok: false, reason: "blob create failed" };
@@ -411,7 +413,7 @@ export function createProjectPersistence(args: {
           // back (a rollback could fail too and leave both keys
           // populated, which is worse).
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             `blob rename DELETE failed for ${oldName} (orphaned)`,
           );
         }
@@ -438,7 +440,7 @@ export function createProjectPersistence(args: {
           persistedByName.set(name, source);
         } catch (e) {
           log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId },
+            { err: errorMessage(e), projectId },
             `blob persist failed for ${name}`,
           );
         }

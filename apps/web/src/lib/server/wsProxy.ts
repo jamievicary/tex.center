@@ -24,6 +24,7 @@ import type { IncomingMessage, Server as HttpServer } from "node:http";
 import type { Duplex } from "node:stream";
 
 import type { UpgradeAuthDecision } from "./wsAuth.js";
+import { errorMessage } from "../errors.js";
 
 const PROJECT_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -192,7 +193,7 @@ export function attachWsProxy(
         options.onEvent?.({
           kind: "resolve-error",
           projectId,
-          message: err instanceof Error ? err.message : String(err),
+          message: errorMessage(err),
         });
         writeStatusAndClose(clientSocket, "502 Bad Gateway");
         return;
@@ -210,7 +211,7 @@ export function attachWsProxy(
           options.onEvent?.({
             kind: "resolve-error",
             projectId,
-            message: err instanceof Error ? err.message : String(err),
+            message: errorMessage(err),
           });
           writeStatusAndClose(clientSocket, "502 Bad Gateway");
         },
@@ -229,7 +230,7 @@ export function attachWsProxy(
       options.onEvent?.({
         kind: "auth-error",
         projectId,
-        message: err instanceof Error ? err.message : String(err),
+        message: errorMessage(err),
       });
       writeStatusAndClose(clientSocket, "401 Unauthorized");
       return;
@@ -250,7 +251,7 @@ export function attachWsProxy(
         options.onEvent?.({
           kind: "auth-error",
           projectId,
-          message: err instanceof Error ? err.message : String(err),
+          message: errorMessage(err),
         });
         writeStatusAndClose(clientSocket, "401 Unauthorized");
       },
@@ -330,7 +331,7 @@ export function attachWsProxy(
         cleanup({
           kind: "upstream-error",
           projectId,
-          message: err instanceof Error ? err.message : String(err),
+          message: errorMessage(err),
         });
         return;
       }
@@ -349,7 +350,7 @@ export function attachWsProxy(
       cleanup({
         kind: "client-error",
         projectId,
-        message: err instanceof Error ? err.message : String(err),
+        message: errorMessage(err),
       });
     });
     upstream.on("close", () => {

@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
 import { defaultSpawnFn, supertexPaths, type SpawnFn } from "./supertexShared.js";
+import { errorMessage } from "../errors.js";
 
 export interface SupertexOnceOptions {
   /** Project workspace dir; the source must already live here. */
@@ -53,7 +54,7 @@ export class SupertexOnceCompiler implements Compiler {
     try {
       result = await this.runOnce(args);
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      return { ok: false, error: errorMessage(e) };
     }
     if (result.code !== 0) {
       const detail = result.stderr.trim() || "(no stderr)";
@@ -66,7 +67,7 @@ export class SupertexOnceCompiler implements Compiler {
     } catch (e) {
       return {
         ok: false,
-        error: `pdf not produced at ${pdfPath}: ${e instanceof Error ? e.message : String(e)}`,
+        error: `pdf not produced at ${pdfPath}: ${errorMessage(e)}`,
       };
     }
     return {

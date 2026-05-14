@@ -14,6 +14,7 @@ import { randomBytes } from "node:crypto";
 import { generatePkce } from "@tex-center/auth";
 import type { RequestHandler } from "@sveltejs/kit";
 
+import { errorMessage } from "$lib/errors.js";
 import {
   loadOAuthConfig,
 } from "$lib/server/oauthConfig.js";
@@ -29,8 +30,7 @@ export const GET: RequestHandler = ({ url }) => {
   try {
     config = loadOAuthConfig();
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    return new Response(`Server misconfigured: ${reason}`, {
+    return new Response(`Server misconfigured: ${errorMessage(err)}`, {
       status: 500,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });

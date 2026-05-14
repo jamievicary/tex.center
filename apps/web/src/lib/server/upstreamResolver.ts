@@ -23,6 +23,8 @@
 
 import net from "node:net";
 
+import { errorMessage } from "../errors.js";
+
 import {
   deleteMachineAssignment,
   getMachineAssignmentByProjectId,
@@ -179,10 +181,8 @@ export function createUpstreamResolver(
         await sleep(500);
       }
     }
-    const message =
-      lastErr instanceof Error ? lastErr.message : String(lastErr);
     throw new Error(
-      `upstreamResolver: ${upstream.host}:${upstream.port} did not accept TCP within probe budget: ${message}`,
+      `upstreamResolver: ${upstream.host}:${upstream.port} did not accept TCP within probe budget: ${errorMessage(lastErr)}`,
     );
   };
 

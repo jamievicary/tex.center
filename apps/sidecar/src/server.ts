@@ -46,6 +46,7 @@ import { SupertexOnceCompiler } from "./compiler/supertexOnce.js";
 import { SupertexDaemonCompiler } from "./compiler/supertexDaemon.js";
 import { ProjectWorkspace } from "./workspace.js";
 import { CompileCoalescer, type CompileCoalescerOptions } from "./compileCoalescer.js";
+import { errorMessage } from "./errors.js";
 import {
   createProjectPersistence,
   defaultBlobStoreFromEnv,
@@ -209,7 +210,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           });
         } catch (e) {
           app.log.error(
-            { err: e instanceof Error ? e.message : String(e) },
+            { err: errorMessage(e) },
             "onIdle threw",
           );
         }
@@ -306,7 +307,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           if (blob) await p.compiler.restore(blob);
         } catch (e) {
           app.log.warn(
-            { err: e instanceof Error ? e.message : String(e), projectId: p.id },
+            { err: errorMessage(e), projectId: p.id },
             "checkpoint restore failed; continuing without restore",
           );
         }
@@ -330,7 +331,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         await persistCheckpoint(blobStore, p.id, bytes);
       } catch (e) {
         app.log.warn(
-          { err: e instanceof Error ? e.message : String(e), projectId: p.id },
+          { err: errorMessage(e), projectId: p.id },
           "checkpoint persist failed",
         );
       }
@@ -355,7 +356,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         encodeControl({
           type: "compile-status",
           state: "error",
-          detail: e instanceof Error ? e.message : String(e),
+          detail: errorMessage(e),
         }),
       );
       return;
@@ -412,7 +413,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         await app.db.client`SELECT 1`;
         db = { state: "up" };
       } catch (e) {
-        db = { state: "down", error: e instanceof Error ? e.message : String(e) };
+        db = { state: "down", error: errorMessage(e) };
       }
     } else {
       db = { state: "absent" };
@@ -423,7 +424,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         await blobStore.health();
         blobs = { state: "up" };
       } catch (e) {
-        blobs = { state: "down", error: e instanceof Error ? e.message : String(e) };
+        blobs = { state: "down", error: errorMessage(e) };
       }
     } else {
       blobs = { state: "absent" };
@@ -541,7 +542,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
           decoded = decodeFrame(frame);
         } catch (e) {
           app.log.warn(
-            { err: e instanceof Error ? e.message : String(e) },
+            { err: errorMessage(e) },
             "bad frame from client",
           );
           return;

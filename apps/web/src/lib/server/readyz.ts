@@ -9,6 +9,8 @@
 // that explicitly want to gate on backing-service availability
 // (deploy verification, external monitors).
 
+import { errorMessage } from "../errors.js";
+
 export type ReadyState = "absent" | "up" | "down";
 
 export interface ReadyDb {
@@ -40,10 +42,7 @@ export async function probeReady(deps: ReadyzDeps): Promise<ReadyResult> {
       await probe;
       db = { state: "up" };
     } catch (e) {
-      db = {
-        state: "down",
-        error: e instanceof Error ? e.message : String(e),
-      };
+      db = { state: "down", error: errorMessage(e) };
     }
   }
   return {

@@ -172,10 +172,15 @@ candidate.
      contains the seeded `documentclass` sentinel within 1000 ms
      of click, and (b) a single keystroke produces a Yjs
      `TAG_DOC_UPDATE` (0x00) `framesent` event within 1000 ms.
-     Aspirational — expected RED until the "widen SSR seed for
-     non-fresh projects" follow-up below lands, since today's
-     non-fresh path shows the blank `.editor-placeholder` for the
-     full ~11.5 s WS-open path. Keeps current GT-6
+     Landed iter 256; observed GREEN by iter 260 gold run
+     (cmContentReadyMs=857, keystrokeAckMs=17). The suspended-resume
+     path is faster than expected: `.cm-content` populates within
+     budget without the seed-widening follow-up, because the
+     suspended Machine resumes in ~300 ms and the existing
+     `.editor-placeholder`/SSR-seed path no longer dominates. The
+     "widen SSR seed for non-fresh projects" follow-up below
+     remains useful for the cold-stopped (non-suspended) case but
+     is no longer load-bearing for M13.2(b).3. Keeps current GT-6
      (`verifyLiveGt6FastContentAppearance`) as the regression lock
      on M13.2(a).
 

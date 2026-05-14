@@ -19,6 +19,7 @@ import {
 } from "@tex-center/db";
 import type { RequestHandler } from "@sveltejs/kit";
 
+import { errorMessage } from "$lib/errors.js";
 import { loadOAuthConfig } from "$lib/server/oauthConfig.js";
 import {
   finalizeGoogleSession,
@@ -46,8 +47,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
   try {
     config = loadOAuthConfig();
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    return new Response(`Server misconfigured: ${reason}`, {
+    return new Response(`Server misconfigured: ${errorMessage(err)}`, {
       status: 500,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });

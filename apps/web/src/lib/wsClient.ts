@@ -18,6 +18,7 @@ import {
 } from "@tex-center/protocol";
 
 import { PdfBuffer } from "./pdfBuffer";
+import { errorMessage } from "./errors";
 
 export type ConnectionState = "connecting" | "open" | "closed" | "error";
 
@@ -165,7 +166,7 @@ export class WsClient {
     try {
       decoded = decodeFrame(frame);
     } catch (e) {
-      this._lastError = e instanceof Error ? e.message : String(e);
+      this._lastError = errorMessage(e);
       this.emit();
       return;
     }

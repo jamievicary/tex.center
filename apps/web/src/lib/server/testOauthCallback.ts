@@ -30,6 +30,8 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { errorMessage } from "../errors.js";
+
 import type {
   GoogleCallbackResolution,
   VerifiedIdToken,
@@ -108,10 +110,6 @@ export async function resolveTestCallback(
 
 function errorWith(status: number, body: string): GoogleCallbackResolution {
   return { kind: "error", status, body, setCookies: [] };
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 function hmac(key: Uint8Array, data: string): Buffer {
