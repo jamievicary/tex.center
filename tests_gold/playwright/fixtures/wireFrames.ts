@@ -29,6 +29,15 @@ export interface FrameCapture {
    * empty even when the pdf-segment count is fine.
    */
   overlapErrors: string[];
+  /**
+   * Running count of outgoing TAG_DOC_UPDATE (0x00) frames on the
+   * project WS — i.e. Yjs ops the client sent toward the sidecar.
+   * Read live (not snapshotted). Lets specs distinguish
+   * "typing-didn't-reach-WS" from "WS-fine-but-no-compile-segment"
+   * failure modes; introduced iter 274 for the
+   * `verifyLivePdfMultiPage` post-edit-segment diagnosis.
+   */
+  readonly docUpdateSent: { value: number };
 }
 
 /**
@@ -46,6 +55,7 @@ export interface FrameCapture {
 export function captureFrames(page: Page, projectId: string): FrameCapture {
   const pdfSegmentFrames: Buffer[] = [];
   const overlapErrors: string[] = [];
+  const docUpdateSent = { value: 0 };
 
   page.on("websocket", (ws) => {
     if (!ws.url().includes(`/ws/project/${projectId}`)) return;
@@ -63,7 +73,14 @@ export function captureFrames(page: Page, projectId: string): FrameCapture {
         }
       }
     });
+    ws.on("framesent", ({ payload }) => {
+      if (typeof payload === "string") return;
+      if (payload.length === 0) return;
+      if (payload[0] === TAG_DOC_UPDATE) {
+        docUpdateSent.value += 1;
+      }
+    });
   });
 
-  return { pdfSegmentFrames, overlapErrors };
+  return { pdfSegmentFrames, overlapErrors, docUpdateSent };
 }

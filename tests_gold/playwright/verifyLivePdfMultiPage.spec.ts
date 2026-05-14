@@ -69,7 +69,10 @@ test.describe("live multi-page PDF preview (M15)", () => {
       name: `pw-probe-multipage-${Date.now()}`,
     });
 
-    const { pdfSegmentFrames } = captureFrames(authedPage, project.id);
+    const { pdfSegmentFrames, docUpdateSent } = captureFrames(
+      authedPage,
+      project.id,
+    );
 
     try {
       await authedPage.goto(`/editor/${project.id}`);
@@ -109,10 +112,31 @@ test.describe("live multi-page PDF preview (M15)", () => {
       ) {
         await authedPage.waitForTimeout(500);
       }
-      expect(
-        pdfSegmentFrames.length,
-        "no post-edit pdf-segment carrying the multipage body arrived",
-      ).toBeGreaterThan(segmentsBefore);
+      if (pdfSegmentFrames.length <= segmentsBefore) {
+        // Diagnostic snapshot — iter 274 made this branch surface
+        // why the compile didn't fire (no DOC_UPDATE sent? typing
+        // didn't reach `.cm-content`? WS not bound to this
+        // project?). Three RED gold runs (271/272/273) gave us
+        // zero data to choose between those modes.
+        const diag = await authedPage.evaluate(() => {
+          const cm = document.querySelector(".cm-content");
+          const text = cm?.textContent ?? "";
+          return {
+            cmContentLen: text.length,
+            cmContentTail: text.slice(-40),
+          };
+        });
+        expect(
+          pdfSegmentFrames.length,
+          `no post-edit pdf-segment carrying the multipage body ` +
+            `arrived within ${COMPILE_BUDGET_MS}ms. ` +
+            `segmentsBefore=${segmentsBefore} ` +
+            `pdfSegmentsAtFail=${pdfSegmentFrames.length} ` +
+            `docUpdateSent=${docUpdateSent.value} ` +
+            `cmContentLen=${diag.cmContentLen} ` +
+            `cmContentTail=${JSON.stringify(diag.cmContentTail)}`,
+        ).toBeGreaterThan(segmentsBefore);
+      }
 
       // Drain — the viewer renders pages serially after the segment
       // lands, and a late page may still be appending when the wire
@@ -124,14 +148,15 @@ test.describe("live multi-page PDF preview (M15)", () => {
         const canvases = Array.from(
           document.querySelectorAll<HTMLCanvasElement>(".preview canvas"),
         );
-        const pagedCanvases = canvases.filter(
-          (c) => c.dataset.page !== undefined,
-        );
+        // Iter 271 moved `data-page` from canvas to the
+        // `.pdf-page` wrapper (M17 cross-fade rewrite); count the
+        // wrappers, not the canvases.
+        const pageWrappers = document.querySelectorAll(".preview .pdf-page");
         const heights = canvases.map((c) => c.getBoundingClientRect().height);
         const tallestPx = heights.reduce((m, h) => (h > m ? h : m), 0);
         return {
           canvasCount: canvases.length,
-          pagedCanvasCount: pagedCanvases.length,
+          pageWrapperCount: pageWrappers.length,
           tallestPx,
           viewportH: window.innerHeight,
           hostScrollH: (host as HTMLElement | null)?.scrollHeight ?? null,
@@ -139,19 +164,19 @@ test.describe("live multi-page PDF preview (M15)", () => {
       });
 
       const viewerAgnosticOk =
-        measurement.pagedCanvasCount >= 2 ||
+        measurement.pageWrapperCount >= 2 ||
         measurement.tallestPx > measurement.viewportH * 1.8;
 
       expect(
         viewerAgnosticOk,
         `preview pane shows only one page of rendered PDF. ` +
           `canvasCount=${measurement.canvasCount} ` +
-          `pagedCanvasCount=${measurement.pagedCanvasCount} ` +
+          `pageWrapperCount=${measurement.pageWrapperCount} ` +
           `tallestPx=${measurement.tallestPx.toFixed(1)} ` +
           `viewportH=${measurement.viewportH} ` +
           `hostScrollH=${measurement.hostScrollH ?? "null"}. ` +
-          `Expected ≥2 paged canvases OR a single canvas > 1.8× viewport ` +
-          `height after typing 4 \\newpage breaks.`,
+          `Expected ≥2 .pdf-page wrappers OR a single canvas > 1.8× ` +
+          `viewport height after typing 4 \\newpage breaks.`,
       ).toBe(true);
     } finally {
       await cleanupLiveProjectMachine({

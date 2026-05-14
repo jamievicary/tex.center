@@ -328,6 +328,21 @@ elements **or** a single canvas of height > viewport.height * 1.8.
   types four `\newpage` breaks before `\end{document}`, then
   asserts viewer-agnostically: ≥2 paged canvases or a single
   canvas > 1.8 × viewport height.
+- **Selector + diagnostics refresh landed iter 274.** Spec's
+  `pagedCanvasCount` branch (counting `canvas[data-page]`) was
+  permanently 0 after iter-271 moved `data-page` to the
+  `.pdf-page` wrapper; switched to counting `.pdf-page` wrappers
+  directly. The `tallestPx > 1.8 × viewport` fallback branch is
+  unchanged. Separately, the spec has been RED with `no post-edit
+  pdf-segment carrying the multipage body arrived` for iters
+  271/272/273 with no diagnostic data on which stage broke
+  (typing not landing? DOC_UPDATE not sent? compile not firing?);
+  `captureFrames` now also buckets outgoing TAG_DOC_UPDATE into a
+  live `docUpdateSent` counter, and the timeout branch of the
+  segments assertion surfaces `docUpdateSent`,
+  `pdfSegmentsAtFail`, and `.cm-content` text length+tail in the
+  failure message. No assertion weakened. Next gold run pins the
+  failure mode.
 - **Diagnosis + fix landed iter 269.** Root cause was the
   sidecar's `targetPage = maxViewingPage(p)` default in
   `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
