@@ -21,8 +21,11 @@ GREEN). **GT-6 pinned RED iter 233** (strengthened spec creates
 a fresh per-test project, clicks from `/projects`, bounds the
 seed sentinel to 500 ms after editor-route interactive; source
 actually appears at ~5 s on live). Live focus is now the GT-6
-fix, beginning iter 234 with M13.1 `performance.mark`
-instrumentation on the editor hydrate path.
+fix. M13.1 instrumentation landed iters 234–236 and the iter-236
+live timeline pinned the bottleneck at route→ws-open ~11.5 s
+(per-project Machine cold-start gating the WS upgrade). M13.2
+direction chosen iter 237: SSR-side seed body so the editor paints
+while the Machine cold-starts in parallel. See M13 below.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`.
@@ -172,9 +175,46 @@ Single iteration. Local gold: drag → reload → widths persist.
     `snapshot.pdfBytes`). Then add the debug-toast bridge and the
     local ordering spec.
 - **M13.2** single highest-impact fix indicated by M13.1 data.
-  Likely overlaps M7.0.2 shared-sidecar pool if cold-start
-  dominates; in that case M13.2 may collapse into M7.0.2
-  sequencing rather than ship separately.
+  **M13.1 diagnostic complete iter 236.** GT-6 failure message now
+  carries the five-mark timeline; iter-236 live run reported
+  `route-mounted=+0ms ws-open=+11546ms yjs-hydrated=+11564ms
+  first-text-paint=+1ms first-pdf-segment=(absent)` with the
+  seeded `documentclass` source appearing in `.cm-content` at
+  +11572 ms. **Verdict: the route→ws-open interval (~11.5 s)
+  dominates entirely; yjs-hydrate adds ~18 ms and DOM paint ~8 ms
+  on top.** The `first-text-paint=+1ms` figure was an
+  instrumentation artefact (Y.Text non-null immediately because
+  `doc.getText()` lazily creates it); iter 237 retargeted the
+  predicate at `text.length > 0` via a Y.Text observer, so future
+  runs will show first-text-paint aligned with yjs-hydrated.
+  Cause: the control-plane WS upgrade
+  (`apps/web/src/lib/server/wsProxy.ts:200`,
+  `upstreamResolver.ts:144`) blocks until the per-project Fly
+  Machine is `started` and the sidecar TCP-binds — a cold start.
+  Seed content cannot reach the client until that completes, even
+  though it is just the static `MAIN_DOC_HELLO_WORLD` template
+  (sidecar `persistence.ts:290`).
+
+  **M13.2 fix direction (chosen iter 237):** serve seed text from
+  the control plane *before* WS, so the editor can paint while
+  the Machine is cold-starting in parallel. Two reasonable shapes:
+  (a) include the seed `.tex` body in the editor route's SSR
+  `+page.server.ts` `load` (fetched once from R2 or, for the
+  cold-project case, just the template string); the client seeds
+  the Y.Text locally and CodeMirror paints immediately, then the
+  WS-sync reconciles when it lands; or (b) add a control-plane
+  `GET /api/project/<id>/seed` that returns the file list + seed
+  bodies, called by `WsClient` in parallel with WS upgrade. (a) is
+  simpler and matches the SvelteKit grain; preferred. The risk
+  with both: the client-locally-seeded Y.Text must merge cleanly
+  with the sidecar's authoritative state on sync. For the
+  cold-fresh-project case the sidecar's seed equals what the
+  control plane provides, so the merge is a no-op; for a
+  reconnect-into-already-edited project the sidecar's state wins
+  (Yjs CRDT merge handles it). Next iteration starts with the
+  smallest version of (a): expose seed bodies via SSR `load` for
+  the cold-project shape only, behind a gate that disables on
+  reconnect to avoid stomping live state.
 
 Default sequencing (M11–M13 all post-MVP, ordered after MVP-gap
 M7.4.x and the GT-E/GT-F/save-feedback work): M13.1 → M12 →

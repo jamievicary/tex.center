@@ -111,8 +111,28 @@
   $effect(() => {
     if (snapshot.status === "open") markOnce(EDITOR_WS_OPEN);
     if (snapshot.hydrated) markOnce(EDITOR_YJS_HYDRATED);
-    if (text !== null) markOnce(EDITOR_FIRST_TEXT_PAINT);
     if (snapshot.pdfBytes !== null) markOnce(EDITOR_FIRST_PDF_SEGMENT);
+  });
+
+  // EDITOR_FIRST_TEXT_PAINT fires on the first observed Y.Text with
+  // non-empty content. `doc.getText(name)` returns a non-null Y.Text
+  // immediately (length=0), so a `text !== null` predicate would
+  // fire at +1ms before WS sync — see iter 236 GT-6 timeline. Use
+  // a Y.Text observer so the mark aligns with the first content
+  // delivered by Yjs sync (or with a file-switch into an already-
+  // populated doc).
+  $effect(() => {
+    if (!text) return;
+    if (text.length > 0) {
+      markOnce(EDITOR_FIRST_TEXT_PAINT);
+      return;
+    }
+    const yText = text;
+    const observer = (): void => {
+      if (yText.length > 0) markOnce(EDITOR_FIRST_TEXT_PAINT);
+    };
+    yText.observe(observer);
+    return () => yText.unobserve(observer);
   });
 
   function handlePageChange(page: number): void {
