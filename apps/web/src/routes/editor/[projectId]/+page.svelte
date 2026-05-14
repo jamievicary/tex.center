@@ -184,6 +184,20 @@
       {#key text}
         <Editor {text} />
       {/key}
+    {:else if data.seed && selected === data.seed.name}
+      <!-- M13.2(a): render the canonical seed text inside the
+           `.editor` pane while the per-project sidecar cold-starts
+           (~11.5 s on live, per iter-236 GT-6 timeline). This is a
+           visual seed only — the local Y.Doc stays empty until WS
+           hydrate lands, so the CRDT cannot duplicate the sidecar's
+           identical seed when initial sync arrives. The placeholder
+           deliberately does *not* carry the `.cm-content` class:
+           live specs that click/type into `.cm-content` (e.g.
+           verifyLiveFullPipeline.spec.ts) must continue to wait for
+           the real CodeMirror mount before interacting; the
+           `.editor` pane is what tests should poll for
+           seed-content appearance (see GT-6). -->
+      <pre class="editor-seed" aria-hidden="true">{data.seed.text}</pre>
     {:else}
       <div class="editor-placeholder" aria-hidden="true"></div>
     {/if}
@@ -247,6 +261,20 @@
     width: 100%;
     height: 100%;
     background: white;
+  }
+  .editor-seed {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0.5rem;
+    background: white;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #1f2937;
+    white-space: pre;
+    overflow: auto;
+    box-sizing: border-box;
   }
   .who {
     display: flex;

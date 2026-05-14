@@ -25,7 +25,11 @@ fix. M13.1 instrumentation landed iters 234–236 and the iter-236
 live timeline pinned the bottleneck at route→ws-open ~11.5 s
 (per-project Machine cold-start gating the WS upgrade). M13.2
 direction chosen iter 237: SSR-side seed body so the editor paints
-while the Machine cold-starts in parallel. See M13 below.
+while the Machine cold-starts in parallel. M13.2(a) **landed iter 238**:
+SSR seed gate via `getMachineAssignmentByProjectId`, rendered as a
+`<pre class="editor-seed">` placeholder inside `.editor`. GT-6 was
+re-pointed at `.editor` textContent (not `.cm-content`) and is
+expected to flip green on the next live gold run. See M13 below.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`.
@@ -195,26 +199,58 @@ Single iteration. Local gold: drag → reload → widths persist.
   though it is just the static `MAIN_DOC_HELLO_WORLD` template
   (sidecar `persistence.ts:290`).
 
-  **M13.2 fix direction (chosen iter 237):** serve seed text from
-  the control plane *before* WS, so the editor can paint while
-  the Machine is cold-starting in parallel. Two reasonable shapes:
-  (a) include the seed `.tex` body in the editor route's SSR
-  `+page.server.ts` `load` (fetched once from R2 or, for the
-  cold-project case, just the template string); the client seeds
-  the Y.Text locally and CodeMirror paints immediately, then the
-  WS-sync reconciles when it lands; or (b) add a control-plane
-  `GET /api/project/<id>/seed` that returns the file list + seed
-  bodies, called by `WsClient` in parallel with WS upgrade. (a) is
-  simpler and matches the SvelteKit grain; preferred. The risk
-  with both: the client-locally-seeded Y.Text must merge cleanly
-  with the sidecar's authoritative state on sync. For the
-  cold-fresh-project case the sidecar's seed equals what the
-  control plane provides, so the merge is a no-op; for a
-  reconnect-into-already-edited project the sidecar's state wins
-  (Yjs CRDT merge handles it). Next iteration starts with the
-  smallest version of (a): expose seed bodies via SSR `load` for
-  the cold-project shape only, behind a gate that disables on
-  reconnect to avoid stomping live state.
+  **M13.2(a) landed iter 238 — visual seed only (no Y.Doc insert).**
+  `apps/web/src/routes/editor/[projectId]/+page.server.ts` now
+  queries `getMachineAssignmentByProjectId` and, when the row is
+  absent (no WS has ever upgraded for this project, so the sidecar
+  has not yet diverged from the canonical template), returns
+  `seed = { name: "main.tex", text: MAIN_DOC_HELLO_WORLD }` in the
+  page data. The editor svelte renders the seed as a `<pre
+  class="editor-seed">` placeholder inside the `.editor` pane
+  while `snapshot.hydrated` is still false. The placeholder is
+  visual only — it deliberately does *not* carry the `.cm-content`
+  class, and the seed bytes are never inserted into the local
+  Y.Doc. Two reasons: (1) Yjs CRDT cannot deterministically dedupe
+  two independent `t.insert(0, MAIN_DOC_HELLO_WORLD)` operations
+  signed with different `clientID`s; an in-Y.Doc seed would
+  duplicate the sidecar's identical seed on initial sync; (2)
+  every live spec that types into `.cm-content`
+  (verifyLiveFullPipeline et al.) must continue waiting for the
+  real CodeMirror mount — typing into a `<pre>` would silently
+  drop input. GT-6 was updated to poll `.editor` textContent for
+  the `documentclass` sentinel rather than `.cm-content`, which is
+  the user-visible promise ("source visible in the editor pane
+  quickly") and does not constrain the implementation to a
+  particular DOM element. Expected effect on the live GT-6
+  timeline: appearance time drops from ~5–12 s to under the 500 ms
+  bound for fresh cold projects.
+
+  **Known follow-ups for M13.2:**
+
+  - Non-fresh projects (those with a `machine_assignments` row)
+    still show the blank `.editor-placeholder` for ~11.5 s on
+    reconnect into a cold-stopped Machine. The user-visible UX is
+    "blank editor until WS opens" for these. Address by widening
+    the seed surface to fetch the *current* persisted source from
+    R2/blob-store in `+page.server.ts` when a row exists. Requires
+    the web side to read the same blob store the sidecar writes;
+    currently the sidecar's `BLOB_STORE` lives only on each
+    per-project Machine. Schedule alongside M11.5 binary-asset
+    wire work (shared R2 bucket).
+  - GT-A currently passes because it polls `.cm-content` which
+    only appears after real CodeMirror mounts (post-hydrate); the
+    seed placeholder is a separate DOM element. If a future
+    iteration consolidates the seed and real editor under a
+    single `.cm-content` class, GT-A's invariant must be carried
+    through unchanged.
+  - `machine_assignments`-row deletion via
+    `cleanupProjectMachine` (used by tests and the eventual
+    idle-reap path) re-arms the SSR seed gate even though the
+    sidecar's blob store may still hold the user's edits. In
+    production this is benign while the blob store remains
+    per-Machine (a cleaned-up project loses its blobs too); once a
+    shared blob store lands, the gate needs to flip from
+    "no machine assignment" to "no persisted blob".
 
 Default sequencing (M11–M13 all post-MVP, ordered after MVP-gap
 M7.4.x and the GT-E/GT-F/save-feedback work): M13.1 → M12 →

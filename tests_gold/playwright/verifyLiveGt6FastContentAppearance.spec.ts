@@ -89,20 +89,26 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
       await authedPage.waitForLoadState("domcontentloaded");
       interactiveAt = Date.now();
 
-      const cmContent = authedPage.locator(".cm-content");
+      // Poll the `.editor` pane rather than `.cm-content` directly.
+      // Per iter 238 M13.2(a), the editor pane may render a seed
+      // placeholder (no `.cm-content` class) before CodeMirror
+      // mounts. The user-visible content guarantee is that the
+      // seeded source is visible *somewhere* inside the editor
+      // pane within the bound — not which DOM element carries it.
+      const editorPane = authedPage.locator(".editor");
       try {
         await expect
           .poll(
             async () => {
               textSeen =
-                (await cmContent.textContent().catch(() => "")) ?? "";
+                (await editorPane.textContent().catch(() => "")) ?? "";
               return textSeen.includes("documentclass");
             },
             {
               timeout: CONTENT_APPEARANCE_TIMEOUT_MS,
               intervals: [25, 50, 100],
               message:
-                "`.cm-content` did not contain the seeded " +
+                "`.editor` pane did not contain the seeded " +
                 "`documentclass` sentinel within the regression bound " +
                 "after /editor/<id> became interactive.",
             },
@@ -120,7 +126,7 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
         ) {
           await authedPage.waitForTimeout(250);
           textSeen =
-            (await cmContent.textContent().catch(() => "")) ?? "";
+            (await editorPane.textContent().catch(() => "")) ?? "";
         }
         const totalAppearanceMs = Date.now() - interactiveAt;
 
@@ -166,7 +172,7 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
 
         throw new Error(
           `GT-6: seeded \`documentclass\` source did not appear in ` +
-            `\`.cm-content\` within ${CONTENT_APPEARANCE_TIMEOUT_MS}ms ` +
+            `\`.editor\` within ${CONTENT_APPEARANCE_TIMEOUT_MS}ms ` +
             `of /editor/<id> becoming interactive. Bound elapsed at ` +
             `${elapsedMs}ms. Source eventually appeared at ` +
             `${
@@ -174,7 +180,7 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
                 ? `${totalAppearanceMs}ms (extended diagnostic poll)`
                 : "(still absent after extended diagnostic poll)"
             }. project=${project.id} url=${authedPage.url()}. ` +
-            `.cm-content textContent prefix: ${JSON.stringify(
+            `.editor textContent prefix: ${JSON.stringify(
               textSeen.slice(0, 120),
             )}. M13.1 timeline (relative to earliest mark): ` +
             `${timeline}. Underlying: ${(err as Error).message}`,
