@@ -47,6 +47,21 @@ export async function getProjectById(
   return rows[0] ?? null;
 }
 
+// Deletes the `projects` row by id. Cascades to
+// `machine_assignments` via the FK in `drizzle.ts`. Returns true
+// when a row was removed, false when no row existed (caller may
+// treat both as success — idempotent).
+export async function deleteProject(
+  db: DrizzleDb,
+  id: string,
+): Promise<boolean> {
+  const rows = await db
+    .delete(projects)
+    .where(eq(projects.id, id))
+    .returning({ id: projects.id });
+  return rows.length > 0;
+}
+
 // Sorted by `created_at` ascending, then `id` ascending as a tie
 // breaker so the result is deterministic when two projects share
 // a `created_at` (PGlite's clock resolution can collide).

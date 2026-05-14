@@ -26,8 +26,20 @@
     {:else}
       <ul class="list">
         {#each data.projects as p (p.id)}
-          <li>
+          <li data-project-id={p.id}>
             <a href={`/editor/${p.id}`}>{p.name}</a>
+            <form
+              method="POST"
+              action="?/delete"
+              onsubmit={(e) => {
+                if (!confirm(`Delete project "${p.name}"? This cannot be undone.`)) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="projectId" value={p.id} />
+              <button type="submit" class="del">Delete</button>
+            </form>
           </li>
         {/each}
       </ul>
@@ -122,6 +134,22 @@
   .list li {
     padding: 0.5rem 0;
     border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .del {
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #b91c1c;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .del:hover {
+    background: #fef2f2;
   }
   .list a {
     color: #1d4ed8;

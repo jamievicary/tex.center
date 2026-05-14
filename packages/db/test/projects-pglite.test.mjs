@@ -8,8 +8,11 @@ import { drizzle } from 'drizzle-orm/pglite';
 
 import {
   createProject,
+  deleteProject,
   findOrCreateUserByGoogleSub,
   getProjectById,
+  upsertMachineAssignment,
+  getMachineAssignmentByProjectId,
   listProjectsByOwnerId,
   schema,
 } from '../src/index.ts';
@@ -90,6 +93,39 @@ try {
     fkErr = e;
   }
   assert.ok(fkErr, 'createProject with bad ownerId must throw (FK)');
+
+  // --- deleteProject: cascades machine_assignments, idempotent ---
+  const victim = await createProject(db, {
+    ownerId: owner.id,
+    name: 'To delete',
+  });
+  await upsertMachineAssignment(db, {
+    projectId: victim.id,
+    machineId: 'mach-xyz',
+    region: 'fra',
+    state: 'started',
+  });
+  const maBefore = await getMachineAssignmentByProjectId(db, victim.id);
+  assert.ok(maBefore, 'precondition: assignment row exists before delete');
+
+  const removed = await deleteProject(db, victim.id);
+  assert.equal(removed, true, 'deleteProject returns true on hit');
+  const victimGone = await getProjectById(db, victim.id);
+  assert.equal(victimGone, null, 'projects row gone after deleteProject');
+  const maAfter = await getMachineAssignmentByProjectId(db, victim.id);
+  assert.equal(
+    maAfter,
+    null,
+    'machine_assignments cascade-deletes with projects row',
+  );
+
+  // Idempotent on a missing row.
+  const removedAgain = await deleteProject(db, victim.id);
+  assert.equal(
+    removedAgain,
+    false,
+    'deleteProject returns false when no row matches',
+  );
 
   console.log('projects PGlite test: OK');
 } finally {

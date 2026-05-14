@@ -21,10 +21,10 @@ green at the 500 ms bound on the iter-240 live run.** Iter-228
 diagnostic seam (`CompileSuccess.noopReason`) removed iter 240
 after GT-5 stayed green iters 231→239.
 
-**Current live focus: delete-project verb + UI** (next slice of
-M9.live-hygiene per `.autodev/discussion/241_answer.md`). Iter 243
-landed the metadata-tagging primitive (fix shape (c)) so the
-guardrail is self-triaging and the delete verb has a stable key.
+**Current live focus: confirm the iter-244 delete-project pin
+flips GREEN on next live run.** Endpoint + UI landed iter 245
+(see M9.live-hygiene.delete-project below). The iter-243
+metadata-tagging primitive gives the destroy verb a stable key.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`; M13
@@ -92,20 +92,27 @@ Remaining slices:
   milestone is the delete-project verb (see
   `.autodev/discussion/241_answer.md`) which will key its destroy
   call off the same tag.
-- **M9.live-hygiene.delete-project.** RED pin landed iter 244:
-  `tests_gold/playwright/verifyLiveDeleteProject.spec.ts` drives
-  the `/projects` delete flow on live and asserts the full reap
-  (projects row gone, machine_assignments row gone, no Fly Machine
-  tagged `texcenter_project=<id>`). Selector contract: each row
-  carries `data-project-id="<id>"` and contains an
-  accessibly-named `Delete` button; any native `confirm()` is
-  pre-accepted. The landing iter (next non-refactor) lands the
-  SvelteKit form action on `/projects` (`?/delete`) — owner-check
-  → `cleanupProjectMachine` against the assignment row → R2 blob
-  reap (best-effort if `BLOB_STORE` not yet hoisted to the web
-  app) → delete projects row → 303 redirect — plus the dashboard
-  UI. Acceptance criterion is the pin flipping green on the next
-  live run.
+- **M9.live-hygiene.delete-project.** Endpoint + UI **LANDED
+  iter 245**. New `?/delete` form action on
+  `apps/web/src/routes/projects/+page.server.ts`: owner-check via
+  `getProjectById`, then `deleteProject` server helper in
+  `apps/web/src/lib/server/deleteProject.ts` which (a) looks up
+  the `machine_assignments` row, (b) destroys the Fly Machine via
+  `MachinesClient.destroyMachine(force=true)` (404 → ok),
+  (c) deletes the `projects` row (FK cascades the assignment row).
+  Fly destroy is skipped when `FLY_API_TOKEN`/`SIDECAR_APP_NAME`
+  are unset (local dev). UI: `data-project-id="<id>"` wrapper per
+  row with an accessibly-named "Delete" button inside a hidden
+  `projectId` form, native `confirm()` guard. Locks: new
+  `apps/web/test/deleteProject.test.mjs` covers no-assignment,
+  with-assignment, 404-already-gone, propagated 500, and missing-env
+  branches against a PGlite db; `packages/db/test/projects-pglite`
+  pins the new `deleteProject` helper (cascade + idempotence). RED
+  pin `verifyLiveDeleteProject.spec.ts` (iter 244) is the live
+  acceptance criterion — should flip green on the next live run.
+  Out of scope this iter: R2 blob reap (requires hoisting the
+  `BLOB_STORE` binding to the web app; spec is verb-shaped, not
+  storage-shaped per iter-244 notes).
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a

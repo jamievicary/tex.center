@@ -167,6 +167,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_logout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "logout.test.mjs")
 
+    def test_web_delete_project(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "deleteProject.test.mjs")
+
     def test_web_google_tokens(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "googleTokens.test.mjs")
 
