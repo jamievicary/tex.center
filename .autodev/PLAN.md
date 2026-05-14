@@ -23,10 +23,11 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-260): **M14.title-bar → M13.2(b).4
-stopped-state pin → M15.multipage-preview → M11.1c headless-tree
-adoption → M16.aesthetic.** See `260_answer.md` for sequencing
-rationale and library/palette decisions.
+Active priority queue (post iter-264): **M13.2(b).4 stopped-state
+pin → M15.multipage-preview → M11.1c headless-tree adoption →
+M16.aesthetic.** M14.title-bar landed iter 264. See
+`260_answer.md` for sequencing rationale and library/palette
+decisions.
 
 Full diagnoses: GT-5 in `.autodev/logs/202.md`; M7.4.x closing in
 `.autodev/discussion/230_answer.md`; M13 timeline in
@@ -270,15 +271,20 @@ Default sequencing (updated iter 262 per `260_answer.md`):
 is M13.2(b).5 fix work, runs after the M13.2(b).4 pin lands RED.
 M11.5 still gated on binary-asset wire work.
 
-### M14.title-bar — centred project title in editor topbar (iter 262)
+### M14.title-bar — centred project title in editor topbar
 
-Small UI slice. The `/editor/<id>` topbar currently shows the brand
-logo + iteration indicator; the project title is not present.
-Requirement: project `name` rendered in the topbar, centred (its
-bounding-box centre x within a small tolerance of the topbar centre
-x; robust to topbar resize). One iteration, pin + fix bundled
-(DOM-only assertion, cheap to verify against live). Style aligns
-with M16 once that lands (Source Serif 4, larger size).
+**Landed iter 264.** `data.project.name` rendered as
+`<h1 class="project-title" data-testid="project-title">` inside
+the editor topbar. Topbar layout changed from `flex
+justify-content: space-between` to
+`grid grid-template-columns: 1fr auto 1fr` so the title column is
+mathematically centred regardless of brand-group / who-group
+widths. Title truncates with `text-overflow: ellipsis` on
+overflow. Lock: third assertion block in
+`tests_gold/playwright/editor.spec.ts` (`renders three-panel
+layout`) — |title-centre-x − topbar-centre-x| ≤ 2 px on a
+freshly-loaded `/editor/<id>` with a 200-status project. Style
+aligns with M16 once that lands (Source Serif 4, larger size).
 
 ### M15.multipage-preview — page-1-only PDF bug (iter 262)
 

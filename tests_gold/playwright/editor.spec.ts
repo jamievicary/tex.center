@@ -46,6 +46,24 @@ test.describe("editor route", () => {
     await expect(authedPage.locator(".editor")).toBeVisible();
     await expect(authedPage.locator(".preview")).toBeVisible();
 
+    // M14: project title is rendered in the topbar and its
+    // bounding-box centre x is within tolerance of the topbar's
+    // centre x. With `grid-template-columns: 1fr auto 1fr` the
+    // title column is mathematically centred so long as the
+    // brand-group and who-group fit inside their 1fr tracks; we
+    // allow 2 px to absorb sub-pixel rounding.
+    const title = authedPage.getByTestId("project-title");
+    await expect(title).toBeVisible();
+    await expect(title).toHaveText("Editor smoke");
+    const topbar = authedPage.locator(".topbar");
+    const topbarBox = await topbar.boundingBox();
+    const titleBox = await title.boundingBox();
+    expect(topbarBox).not.toBeNull();
+    expect(titleBox).not.toBeNull();
+    const topbarCentre = topbarBox!.x + topbarBox!.width / 2;
+    const titleCentre = titleBox!.x + titleBox!.width / 2;
+    expect(Math.abs(titleCentre - topbarCentre)).toBeLessThanOrEqual(2);
+
     // M13.1: editor route mount records a one-shot
     // `performance.mark`. (Other marks — ws-open, yjs-hydrated,
     // first-text-paint, first-pdf-segment — fire only when a real

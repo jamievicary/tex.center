@@ -288,6 +288,13 @@
       >
       <span class="iter">v{PUBLIC_TEXCENTER_ITER || "dev"}</span>
     </div>
+    {#if data.project}
+      <h1 class="project-title" data-testid="project-title">
+        {data.project.name}
+      </h1>
+    {:else}
+      <span></span>
+    {/if}
     {#if data.user}
       <div class="who">
         <span class="email">{data.user.displayName ?? data.user.email}</span>
@@ -402,18 +409,35 @@
   }
   .topbar {
     grid-area: top;
-    display: flex;
+    display: grid;
+    /* M14: three columns (1fr auto 1fr) so the centred title is
+       mathematically centred within the topbar regardless of the
+       (small) widths of brand-group and the who-group. */
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     padding: 0 0.75rem;
     border-bottom: 1px solid #e5e7eb;
     background: #fafafa;
     font-size: 0.85rem;
+    gap: 0.75rem;
+  }
+  .project-title {
+    margin: 0;
+    justify-self: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #1f2937;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 100%;
   }
   .brand-group {
     display: flex;
     align-items: baseline;
     gap: 0.4rem;
+    justify-self: start;
   }
   .brand {
     display: inline-flex;
@@ -457,6 +481,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    justify-self: end;
   }
   .email {
     color: #374151;
