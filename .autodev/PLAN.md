@@ -17,8 +17,12 @@ As of iter 231 live gold, **GT-A/B/C/D/5/7/8 all GREEN**. M7.4.x
 closed iter 231 (warm-doc body-edit silent no-op fixed upstream
 in `vendor/supertex` iters 759–764, submodule bumped to `8c3dec0`,
 sidecar redeployed and `SIDECAR_IMAGE` repinned, GT-5 verified
-GREEN). Live focus moves to **GT-6** (slow `.cm-content`
-appearance, M9.editor-ux.regress.gt6) as the next open RED.
+GREEN). **GT-6 pinned RED iter 233** (strengthened spec creates
+a fresh per-test project, clicks from `/projects`, bounds the
+seed sentinel to 500 ms after editor-route interactive; source
+actually appears at ~5 s on live). Live focus is now the GT-6
+fix, beginning iter 234 with M13.1 `performance.mark`
+instrumentation on the editor hydrate path.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
 closing narrative in `.autodev/discussion/230_answer.md`.
@@ -44,30 +48,30 @@ Toast store API (frozen iter 179):
 
 Remaining slices:
 
-- **M9.editor-ux.regress.gt6 — slow `.cm-content` appearance.**
-  User-reported on v213 and reconfirmed on v231 (see
-  `231_question.md` / `231_answer.md`): after clicking a project
-  on `/projects` the editor route loads quickly but the seeded
-  `.tex` source can take tens of seconds to appear. Current
-  GT-6 (`verifyLiveGt6FastContentAppearance.spec.ts`, iter 214)
-  short-circuits the user-visible path — uses the pre-warmed
-  shared `liveProject` (Machine up + first PDF segment shipped),
-  direct `goto` instead of click-from-/projects, 2 s threshold
-  too lax — and is therefore consistently GREEN despite the bug.
-  Iter 232 plan: rewrite GT-6 to (a) create a fresh per-test
-  project via the `db` worker fixture, (b) navigate
-  `/projects` → `click` the project link (SvelteKit
-  client-side nav, mirrors the user mouse path), (c) bound
-  `.cm-content` containing the `documentclass` sentinel to
-  ~500 ms after editor route becomes interactive, (d)
-  `cleanupProjectMachine` + delete row in `afterEach`. Smoke
-  the spec against live in isolation (`TEXCENTER_FULL_PIPELINE=1`),
-  ship only if it goes RED with the user-reported magnitude.
-  Fix attempts deferred to iter 233+ once the spec is genuinely
-  RED. Fix probe (carry-over from iter 214): instrument the
-  Yjs hydrate path with M13.1 marks to identify whether
-  connect, sync, CodeMirror bind, or sidecar-readiness wait
-  dominates.
+- **M9.editor-ux.regress.gt6 — slow `.cm-content` appearance.
+  Pinned RED iter 233.** User-reported v213 / v231: after
+  clicking a project on `/projects`, the editor route loads
+  quickly but the seeded `.tex` source can take seconds-to-
+  tens-of-seconds to appear. Strengthened GT-6
+  (`verifyLiveGt6FastContentAppearance.spec.ts`, rewritten iter
+  233) creates a fresh per-test project via the `db` worker
+  fixture, navigates `/projects` → clicks the project link
+  (matching the user's mouse path), and bounds the
+  `documentclass` sentinel in `.cm-content` to 500 ms after the
+  editor route becomes interactive (`waitForURL` +
+  `domcontentloaded`). `afterEach` reaps the Machine via
+  `cleanupProjectMachine` + deletes the row, mirroring GT-8.
+  Live smoke iter 233: RED, bound elapsed at 504 ms, source
+  actually appeared at 5057 ms — ~10× the target, deterministically
+  pinned on every cold-project run. Fix attempts begin iter 234+;
+  primary probe is M13.1 `performance.mark` instrumentation on
+  the editor hydrate path (connect, Yjs sync, CodeMirror bind, R2
+  hydrate, sidecar-readiness wait) to identify which sub-step
+  dominates the 5 s gap. Working hypothesis from `231_answer.md`:
+  source render is currently gated on something on the sidecar
+  Machine critical path when it shouldn't be — authoritative R2
+  source should reach CodeMirror in hundreds of ms regardless of
+  Machine state.
 - **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.
   CLOSED iter 227.** Root cause was an upstream supertex bug
   (`tools/supertex_daemon.c` had no usable rollback target when

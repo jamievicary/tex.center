@@ -1,37 +1,53 @@
 // GT-6 — "freshly-navigated /editor/<id> shows source content
-// within a tight bound" (per `.autodev/discussion/213_question.md`).
+// within a tight bound after clicking the project link on
+// /projects" (per `.autodev/discussion/213_question.md` and
+// `.autodev/discussion/231_question.md`).
 //
 // Reported regression: after clicking a project on the dashboard,
-// `/editor/<id>` loads but `.cm-content` remains visibly empty
-// for up to a minute before the seeded `.tex` source appears.
-// The user-visible expectation is "effectively instantaneous"
-// (a few hundred ms after navigation completes).
+// `/editor/<id>` loads but `.cm-content` remains visibly empty for
+// up to a minute before the seeded `.tex` source appears. The
+// user-visible expectation is "effectively instantaneous" (a few
+// hundred ms after the editor route becomes interactive).
 //
-// GT-A asserts the no-flash invariant (`.cm-content` never visible
-// empty) on a freshly-seeded project with a generous 10s budget;
-// it does not pin a tight latency bound. This spec adds the bound.
+// Strengthened design (iter 233, per 231_answer.md):
+//   - Per-test fresh project via the `db` worker fixture +
+//     `createProject` — never reuse the shared warm `liveProject`,
+//     so no Machine has been pre-spawned and the seed template has
+//     never been hydrated into any browser session before.
+//   - Navigate `/projects` → `click` `a[href="/editor/<id>"]`,
+//     matching the user's exact flow. The previous spec used
+//     `page.goto(/editor/<id>)` which short-circuits the
+//     dashboard-to-editor transition the user reported regressing.
+//   - Tight bound: 500 ms for the seeded `documentclass` sentinel
+//     to appear in `.cm-content` after the editor URL becomes
+//     interactive. If today's implementation gates source render
+//     on the sidecar/Machine critical path, that bound is tens of
+//     seconds and the test goes RED.
+//   - `afterEach` reaps the freshly-created Machine assignment and
+//     deletes the row, mirroring the GT-8 teardown pattern.
 //
-// The shared `liveProject` fixture is already warmed up by
-// globalSetup (Machine running, first pdf-segment observed), so a
-// fresh page load only needs to clear connect + Yjs hydrate. Any
-// content-appearance latency past ~2s on a warm project is the
-// regression the user reported.
-//
-// Live-only, gated on `TEXCENTER_FULL_PIPELINE=1`. Runs after
-// GT-5 in file-sort order. Project state at this point includes
-// GT-3/4's appended bytes; we assert against the canonical
-// `documentclass` sentinel which is never typed/erased by earlier
-// GTs.
+// Live-only, gated on `TEXCENTER_FULL_PIPELINE=1`.
 
-import { expect, test } from "./fixtures/sharedLiveProject.js";
+import { eq } from "drizzle-orm";
 
-// Tight regression bound. The reported pathology is "up to a
-// minute"; the user-stated target is "a few hundred ms". 2000ms
-// leaves margin for live-deploy variance while still catching any
-// recurrence of multi-second content-appearance latency.
-const CONTENT_APPEARANCE_TIMEOUT_MS = 2_000;
+import { createProject, projects } from "@tex-center/db";
 
-test.describe("live fast .cm-content appearance (GT-6)", () => {
+import { cleanupProjectMachine } from "../lib/src/cleanupProjectMachine.js";
+
+import { expect, test } from "./fixtures/authedPage.js";
+import {
+  makeAssignmentStore,
+  makeMachineDestroyer,
+} from "./fixtures/cleanupLiveProjectMachine.js";
+
+// Tight regression bound from `231_answer.md`. The user-reported
+// pathology is tens of seconds; the user-stated target is "a few
+// hundred ms". 500 ms is the budget after the editor URL becomes
+// interactive — anything past that on a cold project reproduces
+// the regression.
+const CONTENT_APPEARANCE_TIMEOUT_MS = 500;
+
+test.describe("live fast .cm-content appearance after dashboard click (GT-6)", () => {
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "live",
@@ -43,48 +59,118 @@ test.describe("live fast .cm-content appearance (GT-6)", () => {
     );
   });
 
-  test("warm project: seeded .tex content appears in .cm-content within a few seconds", async ({
+  test("fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive", async ({
     authedPage,
-    liveProject,
-  }) => {
-    const navStartedAt = Date.now();
-    await authedPage.goto(`/editor/${liveProject.id}`);
-    const navCompletedAt = Date.now();
+    db,
+  }, testInfo) => {
+    testInfo.setTimeout(120_000);
 
-    const cmContent = authedPage.locator(".cm-content");
+    // Mint a fresh project owned by the test user. The seed
+    // template (containing the canonical `documentclass` sentinel)
+    // is materialised at row-creation time; no Machine has been
+    // assigned yet, so this is a genuinely cold sidecar path.
+    const project = await createProject(db.db.db, {
+      ownerId: db.userId,
+      name: `pw-gt6-${Date.now()}`,
+    });
 
-    // Poll for the seed-template sentinel under a tight bound. The
-    // assertion failure message captures the elapsed time so a
-    // regression is immediately diagnosable.
+    let elapsedMs = 0;
     let textSeen = "";
+    let interactiveAt = 0;
     try {
-      await expect
-        .poll(
-          async () => {
-            textSeen = (await cmContent.textContent().catch(() => "")) ?? "";
-            return textSeen.includes("documentclass");
-          },
-          {
-            timeout: CONTENT_APPEARANCE_TIMEOUT_MS,
-            intervals: [50, 100, 200],
-            message:
-              "`.cm-content` did not contain the seeded `documentclass` " +
-              "sentinel within the regression bound after /editor/<id> " +
-              "navigation completed.",
-          },
-        )
-        .toBe(true);
-    } catch (err) {
-      const elapsedMs = Date.now() - navCompletedAt;
-      const totalMs = Date.now() - navStartedAt;
-      throw new Error(
-        `GT-6: seeded content did not appear within ` +
-          `${CONTENT_APPEARANCE_TIMEOUT_MS}ms of navigation completing. ` +
-          `Elapsed since nav-complete: ${elapsedMs}ms; since goto start: ` +
-          `${totalMs}ms. .cm-content textContent at timeout: ${JSON.stringify(
-            textSeen.slice(0, 120),
-          )}. Underlying: ${(err as Error).message}`,
+      // Match the user's flow: land on /projects, click the link.
+      await authedPage.goto("/projects");
+      const projectLink = authedPage.locator(
+        `a[href="/editor/${project.id}"]`,
       );
+      await projectLink.waitFor({ state: "visible", timeout: 30_000 });
+      await projectLink.click();
+
+      // Editor route is "interactive" when the URL has flipped and
+      // the DOM has hit domcontentloaded. We start the 500 ms
+      // budget from this moment — any further wait for the source
+      // to populate `.cm-content` is the regression we are pinning.
+      await authedPage.waitForURL(`**/editor/${project.id}`, {
+        timeout: 30_000,
+      });
+      await authedPage.waitForLoadState("domcontentloaded");
+      interactiveAt = Date.now();
+
+      const cmContent = authedPage.locator(".cm-content");
+      try {
+        await expect
+          .poll(
+            async () => {
+              textSeen =
+                (await cmContent.textContent().catch(() => "")) ?? "";
+              return textSeen.includes("documentclass");
+            },
+            {
+              timeout: CONTENT_APPEARANCE_TIMEOUT_MS,
+              intervals: [25, 50, 100],
+              message:
+                "`.cm-content` did not contain the seeded " +
+                "`documentclass` sentinel within the regression bound " +
+                "after /editor/<id> became interactive.",
+            },
+          )
+          .toBe(true);
+      } catch (err) {
+        elapsedMs = Date.now() - interactiveAt;
+        // Best-effort: keep polling (without the 500 ms bound) so
+        // the failure message includes how long the source
+        // actually took to appear — useful for triage.
+        const extendedDeadline = Date.now() + 60_000;
+        while (
+          !textSeen.includes("documentclass") &&
+          Date.now() < extendedDeadline
+        ) {
+          await authedPage.waitForTimeout(250);
+          textSeen =
+            (await cmContent.textContent().catch(() => "")) ?? "";
+        }
+        const totalAppearanceMs = Date.now() - interactiveAt;
+        throw new Error(
+          `GT-6: seeded \`documentclass\` source did not appear in ` +
+            `\`.cm-content\` within ${CONTENT_APPEARANCE_TIMEOUT_MS}ms ` +
+            `of /editor/<id> becoming interactive. Bound elapsed at ` +
+            `${elapsedMs}ms. Source eventually appeared at ` +
+            `${
+              textSeen.includes("documentclass")
+                ? `${totalAppearanceMs}ms (extended diagnostic poll)`
+                : "(still absent after extended diagnostic poll)"
+            }. project=${project.id} url=${authedPage.url()}. ` +
+            `.cm-content textContent prefix: ${JSON.stringify(
+              textSeen.slice(0, 120),
+            )}. Underlying: ${(err as Error).message}`,
+        );
+      }
+    } finally {
+      // Best-effort teardown: reap the sidecar Machine assigned
+      // for this project (if any) and delete the project row.
+      // Mirrors the GT-8 teardown pattern.
+      try {
+        const token = process.env.FLY_API_TOKEN ?? "";
+        const appName =
+          process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
+        if (token !== "") {
+          await cleanupProjectMachine({
+            projectId: project.id,
+            machines: makeMachineDestroyer({ token, appName }),
+            assignments: makeAssignmentStore(db.db.db),
+          }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error("[verifyLiveGt6] machine cleanup failed:", err);
+          });
+        }
+        await db.db.db
+          .delete(projects)
+          .where(eq(projects.id, project.id))
+          .catch(() => {});
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[verifyLiveGt6] teardown failed:", err);
+      }
     }
   });
 });
