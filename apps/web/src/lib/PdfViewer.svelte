@@ -2,6 +2,10 @@
   import { onDestroy } from "svelte";
 
   import { PageTracker } from "./pageTracker";
+  import {
+    PdfFadeController,
+    type FadeAdapter,
+  } from "./pdfFadeController";
 
   let {
     src,
@@ -14,14 +18,14 @@
   let host: HTMLDivElement | undefined = $state();
   let renderToken = 0;
 
-  // One IO + tracker per viewer instance, reused across renders.
-  // The IO root is the scrolling preview pane (the parent of the
-  // host); we use the document viewport as fallback for SSR-safety
-  // by passing `root: null` and relying on the preview pane being
-  // viewport-sized in practice. (M3 page tracking; refine if the
-  // preview pane stops being the scroll viewport.)
+  // Cross-fade duration (M17.b). Synced with the CSS transition
+  // duration below; a `transitionend` listener provides the canonical
+  // fade-complete signal so this number isn't load-bearing.
+  const FADE_MS = 180;
+
   const tracker = new PageTracker();
   let observer: IntersectionObserver | null = null;
+  let controller: PdfFadeController | null = null;
 
   $effect(() => {
     if (!host || !src) return;
@@ -50,6 +54,100 @@
     return observer;
   }
 
+  function makeAdapter(target: HTMLDivElement): FadeAdapter {
+    const io = ensureObserver();
+    return {
+      createWrapper(pageIndex) {
+        const w = document.createElement("div");
+        w.className = "pdf-page";
+        w.dataset.page = String(pageIndex + 1);
+        target.appendChild(w);
+        io?.observe(w);
+        return w;
+      },
+      removeWrapper(wrapper) {
+        const w = wrapper as HTMLDivElement;
+        io?.unobserve(w);
+        w.remove();
+      },
+      appendCanvasToWrapper(wrapper, canvas) {
+        const w = wrapper as HTMLDivElement;
+        const c = canvas as HTMLCanvasElement;
+        w.appendChild(c);
+      },
+      removeCanvasFromWrapper(_wrapper, canvas) {
+        (canvas as HTMLCanvasElement).remove();
+      },
+      setWrapperGeometry(wrapper, width, height) {
+        // Set intrinsic width (in canvas px) but cap with max-width
+        // 100% in CSS; aspect-ratio keeps height proportional under
+        // that responsive scaling. Pages of different sizes still
+        // each get their own correct shape.
+        const w = wrapper as HTMLDivElement;
+        w.style.width = `${width}px`;
+        w.style.aspectRatio = `${width} / ${height}`;
+      },
+      startCrossFade({ wrapper, leaving, entering }) {
+        const w = wrapper as HTMLDivElement;
+        const enter = entering as HTMLCanvasElement;
+        const leave = leaving as HTMLCanvasElement | null;
+        enter.classList.add("pdf-canvas--enter");
+        enter.style.opacity = "0";
+        if (leave) leave.classList.add("pdf-canvas--leave");
+        // Force reflow so the transition kicks in from opacity 0.
+        void enter.offsetWidth;
+        enter.style.opacity = "1";
+        if (leave) leave.style.opacity = "0";
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName !== "opacity") return;
+          enter.removeEventListener("transitionend", onEnd);
+          const idx = (Number(w.dataset.page) || 0) - 1;
+          if (idx >= 0) controller?.onFadeEnd(idx);
+          enter.classList.remove("pdf-canvas--enter");
+        };
+        enter.addEventListener("transitionend", onEnd);
+      },
+      commitFadeImmediately({ wrapper, leaving, entering }) {
+        const w = wrapper as HTMLDivElement;
+        const enter = entering as HTMLCanvasElement | null;
+        const leave = leaving as HTMLCanvasElement | null;
+        if (leave && leave !== enter) {
+          leave.remove();
+        }
+        if (enter) {
+          enter.classList.remove("pdf-canvas--enter");
+          enter.style.opacity = "1";
+        }
+        void w.offsetWidth;
+      },
+      fadeInWrapper(wrapper) {
+        const w = wrapper as HTMLDivElement;
+        w.classList.add("pdf-page--enter");
+        w.style.opacity = "0";
+        void w.offsetWidth;
+        w.style.opacity = "1";
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName !== "opacity") return;
+          w.removeEventListener("transitionend", onEnd);
+          w.classList.remove("pdf-page--enter");
+        };
+        w.addEventListener("transitionend", onEnd);
+      },
+      fadeOutAndRemoveWrapper(wrapper) {
+        const w = wrapper as HTMLDivElement;
+        io?.unobserve(w);
+        w.classList.add("pdf-page--leave");
+        w.style.opacity = "0";
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName !== "opacity") return;
+          w.removeEventListener("transitionend", onEnd);
+          w.remove();
+        };
+        w.addEventListener("transitionend", onEnd);
+      },
+    };
+  }
+
   async function render(
     src: Uint8Array | string,
     target: HTMLDivElement,
@@ -75,11 +173,10 @@
       void pdf.destroy();
       return;
     }
-    // Tear down old canvases + observation before rendering anew.
-    observer?.disconnect();
-    tracker.reset();
-    target.replaceChildren();
-    const io = ensureObserver();
+
+    // Off-DOM render every page; the canvas is fully painted before
+    // it ever attaches to the document. No flash, no per-page pop-in.
+    const descriptors: { canvas: HTMLCanvasElement; width: number; height: number }[] = [];
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       if (!isCurrent()) return;
@@ -87,18 +184,22 @@
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      canvas.dataset.page = String(pageNum);
+      canvas.className = "pdf-canvas";
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
-      target.appendChild(canvas);
-      io?.observe(canvas);
       await page.render({ canvasContext: ctx, viewport }).promise;
       if (!isCurrent()) return;
+      descriptors.push({ canvas, width: viewport.width, height: viewport.height });
     }
+
+    controller ??= new PdfFadeController(makeAdapter(target));
+    controller.commit(descriptors);
   }
 
   onDestroy(() => {
     renderToken++;
+    controller?.destroy();
+    controller = null;
     observer?.disconnect();
     observer = null;
   });
@@ -114,8 +215,24 @@
     gap: 1rem;
     padding: 1rem;
   }
-  :global(.host canvas) {
-    max-width: 100%;
+  :global(.host .pdf-page) {
+    position: relative;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    max-width: 100%;
+    transition: opacity 180ms ease, width 180ms ease, aspect-ratio 180ms ease;
+  }
+  /*
+   * Both canvases are absolutely positioned inside the wrapper, so
+   * a mid-fade two-canvas state stacks them without re-flowing the
+   * page. The wrapper carries the intrinsic width/height set by
+   * `setWrapperGeometry`, so layout is stable across fades.
+   */
+  :global(.host .pdf-page > canvas) {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    transition: opacity 180ms ease;
   }
 </style>

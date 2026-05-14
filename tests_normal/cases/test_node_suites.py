@@ -125,6 +125,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_page_tracker(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pageTracker.test.mjs")
 
+    def test_web_pdf_fade_controller(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "pdfFadeController.test.mjs")
+
     def test_web_oauth_start(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "oauthStart.test.mjs")
 

@@ -9,7 +9,22 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-ERROR
+[globalSetup] DB ready (userId=2656783a-3552-483f-a653-29bbcb69c200); spawning dev server on :3000
+Error: globalSetup: port 3000 is already in use. A previous dev server likely leaked. Identify and kill it (e.g. `ss -tlnp | grep 3000`) before retrying.
+
+   at globalSetup.ts:124
+
+  122 | ): Promise<DevChild> {
+  123 |   if (await isPortInUse(port)) {
+> 124 |     throw new Error(
+      |           ^
+  125 |       `globalSetup: port ${port} is already in use. A previous dev server likely leaked. ` +
+  126 |         `Identify and kill it (e.g. \`ss -tlnp | grep ${port}\`) before retrying.`,
+  127 |     );
+    at spawnDevServer (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/globalSetup.ts:124:11)
+    at globalSetup (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/globalSetup.ts:77:17)
+
+FAIL
 test_sidecar_cold_start_coalescer (test_sidecar_cold_start_coalescer.TestSidecarColdStartCoalescer.test_sidecar_cold_start_coalescer) ... ok
 test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... FAIL
 test_supertex_cold_newpage_crash (test_supertex_cold_newpage_crash.TestSupertexColdNewpageCrash.test_supertex_cold_newpage_crash) ... ok
@@ -21,23 +36,12 @@ test_supertex_warm_doc_body_edit_noop (test_supertex_warm_doc_body_edit_noop.Tes
 test_sweep_orphaned_sidecar_machines (test_sweep_orphaned_sidecar_machines.TestSweepOrphanedSidecarMachines.test_sweep_orphaned_sidecar_machines) ... ok
 
 ======================================================================
-ERROR: test_playwright (test_playwright.TestPlaywright.test_playwright)
+FAIL: test_playwright (test_playwright.TestPlaywright.test_playwright)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 168, in test_playwright
-    result = subprocess.run(
-             ^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.11/subprocess.py", line 550, in run
-    stdout, stderr = process.communicate(input, timeout=timeout)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.11/subprocess.py", line 1207, in communicate
-    stdout, stderr = self._communicate(input, endtime, timeout)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.11/subprocess.py", line 2060, in _communicate
-    self._check_timeout(endtime, orig_timeout, stdout, stderr)
-  File "/usr/lib/python3.11/subprocess.py", line 1251, in _check_timeout
-    raise TimeoutExpired(
-subprocess.TimeoutExpired: Command '['pnpm', 'exec', 'playwright', 'test', '--config', '/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright.config.ts']' timed out after 900 seconds
+  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 192, in test_playwright
+    raise AssertionError(
+AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
 ======================================================================
 FAIL: test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold)
@@ -46,15 +50,15 @@ Traceback (most recent call last):
   File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_sidecar_machine_count.py", line 117, in test_machine_count_under_threshold
     self.fail("\n".join(lines))
 AssertionError: tex-center-sidecar has 7 non-shared Machines (of 9 total), threshold is 5 (TEXCENTER_MAX_SIDECAR_MACHINES). Likely cause: a live spec failed to reap its per-project Machine. Triage / destroy:
-  - 1854737c727798 name=empty-breeze-6626 state=suspended created=2026-05-14T22:18:13Z texcenter_project=639a1971-2a06-4603-989a-40a79d4a104b
   - 48e635ec3ee468 name=holy-sound-7542 state=suspended created=2026-05-14T18:21:37Z texcenter_project=1ead1a1d-2392-4c8c-ba8e-dfebaa78792f
+  - 1854737c727798 name=empty-breeze-6626 state=suspended created=2026-05-14T22:18:13Z texcenter_project=639a1971-2a06-4603-989a-40a79d4a104b
+  - 78496e5fde4608 name=dark-sun-4506 state=started created=2026-05-14T19:28:29Z texcenter_project=2dda63f4-5e16-4955-b5ff-e329adcd7e5b
   - 683e14ecdee568 name=solitary-wave-9271 state=suspended created=2026-05-14T22:20:32Z texcenter_project=d332dbee-3013-49db-9e7c-ea1bd71402f7
   - e8201edb0d3d28 name=frosty-smoke-1581 state=suspended created=2026-05-14T17:56:09Z texcenter_project=00000000-0000-4000-8000-000000000001
+  - 7844043bed6d38 name=quiet-resonance-1665 state=suspended created=2026-05-14T22:17:34Z texcenter_project=c04bf53e-e25e-474b-961d-4967136cb01d
   - 48e0e36f7997d8 name=snowy-wave-2337 state=suspended created=2026-05-14T19:23:32Z texcenter_project=c6790016-eb36-4f6e-8e18-27fc50a8f602
-  - 7844043bed6d38 name=quiet-resonance-1665 state=started created=2026-05-14T22:17:34Z texcenter_project=c04bf53e-e25e-474b-961d-4967136cb01d
-  - 78496e5fde4608 name=dark-sun-4506 state=started created=2026-05-14T19:28:29Z texcenter_project=2dda63f4-5e16-4955-b5ff-e329adcd7e5b
 
 ----------------------------------------------------------------------
-Ran 20 tests in 954.690s
+Ran 20 tests in 49.147s
 
-FAILED (failures=1, errors=1)
+FAILED (failures=2)

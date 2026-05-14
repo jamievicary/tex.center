@@ -23,11 +23,12 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-270): **deploy M15 fix + R2
-sidecar idle-handler from iter 267 → M13.2(b).5 R1 (SSR seed
-widening — needs shared blob store) → M11.1c headless-tree
-adoption → M17.preview-render (PDF flash + cross-fade) →
-M16.aesthetic.** M17 promoted from `269_question.md` /
+Active priority queue (post iter-271): **M17 Playwright pin
+follow-up → M13.2(b).5 R1 (SSR seed widening — needs shared blob
+store) → M11.1c headless-tree adoption → M16.aesthetic.** M15
+sidecar fix + R2 sidecar idle-handler deployed as
+`tex-center-sidecar` v39 (verified iter 271). M17 implementation
+landed iter 271; local Playwright pin owed. M17 promoted from `269_question.md` /
 `269_answer.md`. M15 fix (sidecar `targetPage=0`
 default) landed iter 269 alongside a local sidecar-level pin
 (`test_supertex_multipage_emit`). M14.title-bar landed
@@ -340,11 +341,15 @@ elements **or** a single canvas of height > viewport.height * 1.8.
 
 ### M17.preview-render — PDF preview flashing + cross-fade (iter 270)
 
-Promoted from `269_question.md` / `269_answer.md`. Defining defect:
-`apps/web/src/lib/PdfViewer.svelte` `render()` does
-`target.replaceChildren()` then rebuilds canvases serially —
-preview pane is empty for hundreds of ms on every compile, pages
-pop in one at a time. Acceptance:
+Promoted from `269_question.md` / `269_answer.md`. **Implementation
+landed iter 271** (controller + DOM rewrite + unit test). Local
+Playwright pin still owed — defer to a follow-up iteration.
+
+Defining defect (now fixed):
+`apps/web/src/lib/PdfViewer.svelte` `render()` did
+`target.replaceChildren()` then rebuilt canvases serially —
+preview pane was empty for hundreds of ms on every compile, pages
+popped in one at a time. Acceptance:
 
 - **M17.a — no flash on update.** Render new canvases off-DOM
   (PDF.js works on a detached canvas's 2D context); swap into
@@ -370,9 +375,21 @@ pop in one at a time. Acceptance:
   fade-controller state machine
   (`apps/web/test/pdfFadeController.test.mjs`).
 
-Land M17.a + M17.b + pin together — same per-page wrapper rewrite.
-No pin-RED-first (the failure mode is visual; the assertion only
-holds post-fix).
+**Status (iter 271).** M17.a + M17.b landed. New module
+`apps/web/src/lib/pdfFadeController.ts` owns the per-page fade
+state machine (mid-fade interrupt → snapshot, cross-fade,
+add/remove wrapper transitions) with `apps/web/test/pdfFadeController.test.mjs`
+covering the eight code paths via a recording adapter (no DOM).
+`PdfViewer.svelte` renders all pages off-DOM then hands the
+controller a per-page canvas descriptor list; wrappers carry
+`data-page` (not canvases) so the IntersectionObserver target is
+stable across renders and `tracker.reset()` is gone. Local
+Playwright pin `verifyLivePdfNoFlashBetweenSegments.spec.ts` (poll
+DOM at 20 ms cadence across a two-segment window, assert canvas
+count ≥ 1) is **owed** but deferred — needs the local dev path to
+hit a real second compile, exercised more cheaply in a follow-up
+iter. Until then the controller's unit test is the load-bearing
+regression lock.
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
