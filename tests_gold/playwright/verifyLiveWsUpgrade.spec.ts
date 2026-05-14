@@ -28,24 +28,12 @@
 
 import { request as httpsRequest } from "node:https";
 
-import { eq } from "drizzle-orm";
+import { createProject, deleteSession } from "@tex-center/db";
 
-import {
-  createProject,
-  deleteMachineAssignment,
-  deleteSession,
-  getMachineAssignmentByProjectId,
-  projects,
-} from "@tex-center/db";
-
-import {
-  cleanupProjectMachine,
-  type AssignmentStore,
-  type MachineDestroyer,
-} from "../lib/src/cleanupProjectMachine.js";
 import { mintSession } from "../lib/src/mintSession.js";
 
 import { test, expect } from "./fixtures/authedPage.js";
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 
 const LIVE_HOST = "tex.center";
 
@@ -96,21 +84,10 @@ test.describe("live WS-upgrade with cookie", () => {
       );
       expect(result.status).toBe(101);
     } finally {
-      await cleanupProjectMachine({
+      await cleanupLiveProjectMachine({
         projectId: project.id,
-        machines: makeMachineDestroyer({ token, appName }),
-        assignments: makeAssignmentStore(drizzle),
-      }).catch((err) => {
-        // Surface the cleanup error in the test report — but don't
-        // mask the original failure (if any) by re-throwing here.
-        // The next iteration's run will retry against the still-
-        // present assignment row.
-        // eslint-disable-next-line no-console
-        console.error("cleanupProjectMachine failed:", err);
+        drizzle,
       });
-      await drizzle.delete(projects).where(eq(projects.id, project.id)).catch(
-        () => {},
-      );
       await deleteSession(drizzle, session.sid).catch(() => {});
     }
   });
@@ -166,42 +143,3 @@ function probeWsUpgrade(
   });
 }
 
-function makeMachineDestroyer(opts: {
-  readonly token: string;
-  readonly appName: string;
-}): MachineDestroyer {
-  return {
-    async destroyMachine(machineId, options) {
-      const force = options?.force ? "?force=true" : "";
-      const url =
-        `https://api.machines.dev/v1/apps/${opts.appName}` +
-        `/machines/${machineId}${force}`;
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${opts.token}` },
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        const err = new Error(
-          `destroyMachine ${res.status} ${url}: ${body}`,
-        ) as Error & { status: number };
-        err.status = res.status;
-        throw err;
-      }
-    },
-  };
-}
-
-function makeAssignmentStore(
-  drizzle: Parameters<typeof getMachineAssignmentByProjectId>[0],
-): AssignmentStore {
-  return {
-    async getAssignment(projectId) {
-      const row = await getMachineAssignmentByProjectId(drizzle, projectId);
-      return row === null ? null : { machineId: row.machineId };
-    },
-    async deleteAssignment(projectId) {
-      return deleteMachineAssignment(drizzle, projectId);
-    },
-  };
-}

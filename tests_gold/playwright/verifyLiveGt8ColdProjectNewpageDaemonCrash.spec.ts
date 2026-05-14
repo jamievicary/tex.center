@@ -40,17 +40,10 @@
 // do not revert the iteration; they only gate finished.md, which
 // is correct — completion requires a real fix.)
 
-import { eq } from "drizzle-orm";
-
-import { createProject, projects } from "@tex-center/db";
-
-import { cleanupProjectMachine } from "../lib/src/cleanupProjectMachine.js";
+import { createProject } from "@tex-center/db";
 
 import { expect, test } from "./fixtures/authedPage.js";
-import {
-  makeAssignmentStore,
-  makeMachineDestroyer,
-} from "./fixtures/cleanupLiveProjectMachine.js";
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 import { TAG_CONTROL, TAG_PDF_SEGMENT } from "./fixtures/wireFrames.js";
 
 const PROBE_ITERATIONS = 20;
@@ -192,30 +185,10 @@ test.describe("live cold-project \\newpage daemon-crash regression (GT-8)", () =
           `First error frame: ${errorFrames[0] ?? "(none)"}`,
       ).toEqual([]);
     } finally {
-      // Best-effort: delete the project row and reap its sidecar
-      // Machine so the probe doesn't leak live infra. Mirrors
-      // liveProjectBootstrap.ts teardown.
-      try {
-        const token = process.env.FLY_API_TOKEN ?? "";
-        const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
-        if (token !== "") {
-          await cleanupProjectMachine({
-            projectId: project.id,
-            machines: makeMachineDestroyer({ token, appName }),
-            assignments: makeAssignmentStore(db.db.db),
-          }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error("[verifyLiveGt8] machine cleanup failed:", err);
-          });
-        }
-        await db.db.db
-          .delete(projects)
-          .where(eq(projects.id, project.id))
-          .catch(() => {});
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[verifyLiveGt8] teardown failed:", err);
-      }
+      await cleanupLiveProjectMachine({
+        projectId: project.id,
+        drizzle: db.db.db,
+      });
     }
   });
 });

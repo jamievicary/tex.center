@@ -28,17 +28,10 @@
 //
 // Live-only, gated on `TEXCENTER_FULL_PIPELINE=1`.
 
-import { eq } from "drizzle-orm";
-
-import { createProject, projects } from "@tex-center/db";
-
-import { cleanupProjectMachine } from "../lib/src/cleanupProjectMachine.js";
+import { createProject } from "@tex-center/db";
 
 import { expect, test } from "./fixtures/authedPage.js";
-import {
-  makeAssignmentStore,
-  makeMachineDestroyer,
-} from "./fixtures/cleanupLiveProjectMachine.js";
+import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
 
 // Tight regression bound from `231_answer.md`. The user-reported
 // pathology is tens of seconds; the user-stated target is "a few
@@ -146,31 +139,10 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
         );
       }
     } finally {
-      // Best-effort teardown: reap the sidecar Machine assigned
-      // for this project (if any) and delete the project row.
-      // Mirrors the GT-8 teardown pattern.
-      try {
-        const token = process.env.FLY_API_TOKEN ?? "";
-        const appName =
-          process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
-        if (token !== "") {
-          await cleanupProjectMachine({
-            projectId: project.id,
-            machines: makeMachineDestroyer({ token, appName }),
-            assignments: makeAssignmentStore(db.db.db),
-          }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error("[verifyLiveGt6] machine cleanup failed:", err);
-          });
-        }
-        await db.db.db
-          .delete(projects)
-          .where(eq(projects.id, project.id))
-          .catch(() => {});
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[verifyLiveGt6] teardown failed:", err);
-      }
+      await cleanupLiveProjectMachine({
+        projectId: project.id,
+        drizzle: db.db.db,
+      });
     }
   });
 });
