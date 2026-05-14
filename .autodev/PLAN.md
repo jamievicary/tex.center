@@ -109,7 +109,14 @@ Remaining slices:
   branches against a PGlite db; `packages/db/test/projects-pglite`
   pins the new `deleteProject` helper (cascade + idempotence). RED
   pin `verifyLiveDeleteProject.spec.ts` (iter 244) is the live
-  acceptance criterion — should flip green on the next live run.
+  acceptance criterion. Iter-245 live run was RED on a false
+  pre-condition: it waited for the SSR seed `documentclass` text
+  (which lands in <500 ms via M13.2(a)) and then checked the DB
+  before the client WS had bootstrapped the per-project Machine.
+  Iter 246 swapped the pre-condition to a bounded poll on the
+  `machine_assignments` row itself
+  (`getMachineAssignmentByProjectId`, EDITOR_CONTENT_TIMEOUT_MS
+  budget). Should flip green on the next live run.
   Out of scope this iter: R2 blob reap (requires hoisting the
   `BLOB_STORE` binding to the web app; spec is verb-shaped, not
   storage-shaped per iter-244 notes).

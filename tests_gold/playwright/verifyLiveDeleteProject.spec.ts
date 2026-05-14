@@ -131,32 +131,41 @@ test.describe("live delete-project (M9.live-hygiene delete verb)", () => {
       await projectLink.waitFor({ state: "visible", timeout: 30_000 });
       await projectLink.click();
 
-      // (3) Wait for the seeded source to appear, which means the
-      // sidecar Machine was created (and tagged).
+      // (3) Wait for the per-project Machine to be created. The
+      // editor route renders an SSR seed placeholder containing the
+      // canonical `documentclass` text within hundreds of ms (see
+      // M13.2(a), iter 238) — that signal fires long before the
+      // client WS bootstraps and `upstreamResolver` upserts the
+      // `machine_assignments` row. Poll the DB row directly: it is
+      // the precise pre-condition we need (a row keyed by projectId
+      // ⇒ Machine was created and tagged) and matches the post-
+      // delete polling style further down.
       await authedPage.waitForURL(`**/editor/${project.id}`, {
         timeout: 30_000,
       });
-      const editorPane = authedPage.locator(".editor");
       await expect
         .poll(
-          async () =>
-            ((await editorPane.textContent().catch(() => "")) ?? "").includes(
-              "documentclass",
-            ),
+          async () => {
+            const row = await getMachineAssignmentByProjectId(
+              db.db.db,
+              project.id,
+            );
+            return row !== null;
+          },
           {
             timeout: EDITOR_CONTENT_TIMEOUT_MS,
-            intervals: [250, 500, 1000],
+            intervals: [500, 1_000, 2_000],
             message:
-              "editor pane never showed the seeded `documentclass` " +
-              "sentinel — cannot proceed to delete-flow assertion " +
-              "without a confirmed live Machine to destroy.",
+              "machine_assignments row never appeared after editor " +
+              "open — cannot proceed to delete-flow assertion without " +
+              "a confirmed live Machine to destroy.",
           },
         )
         .toBe(true);
 
-      // Confirm the per-project Machine exists with the expected tag
-      // before we exercise delete (so a missing Machine is a
-      // pre-condition failure, not a false RED on (c)).
+      // Read the row back for the assertion-style failure message
+      // (an unexpected null here after the poll succeeded would be
+      // a race we want flagged clearly, not silently re-polled).
       const ma = await getMachineAssignmentByProjectId(db.db.db, project.id);
       expect(
         ma,
