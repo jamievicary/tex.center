@@ -365,9 +365,16 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // must not lose the user's edits — once the source is on the
     // workspace disk it is also durable in the blob store.
     await p.persistence.maybePersist();
+    // targetPage = 0 ⇒ `recompile,end` (every page shipped). The
+    // earlier `maxViewingPage(p)` default clamped every compile to
+    // page 1 (no viewer ever sets a higher viewingPage until a page-2
+    // canvas exists, which depends on page 2 being shipped — M15
+    // chicken-and-egg). With "end" the user sees the full document
+    // on every compile; the per-page targetPage gate is layered back
+    // on later if a long-document perf optimisation is justified.
     const result = await p.compiler.compile({
       source,
-      targetPage: maxViewingPage(p),
+      targetPage: 0,
     });
     if (!result.ok) {
       app.log.warn(

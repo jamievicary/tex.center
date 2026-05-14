@@ -23,10 +23,12 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-268): **M15 diagnose-and-fix (pin
-landed iter 268, expected RED) → M13.2(b).5 R1 (SSR seed widening
-— needs shared blob store) → deploy R2 sidecar idle-handler fix
-from iter 267 → M11.1c headless-tree adoption → M16.aesthetic.** M14.title-bar landed
+Active priority queue (post iter-269): **deploy M15 fix + R2
+sidecar idle-handler from iter 267 → M13.2(b).5 R1 (SSR seed
+widening — needs shared blob store) → M11.1c headless-tree
+adoption → M16.aesthetic.** M15 fix (sidecar `targetPage=0`
+default) landed iter 269 alongside a local sidecar-level pin
+(`test_supertex_multipage_emit`). M14.title-bar landed
 iter 264. M13.2(b).4 stopped-state pin landed iter 266 (RED gold
 case as expected). M13.2(b).5 R2 (sidecar idle-handler stays
 alive on suspend-throw) landed iter 267.
@@ -312,21 +314,27 @@ elements **or** a single canvas of height > viewport.height * 1.8.
 
 - **Pin landed iter 268.**
   `tests_gold/playwright/verifyLivePdfMultiPage.spec.ts` creates
-  its own fresh project (mirrors GT-8's per-invocation cold-start
-  shape), waits for the seeded-template pdf-segment, types four
-  `\newpage` breaks into the body before `\end{document}`, then
+  its own fresh project, waits for the seeded-template pdf-segment,
+  types four `\newpage` breaks before `\end{document}`, then
   asserts viewer-agnostically: ≥2 paged canvases or a single
-  canvas > 1.8 × viewport height. Diagnostic measurement captures
-  `canvasCount`, `pagedCanvasCount`, `tallestPx`, `viewportH`,
-  `hostScrollH` so the failure message is enough to start the
-  diagnosis without re-running. Expected RED until the fix iter
-  below lands.
-- **Next iter: diagnose + fix.** Log `pdf.numPages` and
-  `pdfBytes.length` in `PdfViewer.render` at first segment arrival
-  to discriminate (a) wire-format `totalLength` cap vs (b) viewer
-  snapshot short-circuit. (a) traces to sidecar `assembleSegment`
-  or upstream supertex emit; (b) lives in `PdfViewer.svelte`'s
-  `$effect`. (c) CSS overflow is the cheap-eliminate.
+  canvas > 1.8 × viewport height.
+- **Diagnosis + fix landed iter 269.** Root cause was the
+  sidecar's `targetPage = maxViewingPage(p)` default in
+  `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
+  protocol clamps shipouts to `recompile,<N>`; with no viewer ever
+  setting `viewingPage > 1` (page-2 canvas doesn't exist until
+  page 2 is shipped — chicken-and-egg), every compile shipped
+  page 1 only. Local probe via a 5-page source confirmed
+  `targetPage=1 → 1 page ref in PDF, targetPage=0 ("end") → 5
+  page refs`. Fix: pass `targetPage: 0` unconditionally so
+  supertex always renders every page. Sidecar-level pin:
+  `tests_gold/cases/test_supertex_multipage_emit.py` +
+  `tests_gold/lib/test/supertexMultipageEmit.test.mjs`. The
+  live `verifyLivePdfMultiPage` gold spec will flip green on the
+  next gold run after `SIDECAR_IMAGE` redeploy. The
+  per-viewer targetPage optimisation is parked as a long-doc
+  perf hatch — re-introduce only if compile-cost on a 50+ page
+  doc becomes load-bearing.
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
