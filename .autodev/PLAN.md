@@ -13,26 +13,23 @@ with `app`-tagged deployment machines) exists alongside but isn't
 routed to. Iteration indicator wired through Dockerfile build-arg
 into the topbar (regression-locked).
 
-As of iter 231 live gold, **GT-A/B/C/D/5/7/8 all GREEN**. M7.4.x
-closed iter 231 (warm-doc body-edit silent no-op fixed upstream
-in `vendor/supertex` iters 759–764, submodule bumped to `8c3dec0`,
-sidecar redeployed and `SIDECAR_IMAGE` repinned, GT-5 verified
-GREEN). **GT-6 pinned RED iter 233** (strengthened spec creates
-a fresh per-test project, clicks from `/projects`, bounds the
-seed sentinel to 500 ms after editor-route interactive; source
-actually appears at ~5 s on live). Live focus is now the GT-6
-fix. M13.1 instrumentation landed iters 234–236 and the iter-236
-live timeline pinned the bottleneck at route→ws-open ~11.5 s
-(per-project Machine cold-start gating the WS upgrade). M13.2
-direction chosen iter 237: SSR-side seed body so the editor paints
-while the Machine cold-starts in parallel. M13.2(a) **landed iter 238**:
-SSR seed gate via `getMachineAssignmentByProjectId`, rendered as a
-`<pre class="editor-seed">` placeholder inside `.editor`. GT-6 was
-re-pointed at `.editor` textContent (not `.cm-content`) and is
-expected to flip green on the next live gold run. See M13 below.
+All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
+240. M13.1 instrumentation (iters 234–237) pinned the open-latency
+bottleneck at route→ws-open ~11.5 s (per-project Machine cold
+start); **M13.2(a) SSR seed gate landed iter 238 and flipped GT-6
+green at the 500 ms bound on the iter-240 live run.** Iter-228
+diagnostic seam (`CompileSuccess.noopReason`) removed iter 240
+after GT-5 stayed green iters 231→239.
+
+**Current live focus: M9.live-hygiene.leaked-machines.** Iter
+239's gold run reported `tex-center-sidecar` at 6 machines (vs
+threshold-5 guardrail) — at least one live spec is letting a
+per-project Machine slip past its `afterEach`
+`cleanupLiveProjectMachine`. See M9.live-hygiene below.
 
 Full original GT-5 diagnosis in `.autodev/logs/202.md`; M7.4.x
-closing narrative in `.autodev/discussion/230_answer.md`.
+closing narrative in `.autodev/discussion/230_answer.md`; M13
+instrumentation timeline in `.autodev/logs/236.md`.
 
 ## 2. Milestones
 
@@ -56,71 +53,48 @@ Toast store API (frozen iter 179):
 Remaining slices:
 
 - **M9.editor-ux.regress.gt6 — slow `.cm-content` appearance.
-  Pinned RED iter 233.** User-reported v213 / v231: after
-  clicking a project on `/projects`, the editor route loads
-  quickly but the seeded `.tex` source can take seconds-to-
-  tens-of-seconds to appear. Strengthened GT-6
-  (`verifyLiveGt6FastContentAppearance.spec.ts`, rewritten iter
-  233) creates a fresh per-test project via the `db` worker
-  fixture, navigates `/projects` → clicks the project link
-  (matching the user's mouse path), and bounds the
-  `documentclass` sentinel in `.cm-content` to 500 ms after the
-  editor route becomes interactive (`waitForURL` +
-  `domcontentloaded`). `afterEach` reaps the Machine via
-  `cleanupProjectMachine` + deletes the row, mirroring GT-8.
-  Live smoke iter 233: RED, bound elapsed at 504 ms, source
-  actually appeared at 5057 ms — ~10× the target, deterministically
-  pinned on every cold-project run. Fix attempts begin iter 234+;
-  primary probe is M13.1 `performance.mark` instrumentation on
-  the editor hydrate path (connect, Yjs sync, CodeMirror bind, R2
-  hydrate, sidecar-readiness wait) to identify which sub-step
-  dominates the 5 s gap. Working hypothesis from `231_answer.md`:
-  source render is currently gated on something on the sidecar
-  Machine critical path when it shouldn't be — authoritative R2
-  source should reach CodeMirror in hundreds of ms regardless of
-  Machine state.
+  CLOSED iter 240.** GT-6
+  (`verifyLiveGt6FastContentAppearance.spec.ts`) bounds the
+  seeded-`documentclass` sentinel inside `.editor` to 500 ms after
+  the editor route becomes interactive. Driven RED iter 233 (~5 s
+  actual appearance), diagnosed via M13.1 instrumentation iters
+  234–236 (route→ws-open dominated at ~11.5 s on cold Machine),
+  fixed iter 238 by M13.2(a) SSR seed gate (see M13 below). Live
+  green iter 240.
 - **M9.editor-ux.regress.gt7 — daemon crash under rapid typing.
-  CLOSED iter 227.** Root cause was an upstream supertex bug
-  (`tools/supertex_daemon.c` had no usable rollback target when
-  a coalesced edit landed past every extant checkpoint during the
-  cold-start window). Upstream fix landed in `vendor/supertex`
-  iters 755–758; submodule bumped to `2fb543e` in iter-227 start
-  commit; sidecar redeployed iter 227 and the live `SIDECAR_IMAGE`
-  digest pinned on `tex-center`. Live verification: GT-8
-  (`verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts`) GREEN on
-  iter-227 gold pass — `errorFrames=0`, 26 control frames clean.
-  Five-iteration narrative compressed: see `225_answer.md`,
-  `226_question.md`, `226_answer.md`. Retained regression locks:
-  GT-8 (live, cold-project Playwright spec, iter 224),
-  `tests_gold/lib/test/supertexColdNewpageCrash.test.mjs` (local,
-  iter 225), `tests_gold/lib/test/supertexFilewatcherRace.test.mjs`
-  (iter 218), `tests_gold/lib/test/supertexOversizeTarget.test.mjs`
-  (iter 217), `tests_gold/lib/test/sidecarColdStartCoalescer.test.mjs`
-  (iter 222). `SIDECAR_TRACE_COALESCER` plumbing kept as passive
-  diagnostic; consider removal if not used by next coalescer-area
-  iteration.
-- **M7.4.x — GT-5. CLOSED iter 231.** Root cause was a second
-  upstream supertex no-op shape (warm-doc body-edit past every
-  extant checkpoint), distinct from the GT-8 cold-start
-  `\newpage` shape M7.4 closed for. Upstream fix landed in
-  `vendor/supertex` iters 759–764 with two new regression cases
-  (`test_cli_daemon_warm_body_edit_noop.sh`,
-  `test_cli_daemon_warm_body_edit_long_chain.sh`). Submodule
-  bumped to `8c3dec0` in the iter-231 start commit. Sidecar
-  redeployed iter 231
-  (`deployment-01KRHQ3PE6KY61ZD89XMD7P6YB`,
-  sha `b10d59ce82cc…`); `SIDECAR_IMAGE` pinned and control plane
-  redeployed
-  (`deployment-01KRHQ6ZDCFZFMWGY922VK2QEV`,
-  sha `6aa67217b34b…`). Live verification: GT-5
-  (`verifyLiveGt5EditUpdatesPreview.spec.ts`) GREEN on iter-231
-  isolated run (4.6 s). Retained regression locks:
-  GT-5 (live), `supertexWarmDocBodyEditNoop.test.mjs` (local,
-  iter 230, deterministic warm-doc body-edit repro driving
-  `supertex --daemon` directly). Iter-228 diagnostic seam
-  (`CompileSuccess.noopReason` + warn log) removed iter 240
-  after GT-5 stayed green iter 231→239 (well past the 2–3-pass
-  threshold).
+  CLOSED iter 227.** Upstream supertex rollback-target bug fixed
+  in `vendor/supertex` iters 755–758 (submodule bumped to
+  `2fb543e` iter 227). Sidecar redeployed; `SIDECAR_IMAGE` repinned.
+  Live GT-8 green iter 227, locks retained: GT-8 (live);
+  `supertexColdNewpageCrash.test.mjs`, `supertexFilewatcherRace.test.mjs`,
+  `supertexOversizeTarget.test.mjs`, `sidecarColdStartCoalescer.test.mjs`
+  (local). Narrative: `.autodev/discussion/225_answer.md`,
+  `226_question.md`, `226_answer.md`.
+- **M7.4.x — GT-5. CLOSED iter 231.** Second upstream supertex
+  no-op shape (warm-doc body-edit past every extant checkpoint),
+  distinct from the GT-8 `\newpage` shape. Fixed in
+  `vendor/supertex` iters 759–764 (submodule bumped to `8c3dec0`
+  iter 231); sidecar + control plane redeployed. Locks retained:
+  GT-5 (live) + `supertexWarmDocBodyEditNoop.test.mjs` (local,
+  iter 230). Iter-228 diagnostic seam removed iter 240.
+- **M9.live-hygiene.leaked-machines.** Iter 239 gold logged
+  `tex-center-sidecar` at 6 machines (4 untagged + 2 `app`-tagged
+  shared-pool); 2 of the untagged were created during the iter-239
+  live gold run with no `texcenter_project` metadata. Some live
+  spec is missing `cleanupLiveProjectMachine` in `afterEach`, or
+  a fresh-project bootstrap flow is creating a Machine outside the
+  reapable path. Three candidate fix shapes (per iter-240 log
+  Notes): (a) audit every `tests_gold/playwright/*.spec.ts`
+  fresh-project flow for missing `afterEach` reap; (b)
+  final-teardown sweeper that destroys metadata-less machines
+  older than suite-start time; (c) tag every control-plane-created
+  machine with `texcenter_project=<id>` so the guardrail can
+  programmatically distinguish leaks from the shared pool.
+  **Preferred: (c)** — makes the guardrail self-triaging.
+  Implementation point: `apps/web/src/lib/server/machineAssignments.ts`
+  (or wherever the Machines API create is invoked) + a read in
+  `test_machine_count_under_threshold`. Shared-pool `app`-tagged
+  machines are intentional and must NOT be destroyed.
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
 - **GT-F (local Playwright).** `?debug=1` flips localStorage; a
@@ -147,8 +121,7 @@ lib). Sub-slices, each its own iteration:
   file; folder materialises on first child).
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5** OS-drop upload. **Blocked by FUTURE_IDEAS "binary
-  asset upload"** for non-UTF-8 payloads — text-only is
-  insufficient since the real motivation is image/PDF/font drops.
+  asset upload"** for non-UTF-8 payloads.
 
 ### M12.panels — draggable dividers (post-MVP UX)
 
@@ -160,99 +133,59 @@ Single iteration. Local gold: drag → reload → widths persist.
 
 ### M13.open-latency — instrument-then-fix (post-MVP UX)
 
-- **M13.1** `performance.mark` at click → route loaded → WS open
-  → Yjs sync complete → first text paint → first pdf-segment.
-  Surface via iter-187 `?debug=1` toast fan-out. Local gold
-  asserts mark ordering + monotonic timestamps.
-  - Iter 206 scaffolded: `apps/web/src/lib/editorMarks.ts`
-    exports name constants for all five marks plus a `markOnce(name)`
-    helper that guards against re-firing and SSR/no-Performance
-    environments; editor page wires `EDITOR_ROUTE_MOUNTED` in
-    `onMount`.
-  - Remaining: wire `EDITOR_WS_OPEN` (first 'connected' snapshot
-    from WsClient), `EDITOR_YJS_HYDRATED` (first `snapshot.hydrated`
-    true), `EDITOR_FIRST_TEXT_PAINT` (first non-null Y.Text bound
-    to the CodeMirror Editor — likely an effect when `text` first
-    flips non-null), `EDITOR_FIRST_PDF_SEGMENT` (first non-null
-    `snapshot.pdfBytes`). Then add the debug-toast bridge and the
-    local ordering spec.
-- **M13.2** single highest-impact fix indicated by M13.1 data.
-  **M13.1 diagnostic complete iter 236.** GT-6 failure message now
-  carries the five-mark timeline; iter-236 live run reported
-  `route-mounted=+0ms ws-open=+11546ms yjs-hydrated=+11564ms
-  first-text-paint=+1ms first-pdf-segment=(absent)` with the
-  seeded `documentclass` source appearing in `.cm-content` at
-  +11572 ms. **Verdict: the route→ws-open interval (~11.5 s)
-  dominates entirely; yjs-hydrate adds ~18 ms and DOM paint ~8 ms
-  on top.** The `first-text-paint=+1ms` figure was an
-  instrumentation artefact (Y.Text non-null immediately because
-  `doc.getText()` lazily creates it); iter 237 retargeted the
-  predicate at `text.length > 0` via a Y.Text observer, so future
-  runs will show first-text-paint aligned with yjs-hydrated.
-  Cause: the control-plane WS upgrade
-  (`apps/web/src/lib/server/wsProxy.ts:200`,
+- **M13.1 — instrumentation. CLOSED iter 236.** `performance.mark`
+  at click → route loaded → WS open → Yjs sync complete → first
+  text paint → first pdf-segment. Helpers in
+  `apps/web/src/lib/editorMarks.ts`. M13.1 diagnostic conclusion
+  (iter 236 live timeline): route→ws-open ~11.5 s dominates
+  entirely; yjs-hydrate adds ~18 ms and DOM paint ~8 ms on top.
+  Cause: control-plane WS upgrade (`apps/web/src/lib/server/wsProxy.ts:200`,
   `upstreamResolver.ts:144`) blocks until the per-project Fly
   Machine is `started` and the sidecar TCP-binds — a cold start.
-  Seed content cannot reach the client until that completes, even
-  though it is just the static `MAIN_DOC_HELLO_WORLD` template
-  (sidecar `persistence.ts:290`).
-
-  **M13.2(a) landed iter 238 — visual seed only (no Y.Doc insert).**
-  `apps/web/src/routes/editor/[projectId]/+page.server.ts` now
+- **M13.2(a) — SSR seed gate. LANDED iter 238, closed GT-6 iter
+  240.** `apps/web/src/routes/editor/[projectId]/+page.server.ts`
   queries `getMachineAssignmentByProjectId` and, when the row is
-  absent (no WS has ever upgraded for this project, so the sidecar
-  has not yet diverged from the canonical template), returns
-  `seed = { name: "main.tex", text: MAIN_DOC_HELLO_WORLD }` in the
-  page data. The editor svelte renders the seed as a `<pre
-  class="editor-seed">` placeholder inside the `.editor` pane
-  while `snapshot.hydrated` is still false. The placeholder is
-  visual only — it deliberately does *not* carry the `.cm-content`
-  class, and the seed bytes are never inserted into the local
-  Y.Doc. Two reasons: (1) Yjs CRDT cannot deterministically dedupe
-  two independent `t.insert(0, MAIN_DOC_HELLO_WORLD)` operations
-  signed with different `clientID`s; an in-Y.Doc seed would
-  duplicate the sidecar's identical seed on initial sync; (2)
-  every live spec that types into `.cm-content`
-  (verifyLiveFullPipeline et al.) must continue waiting for the
-  real CodeMirror mount — typing into a `<pre>` would silently
-  drop input. GT-6 was updated to poll `.editor` textContent for
-  the `documentclass` sentinel rather than `.cm-content`, which is
-  the user-visible promise ("source visible in the editor pane
-  quickly") and does not constrain the implementation to a
-  particular DOM element. Expected effect on the live GT-6
-  timeline: appearance time drops from ~5–12 s to under the 500 ms
-  bound for fresh cold projects.
+  absent, returns `seed = { name: "main.tex", text:
+  MAIN_DOC_HELLO_WORLD }` in page data; the editor renders the
+  seed as a `<pre class="editor-seed">` placeholder *inside*
+  `.editor` while `snapshot.hydrated` is still false. Two
+  load-bearing design calls:
+  1. **Seed is visual-only, never inserted into the local Y.Doc.**
+     Yjs CRDT cannot deterministically dedupe two independent
+     `t.insert(0, MAIN_DOC_HELLO_WORLD)` ops signed with different
+     `clientID`s; an in-Y.Doc seed would duplicate the sidecar's
+     identical seed on initial sync.
+  2. **Placeholder DOM element is `<pre class="editor-seed">`, not
+     `.cm-content`.** Every live spec that types into `.cm-content`
+     (verifyLiveFullPipeline et al.) must continue waiting for the
+     real CodeMirror mount — typing into the `<pre>` would silently
+     drop input. GT-6 polls `.editor` textContent instead, which is
+     the user-visible promise.
 
   **Known follow-ups for M13.2:**
 
   - Non-fresh projects (those with a `machine_assignments` row)
     still show the blank `.editor-placeholder` for ~11.5 s on
-    reconnect into a cold-stopped Machine. The user-visible UX is
-    "blank editor until WS opens" for these. Address by widening
-    the seed surface to fetch the *current* persisted source from
-    R2/blob-store in `+page.server.ts` when a row exists. Requires
-    the web side to read the same blob store the sidecar writes;
-    currently the sidecar's `BLOB_STORE` lives only on each
-    per-project Machine. Schedule alongside M11.5 binary-asset
-    wire work (shared R2 bucket).
+    reconnect into a cold-stopped Machine. Widen the seed surface
+    to fetch the *current* persisted source from R2/blob-store in
+    `+page.server.ts` when a row exists. Requires the web side to
+    read the same blob store the sidecar writes; currently
+    `BLOB_STORE` lives only on each per-project Machine. Schedule
+    alongside M11.5 binary-asset wire work (shared R2 bucket).
   - GT-A currently passes because it polls `.cm-content` which
     only appears after real CodeMirror mounts (post-hydrate); the
     seed placeholder is a separate DOM element. If a future
-    iteration consolidates the seed and real editor under a
-    single `.cm-content` class, GT-A's invariant must be carried
-    through unchanged.
-  - `machine_assignments`-row deletion via
-    `cleanupProjectMachine` (used by tests and the eventual
-    idle-reap path) re-arms the SSR seed gate even though the
-    sidecar's blob store may still hold the user's edits. In
-    production this is benign while the blob store remains
-    per-Machine (a cleaned-up project loses its blobs too); once a
-    shared blob store lands, the gate needs to flip from
-    "no machine assignment" to "no persisted blob".
+    iteration consolidates the seed and real editor under a single
+    `.cm-content` class, GT-A's invariant must be carried through.
+  - `machine_assignments`-row deletion via `cleanupProjectMachine`
+    re-arms the SSR seed gate even though the sidecar's blob store
+    may still hold the user's edits. Benign while the blob store
+    remains per-Machine; once a shared blob store lands, the gate
+    must flip from "no machine assignment" to "no persisted blob".
 
-Default sequencing (M11–M13 all post-MVP, ordered after MVP-gap
-M7.4.x and the GT-E/GT-F/save-feedback work): M13.1 → M12 →
-M11.1–M11.4 → M13.2. M11.5 gated on binary-asset wire work.
+Default sequencing: **M9.live-hygiene.leaked-machines next**, then
+M12 → M11.1–M11.4 → M13.2 widening. M11.5 gated on binary-asset
+wire work.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
@@ -277,17 +210,12 @@ SVGs at `apps/web/src/lib/logos/{linear,stacked}.svg`, inlined via
 Vite `?raw` import; brand wrapper is
 `<span role="img" aria-label="tex.center">`, editor route uses
 `<a class="brand">`); iter-200 coalescer extraction
-(`apps/sidecar/src/compileCoalescer.ts`). See git log and
-`.autodev/logs/` for detail.
+(`apps/sidecar/src/compileCoalescer.ts`); M13.1 instrumentation
+(iter 236); M13.2(a) SSR seed gate (iter 238, GT-6 green iter 240).
+See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 
-- **Cold-start fresh-project flakiness.** Iter 182 replaced
-  single-shot canvas evaluates with a bounded 30s `expect.poll`
-  re-locating `.preview canvas` each tick and bumped GT-A's
-  `.cm-content` timeout to 120s. If recurrence appears, next step
-  is `flyctl machine logs` from a failing run under the
-  leaked-subprocess hygiene rules below.
 - **Per-project vs shared-sidecar routing.** Current model is
   per-project Machine. Shared-pool app-tagged machines exist but
   aren't routed to. Decision deferred to post-MVP.
