@@ -23,10 +23,12 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-269): **deploy M15 fix + R2
+Active priority queue (post iter-270): **deploy M15 fix + R2
 sidecar idle-handler from iter 267 → M13.2(b).5 R1 (SSR seed
 widening — needs shared blob store) → M11.1c headless-tree
-adoption → M16.aesthetic.** M15 fix (sidecar `targetPage=0`
+adoption → M17.preview-render (PDF flash + cross-fade) →
+M16.aesthetic.** M17 promoted from `269_question.md` /
+`269_answer.md`. M15 fix (sidecar `targetPage=0`
 default) landed iter 269 alongside a local sidecar-level pin
 (`test_supertex_multipage_emit`). M14.title-bar landed
 iter 264. M13.2(b).4 stopped-state pin landed iter 266 (RED gold
@@ -335,6 +337,42 @@ elements **or** a single canvas of height > viewport.height * 1.8.
   per-viewer targetPage optimisation is parked as a long-doc
   perf hatch — re-introduce only if compile-cost on a 50+ page
   doc becomes load-bearing.
+
+### M17.preview-render — PDF preview flashing + cross-fade (iter 270)
+
+Promoted from `269_question.md` / `269_answer.md`. Defining defect:
+`apps/web/src/lib/PdfViewer.svelte` `render()` does
+`target.replaceChildren()` then rebuilds canvases serially —
+preview pane is empty for hundreds of ms on every compile, pages
+pop in one at a time. Acceptance:
+
+- **M17.a — no flash on update.** Render new canvases off-DOM
+  (PDF.js works on a detached canvas's 2D context); swap into
+  per-page wrappers in one synchronous DOM op once all pages have
+  rendered.
+- **M17.b — cross-fade.** Per-page wrapper `<div class="pdf-page">`
+  with two absolutely-positioned canvases during the swap window;
+  new canvas opacity 0→1, old 1→0 over ~180 ms; old unmounts on
+  `transitionend`. Trailing wrappers append/remove as page count
+  changes (fade-in / fade-out same transition). Geometry-change
+  case: animate wrapper width/height alongside.
+- **renderToken extension.** New render mid-fade commits any
+  in-flight fade instantly (snapshot opacity, remove old canvas,
+  clear transition) before starting the new off-DOM render; the
+  most-recent committed canvas becomes "old" for the next fade.
+- **IntersectionObserver retargeted to wrapper**, not canvas —
+  survives fades, `tracker.reset()` no longer needed per render.
+- **Pin.** Local Playwright
+  `verifyLivePdfNoFlashBetweenSegments.spec.ts`: across 1s window
+  spanning two `pdf-segment` arrivals, poll DOM at 20 ms cadence;
+  assert `min(canvas[data-page] count) >= 1`. Secondary opacity-
+  in-(0,1) sample optional. Plus a non-DOM unit test for the
+  fade-controller state machine
+  (`apps/web/test/pdfFadeController.test.mjs`).
+
+Land M17.a + M17.b + pin together — same per-page wrapper rewrite.
+No pin-RED-first (the failure mode is visual; the assertion only
+holds post-fix).
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
