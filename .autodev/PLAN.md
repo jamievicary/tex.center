@@ -127,17 +127,18 @@ Single iteration. Local gold: drag → reload → widths persist.
   GT-6 only asserts the SSR seed `<pre>`; the real bar is Yjs
   connected + CodeMirror bound + typing not dropped.
 
-  1. **M13.2(b).1. Landed iter 249, deployed iter 250.**
-     `auto_destroy: false` in
-     `apps/web/src/lib/server/upstreamFromEnv.ts`; sidecar idle
-     path now calls `POST /machines/{self}/suspend` via
-     `createIdleHandler` + `buildSuspendSelfFromEnv` in
-     `apps/sidecar/src/index.ts`, falling back to
-     `process.exit(0)` on missing env / API error. Unit-tested in
-     `apps/sidecar/test/idleSuspend.test.mjs`. Smoke-probe iter
-     249 confirmed suspend ok:true on shared-cpu-1x:1024MB in
-     `fra`; resume `suspended → started` ~0.7 s. `healthz` green
-     post-deploy.
+  1. **M13.2(b).1. Landed iter 249, deployed iter 250; resume-bug
+     fix landed + deployed iter 255.** `auto_destroy: false` in
+     `apps/web/src/lib/server/upstreamFromEnv.ts`. Sidecar idle
+     handler in `apps/sidecar/src/index.ts` calls
+     `POST /machines/{self}/suspend`; on resume it must NOT close
+     the app and must NOT exit (the Fly response-then-freeze
+     semantic means the suspend fetch resolves post-resume with the
+     listener still bound — iter 249 got this wrong, iter 255 fixed
+     it). On `null` `suspendSelf` (local dev) or fetch-throws,
+     fallback path closes app + `exit(0)`. `server.ts` passes
+     `{ rearm }` to `onIdle` so the post-resume path can re-arm the
+     idle gate. Unit tests in `apps/sidecar/test/idleSuspend.test.mjs`.
   2. **M13.2(b).2 — optimistic project delete. Landed iter 254.**
      `deleteProject` now deletes the DB row first, then kicks off
      Fly `destroyMachine` as fire-and-forget. The result exposes a

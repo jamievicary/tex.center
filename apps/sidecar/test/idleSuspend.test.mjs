@@ -1,9 +1,20 @@
-// M13.2(b) iter 249: when the sidecar idle timer fires, it must
-// (a) close the Fastify app, (b) try to suspend its own Fly Machine
-// via the Machines API, and (c) fall back to a clean process.exit(0)
-// if no suspend credentials are wired or the call errors. Production
-// path freezes the VM mid-call (we never observe the resolved
-// promise); unit tests cover the wiring without making real fetches.
+// M13.2(b) idle handler — iter 255 rewrite.
+//
+// Production sequence on Fly:
+//   1. Idle timer fires → handler awaits POST /machines/{self}/suspend.
+//   2. Fly responds, then freezes the VM. The fetch promise is
+//      pending across the freeze.
+//   3. Some time later a WS upgrade hits the Machine, the control
+//      plane calls /start, the VM resumes. The pending fetch
+//      resolves — we are now *post-resume*, with the same listener
+//      still bound to the same port.
+//   4. The handler must NOT exit and must NOT close the app; it
+//      must re-arm the idle gate so a future inactive window can
+//      suspend us again.
+//
+// Iter 249 got step 3 wrong (it `exit(0)`'d after the await, killing
+// the resumed sidecar ~1 s after every wake). This test pins the
+// correct post-resume contract.
 
 import assert from "node:assert/strict";
 
@@ -88,11 +99,21 @@ function fakeApp() {
   };
 }
 
-// no suspender wired (local dev): just close + exit(0).
+function fakeCtx() {
+  const rearms = [];
+  return {
+    rearms,
+    ctx: { rearm: () => rearms.push(Date.now()) },
+  };
+}
+
+// No suspender wired (local dev): close + exit(0). Rearm is NOT
+// called because the process is going away.
 {
   const app = fakeApp();
   const exits = [];
   const logs = [];
+  const { ctx, rearms } = fakeCtx();
   const handler = createIdleHandler({
     getApp: () => app,
     suspendSelf: null,
@@ -101,21 +122,21 @@ function fakeApp() {
     },
     log: (msg, err) => logs.push([msg, err]),
   });
-  handler();
-  // Allow microtasks/awaits to run.
+  handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(app.closes.length, 1);
   assert.deepEqual(exits, [0]);
-  // No log lines on the happy local-dev path.
+  assert.equal(rearms.length, 0);
   assert.equal(logs.length, 0);
 }
 
-// suspender succeeds (in prod the VM would freeze; in tests it
-// returns, and we exit(0) cleanly anyway).
+// Suspender succeeds (production post-resume path): handler must
+// NOT close the app, must NOT exit, must call ctx.rearm().
 {
   const app = fakeApp();
   const exits = [];
   const suspendCalls = [];
+  const { ctx, rearms } = fakeCtx();
   const handler = createIdleHandler({
     getApp: () => app,
     suspendSelf: async () => {
@@ -126,18 +147,25 @@ function fakeApp() {
     },
     log: () => {},
   });
-  handler();
+  handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
-  assert.equal(app.closes.length, 1);
+  assert.equal(
+    app.closes.length,
+    0,
+    "post-resume must not close the listener",
+  );
   assert.equal(suspendCalls.length, 1);
-  assert.deepEqual(exits, [0]);
+  assert.deepEqual(exits, [], "post-resume must not exit");
+  assert.equal(rearms.length, 1, "post-resume must re-arm idle gate");
 }
 
-// suspender throws: handler still exits 0, error is logged.
+// Suspender throws: log and fall back to close + exit(0). This is
+// the "Fly returned 5xx" or "creds wrong" case.
 {
   const app = fakeApp();
   const exits = [];
   const logs = [];
+  const { ctx, rearms } = fakeCtx();
   const handler = createIdleHandler({
     getApp: () => app,
     suspendSelf: async () => {
@@ -148,31 +176,66 @@ function fakeApp() {
     },
     log: (msg, err) => logs.push([msg, err]),
   });
-  handler();
+  handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
+  assert.equal(app.closes.length, 1);
   assert.deepEqual(exits, [0]);
+  assert.equal(rearms.length, 0);
   assert.equal(logs.length, 1);
   assert.match(logs[0][0], /suspend failed/);
 }
 
-// double-firing the handler must only close + exit once.
+// While a suspend is in flight, a second call is a no-op
+// (re-entrancy guard).
 {
-  const app = fakeApp();
   const exits = [];
+  const suspendCalls = [];
+  let releaseSuspend;
+  const suspend = () =>
+    new Promise((r) => {
+      releaseSuspend = r;
+    });
+  const { ctx } = fakeCtx();
   const handler = createIdleHandler({
-    getApp: () => app,
-    suspendSelf: null,
-    exit: (code) => {
-      exits.push(code);
+    getApp: () => fakeApp(),
+    suspendSelf: async () => {
+      suspendCalls.push(1);
+      await suspend();
     },
+    exit: (code) => exits.push(code),
     log: () => {},
   });
-  handler();
-  handler();
-  handler();
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(app.closes.length, 1);
-  assert.deepEqual(exits, [0]);
+  handler(ctx);
+  handler(ctx);
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(suspendCalls.length, 1, "in-flight guard");
+  releaseSuspend();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(exits, []);
+}
+
+// After a successful suspend/resume, the handler can fire again
+// for a *second* idle window (`inFlight` must be cleared).
+{
+  const exits = [];
+  const suspendCalls = [];
+  const { ctx, rearms } = fakeCtx();
+  const handler = createIdleHandler({
+    getApp: () => fakeApp(),
+    suspendSelf: async () => {
+      suspendCalls.push(1);
+    },
+    exit: (code) => exits.push(code),
+    log: () => {},
+  });
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 5));
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(suspendCalls.length, 2, "second idle window must re-fire");
+  assert.equal(rearms.length, 2);
+  assert.deepEqual(exits, []);
 }
 
 console.log("idleSuspend ok");

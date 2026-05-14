@@ -132,7 +132,7 @@ export interface SidecarOptions {
    * leaves the Machine in `stopped` state for the next wake.
    */
   idleTimeoutMs?: number;
-  onIdle?: () => void;
+  onIdle?: (ctx: { rearm: () => void }) => void;
 }
 
 export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyInstance> {
@@ -202,7 +202,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       void (async () => {
         await persistAllCheckpoints();
         try {
-          onIdle!();
+          onIdle!({
+            rearm: () => {
+              if (viewerCount === 0) armIdleTimer();
+            },
+          });
         } catch (e) {
           app.log.error(
             { err: e instanceof Error ? e.message : String(e) },

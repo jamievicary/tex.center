@@ -68,30 +68,61 @@ export interface IdleHandlerDeps {
   exit?: (code: number) => never;
 }
 
-export function createIdleHandler(deps: IdleHandlerDeps): () => void {
+export interface IdleHandlerContext {
+  /** Called by the handler after a successful suspend→resume cycle
+   *  so the server can re-arm its idle gate without waiting for a
+   *  new viewer to come and go. */
+  rearm: () => void;
+}
+
+export type IdleHandler = (ctx: IdleHandlerContext) => void;
+
+// Idle handler. Two cases:
+//
+//   1. `suspendSelf` is wired (production on Fly with FLY_API_TOKEN).
+//      The handler calls POST /machines/{self}/suspend. Fly sends the
+//      response and *then* freezes the VM, so when the fetch promise
+//      resolves we are post-resume — the Machine has been woken via
+//      /start. The listener is still bound (we never close the app
+//      here), so the incoming WS connection that triggered the
+//      resume can be served. Re-arm the idle gate and stay alive.
+//      Iter 249 incorrectly assumed the freeze happened mid-fetch
+//      and called `exit(0)` after the await; that exited the sidecar
+//      ~1 s after every resume, defeating the optimisation entirely
+//      (live evidence: iter 255 log, reused-project Machine).
+//
+//   2. `suspendSelf` is null (local dev or missing creds). No
+//      suspend API to call; close the app and exit cleanly. This is
+//      the historical idle-stop path.
+export function createIdleHandler(deps: IdleHandlerDeps): IdleHandler {
   const log = deps.log ?? ((msg, err) => console.error(msg, err));
   const exit = deps.exit ?? ((code: number) => process.exit(code));
-  let fired = false;
-  return (): void => {
-    if (fired) return;
-    fired = true;
+  let inFlight = false;
+  return (ctx: IdleHandlerContext): void => {
+    if (inFlight) return;
+    inFlight = true;
     void (async (): Promise<void> => {
+      if (deps.suspendSelf) {
+        try {
+          await deps.suspendSelf();
+          // Post-resume. Keep the listener bound; re-arm the idle
+          // gate so a future inactive window can suspend us again.
+          inFlight = false;
+          try {
+            ctx.rearm();
+          } catch (err) {
+            log("sidecar idle: rearm callback threw", err);
+          }
+          return;
+        } catch (err) {
+          log("sidecar idle: suspend failed, falling back to clean exit", err);
+        }
+      }
       const app = deps.getApp();
       try {
         if (app) await app.close();
       } catch (err) {
         log("sidecar idle: app.close() failed", err);
-      }
-      if (deps.suspendSelf) {
-        try {
-          await deps.suspendSelf();
-          // In production the VM freezes mid-call and we never get
-          // here. If we do (e.g. Fly returned success then resumed
-          // us before the call site completed), exit cleanly.
-          log("sidecar idle: suspend returned without freezing — exiting", null);
-        } catch (err) {
-          log("sidecar idle: suspend failed, falling back to clean exit", err);
-        }
       }
       exit(0);
     })();
