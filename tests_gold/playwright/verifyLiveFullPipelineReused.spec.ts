@@ -111,8 +111,14 @@ test.describe("live full pipeline reused (M8.pw.4 reused project)", () => {
 
     await authedPage.goto(`/editor/${projectId}`);
 
+    // 120s, matching `verifyLiveFullPipeline.spec.ts`. The reused
+    // path can need to cold-start an idle-stopped per-project
+    // Machine before the first Yjs sync gates `.cm-content` visible
+    // (iter 177's no-flash fix). 30s was tight enough that iter 252
+    // saw a TimeoutError here even though the rest of the budget
+    // remained.
     const cmContent = authedPage.locator(".cm-content");
-    await cmContent.waitFor({ state: "visible", timeout: 30_000 });
+    await cmContent.waitFor({ state: "visible", timeout: 120_000 });
     await cmContent.click();
 
     // The Y.Doc carries whatever source the previous iteration
