@@ -19,6 +19,10 @@ import {
   describeBootMigrationsStatus,
   runBootMigrations,
 } from "./lib/server/bootMigrations.js";
+import {
+  describeSessionSweepStatus,
+  runBootSessionSweep,
+} from "./lib/server/sessionSweep.js";
 import { getDb } from "./lib/server/db.js";
 import { MachinesClient } from "./lib/server/flyMachines.js";
 import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
@@ -76,6 +80,17 @@ const resolveUpstream = buildUpstreamFromEnv(process.env, {
 // no-op so the existing stateless path keeps working.
 const migrationsStatus = await runBootMigrations(process.env);
 console.log(describeBootMigrationsStatus(migrationsStatus));
+
+// Sweep expired session rows. Gated by `SWEEP_SESSIONS_ON_BOOT=1`;
+// independent of migrations so ops can flip them separately. A
+// sweep failure is non-fatal — log and continue, since the schema
+// is still usable and the next deploy will retry.
+try {
+  const sweepStatus = await runBootSessionSweep(process.env);
+  console.log(describeSessionSweepStatus(sweepStatus));
+} catch (err) {
+  console.error("session sweep failed (non-fatal)", err);
+}
 
 const { server } = boot({
   handler,

@@ -230,7 +230,8 @@ Vite `?raw` import; brand wrapper is
 (`apps/sidecar/src/compileCoalescer.ts`); M13.1 instrumentation
 (iter 236); M13.2(a) SSR seed gate (iter 238, GT-6 green iter 240);
 M13.2(b).1 no-auto-destroy + self-suspend (iter 249, deployed iter
-250); M13.2(b).2 optimistic delete (iter 254). See git log and
+250); M13.2(b).2 optimistic delete (iter 254); boot-time session
+sweep (iter 258, `SWEEP_SESSIONS_ON_BOOT=1`). See git log and
 `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps

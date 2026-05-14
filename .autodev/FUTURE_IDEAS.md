@@ -24,10 +24,11 @@
   from a GitHub Action and `curl` them in. Reproducibility goal:
   `sha256sum` the bin matches between a clean rebuild and
   what's in the repo.
-- **Session sweeper scheduling.** Storage primitive
-  `deleteExpiredSessions(db, now)` landed iter 54; wire it to a
-  periodic caller (cron, on-boot pass, or admin route) when one
-  exists.
+- **Periodic in-process session sweep.** Boot-time one-shot
+  landed iter 258 (gated by `SWEEP_SESSIONS_ON_BOOT=1`). A
+  periodic timer (every N hours) inside the same process is the
+  next step if deploy cadence slows enough that boot frequency
+  alone leaves expired rows lingering.
 - **In-image Dockerfile smoke before deploy.** Iter 129 had to
   diagnose a production 500 (`Cannot find package 'jose'`) caused
   by adapter-node leaving `jose` external while
