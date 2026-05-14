@@ -17,7 +17,14 @@
     initDebugFlag,
     onDebugKeyShortcut,
   } from "$lib/debugToasts";
-  import { EDITOR_ROUTE_MOUNTED, markOnce } from "$lib/editorMarks";
+  import {
+    EDITOR_FIRST_PDF_SEGMENT,
+    EDITOR_FIRST_TEXT_PAINT,
+    EDITOR_ROUTE_MOUNTED,
+    EDITOR_WS_OPEN,
+    EDITOR_YJS_HYDRATED,
+    markOnce,
+  } from "$lib/editorMarks";
 
   let { data } = $props();
 
@@ -96,6 +103,16 @@
   // persists changes to each file's blob on the next compile.
   $effect(() => {
     if (client) text = client.getText(selected);
+  });
+
+  // M13.1 editor-open-latency marks. `markOnce` is idempotent —
+  // these fire on the *first* transition through each predicate and
+  // are no-ops afterwards (reconnects, file-switches, late frames).
+  $effect(() => {
+    if (snapshot.status === "open") markOnce(EDITOR_WS_OPEN);
+    if (snapshot.hydrated) markOnce(EDITOR_YJS_HYDRATED);
+    if (text !== null) markOnce(EDITOR_FIRST_TEXT_PAINT);
+    if (snapshot.pdfBytes !== null) markOnce(EDITOR_FIRST_PDF_SEGMENT);
   });
 
   function handlePageChange(page: number): void {

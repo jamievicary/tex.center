@@ -45,6 +45,16 @@ test.describe("editor route", () => {
     await expect(authedPage.locator(".tree")).toBeVisible();
     await expect(authedPage.locator(".editor")).toBeVisible();
     await expect(authedPage.locator(".preview")).toBeVisible();
+
+    // M13.1: editor route mount records a one-shot
+    // `performance.mark`. (Other marks — ws-open, yjs-hydrated,
+    // first-text-paint, first-pdf-segment — fire only when a real
+    // sidecar is reachable; the local webServer has none, so this
+    // spec only checks the route-mount mark.)
+    const routeMountedCount = await authedPage.evaluate(() =>
+      performance.getEntriesByName("editor:route-mounted").length,
+    );
+    expect(routeMountedCount).toBe(1);
   });
 
 });
