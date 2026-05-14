@@ -18,8 +18,15 @@ All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
 **Current live focus: M13.2(b) — fully-live editor within 1000 ms
 on cold project access.** M13.2(b).1 (no-auto-destroy + self-suspend)
 landed iter 249, deployed iter 250. M13.2(b).2 (optimistic delete)
-landed iter 254. M13.2(b).3 (new gold spec on cold cm-content +
-first op) open.
+landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
+256/260. **M13.2(b).4 (stopped-state pin) open — current GT-6 spec
+only exercises the optimistic suspended-resume path; user reports
+20 s+ on `stopped`-state Machines (see `260_answer.md`).**
+
+Active priority queue (post iter-260): **M14.title-bar → M13.2(b).4
+stopped-state pin → M15.multipage-preview → M11.1c headless-tree
+adoption → M16.aesthetic.** See `260_answer.md` for sequencing
+rationale and library/palette decisions.
 
 Full diagnoses: GT-5 in `.autodev/logs/202.md`; M7.4.x closing in
 `.autodev/discussion/230_answer.md`; M13 timeline in
@@ -85,30 +92,44 @@ Remaining slices:
 
 ### M11.file-tree — tree component + CRUD UX (post-MVP UX)
 
-Native Svelte 5 component (no React island, no third-party tree
-lib). Sub-slices, each its own iteration:
+**Constraint revisited iter 262 (see `260_answer.md`):** the
+"native Svelte 5, no third-party tree lib" rule is dropped.
+Adopting `@headless-tree/core` + its Svelte adapter — headless
+state-machine for expand/select/rename/DnD, our own markup and
+styles. Rationale: a11y + keyboard nav + DnD primitives are a
+maintenance liability; headless library carries them; styling
+stays ours (clean fit with M16 aesthetic). Sub-slices:
 
 - **M11.1 rendering substrate. Landed iter 261.**
   `apps/web/src/lib/fileTree.ts` (`buildFileTree` pure
   path-grouping forest, folders-first/alphabetic sort) +
   `apps/web/src/lib/FileTreeNode.svelte` (self-recursive
-  collapsible node) consumed by `FileTree.svelte`. Behavior on
-  today's flat names is unchanged (server's
-  `validateProjectFileName` still forbids `/`). Lock:
-  `apps/web/test/fileTree.test.mjs`. Folder collapse state lives
-  in `FileTree.svelte` as `Map<path, boolean>`; default expanded.
+  collapsible node) consumed by `FileTree.svelte`. The data
+  layer (`fileTree.ts`) survives the headless-tree migration;
+  `FileTreeNode.svelte`'s recursive markup is replaced in M11.1c.
+  Lock: `apps/web/test/fileTree.test.mjs`.
 - **M11.1b** relax `validateProjectFileName` to permit
   `/`-separated segments, update sidecar persistence to
   `mkdir -p` parent dirs on write/rename and reap empty parents
   on delete. Folders become a live concept end-to-end. Required
   before M11.3 has any effect.
+- **M11.1c (new)** adopt `@headless-tree/core` + its Svelte
+  adapter. Wire its state to `buildFileTree` output; replace
+  `FileTreeNode.svelte`'s markup with a headless-tree-driven
+  view; preserve behaviour (flat names render flat, folders
+  render collapsible). Component test on the wiring
+  (expand/collapse/selection).
 - **M11.2** create/delete/rename via context menu + keyboard
-  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
+  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs;
+  headless-tree provides keyboard primitives.
 - **M11.3** create folder via virtual-folder model (no sentinel
   file; folder materialises on first child). Gated on M11.1b.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
-- **M11.5** OS-drop upload. **Blocked by FUTURE_IDEAS "binary
-  asset upload"** for non-UTF-8 payloads.
+  Headless-tree drag handler emits `{ source, target }`.
+- **M11.5** OS drop-upload + drag-out download. Drop-upload still
+  **blocked by FUTURE_IDEAS "binary asset upload"** for non-UTF-8
+  payloads. Drag-out download is unblocked (browser-native
+  `DataTransfer`; blob-URL fallback for non-Chromium).
 
 ### M12.panels — draggable dividers (post-MVP UX)
 
@@ -173,7 +194,7 @@ candidate.
      post-click latency assertion was considered but rejected as
      flake-prone over the live network (form POST → 303 → fresh
      GET /projects, p99 well above 500 ms on a cold path).
-  3. **M13.2(b).3 — cold-editable gold case. Spec landed iter 256.**
+  3. **M13.2(b).3 — suspended-resume cold-editable gold case. Spec landed iter 256.**
      `tests_gold/playwright/verifyLiveGt6LiveEditableState.spec.ts`.
      Cold-starts a fresh project, leaves `/editor`, drives the
      per-project Machine into the `suspended` state via the Fly
@@ -196,6 +217,34 @@ candidate.
      (`verifyLiveGt6FastContentAppearance`) as the regression lock
      on M13.2(a).
 
+  4. **M13.2(b).4 — stopped-state cold-editable pin. OPEN (iter 262).**
+     The existing M13.2(b).3 spec drives the Machine into
+     `suspended` via Fly's `/suspend` endpoint, which exercises only
+     the optimistic resume path. User reports 20 s+ on `ererg` —
+     the `stopped`-state path (sidecar idle-handler fallback
+     `exit(0)` lands a Machine in `stopped`, not `suspended`).
+     Live read iter 262: 0 suspended, 4 started, 0 stopped per-
+     project — the suspend handler may be unreliable in practice.
+     Slice: add a sibling case to `verifyLiveGt6LiveEditableState`
+     that calls `POST /machines/{id}/stop` instead of `/suspend`,
+     polls until `state === 'stopped'`, clicks the dashboard link,
+     asserts the same 1000 ms `.cm-content` budget. Expected RED
+     on landing (pin-first). Pair with a sidecar idle-handler test
+     asserting `suspended` (not `stopped`) is the actual outcome.
+     See `260_answer.md` for full audit.
+  5. **M13.2(b).5 — fix for stopped-state cold load. OPEN.**
+     Two candidate roots, addressable independently:
+     - **R1.** Widen SSR seed for non-fresh projects (already a
+       known follow-up below). Fetches persisted source from
+       shared blob store so `.cm-content` shows real content
+       during the Machine cold-start. Prerequisite for M13.2(b).4
+       flipping green. Requires shared `BLOB_STORE` binding.
+     - **R2.** Eliminate `stopped` as a reachable per-project
+       state. Either keep one Machine warm (shared-pool M7.0.2
+       work), or convert the idle-handler fallback from
+       `process.exit(0)` to a hard-error retry so Machines only
+       ever land in `suspended`.
+
   **Known follow-ups for M13.2:**
 
   - Non-fresh projects (those with a `machine_assignments` row)
@@ -216,10 +265,50 @@ candidate.
     remains per-Machine; once shared, the gate must flip from
     "no machine assignment" to "no persisted blob".
 
-Default sequencing: **M13.2(a) seed widening for non-fresh
-projects (M13.2(b).3 closer)** or **M11.1 read-only collapsible
-tree** next — M13.2(b).3 spec landed iter 256, M12 landed iter
-257. M11.5 gated on binary-asset wire work.
+Default sequencing (updated iter 262 per `260_answer.md`):
+**M14 → M13.2(b).4 → M15 → M11.1c → M16.** R1 (SSR seed widening)
+is M13.2(b).5 fix work, runs after the M13.2(b).4 pin lands RED.
+M11.5 still gated on binary-asset wire work.
+
+### M14.title-bar — centred project title in editor topbar (iter 262)
+
+Small UI slice. The `/editor/<id>` topbar currently shows the brand
+logo + iteration indicator; the project title is not present.
+Requirement: project `name` rendered in the topbar, centred (its
+bounding-box centre x within a small tolerance of the topbar centre
+x; robust to topbar resize). One iteration, pin + fix bundled
+(DOM-only assertion, cheap to verify against live). Style aligns
+with M16 once that lands (Source Serif 4, larger size).
+
+### M15.multipage-preview — page-1-only PDF bug (iter 262)
+
+Promoted from `241_question.md` / `241_answer.md`. Pin-RED-first:
+seed a project body producing ≥3 pages (existing `\newpage` flows),
+open `/editor`, assert preview pane contains ≥2 `canvas[data-page]`
+elements **or** a single canvas of height > viewport.height * 1.8.
+Smoke RED on live before promoting. Then diagnose against the
+three hypotheses in `241_answer.md` (wire-format `totalLength` cap,
+`PdfViewer` snapshot short-circuit, CSS overflow).
+
+### M16.aesthetic — writerly chrome retune (iter 262)
+
+Retune site CSS for chrome surfaces (landing, dashboard, editor
+topbar/tree/status). Editor and PDF preview content surfaces stay
+strictly functional.
+
+Type pair: **Source Serif 4** (body / project names / hero prose;
+OFL, variable) + **Inter** (UI affordances, buttons, table
+headers; OFL, variable). Self-host both. Monospace in CodeMirror
+pane unchanged.
+
+Palette (4 colours): **Paper** `#FAF7F0` (chrome background) +
+**Ink** `#1F1B16` (text) + **Quill** `#2E4C6D` (accent / links /
+primary buttons) + **Margin** `#D9CFBF` (rules, dividers, chevron
+tints). Editor pane background and PDF canvas stay neutral.
+
+Pin: Playwright visual-snapshot diff on `/` and `/projects`,
+plus a tight topbar-element snapshot on the editor route. No
+CSS changes iter 262 — proposal only, applied in a later slice.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
