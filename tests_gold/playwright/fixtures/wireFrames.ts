@@ -15,6 +15,7 @@
 
 import type { Page } from "@playwright/test";
 
+export const TAG_DOC_UPDATE = 0x00;
 export const TAG_CONTROL = 0x10;
 export const TAG_PDF_SEGMENT = 0x20;
 

@@ -155,12 +155,23 @@ Single iteration. Local gold: drag → reload → widths persist.
      post-click latency assertion was considered but rejected as
      flake-prone over the live network (form POST → 303 → fresh
      GET /projects, p99 well above 500 ms on a cold path).
-  3. **M13.2(b).3 — cold-editable gold case.** New
-     `verifyLiveGt6LiveEditableState.spec.ts` — on a project whose
-     Machine has been suspended ≥ 5 min, click →
-     `.cm-content` populated within 1000 ms + keystroke produces
-     a `Y.Doc` op frame within 1000 ms. Keep current GT-6 as the
-     regression lock on M13.2(a).
+  3. **M13.2(b).3 — cold-editable gold case. Spec landed iter 256.**
+     `tests_gold/playwright/verifyLiveGt6LiveEditableState.spec.ts`.
+     Cold-starts a fresh project, leaves `/editor`, drives the
+     per-project Machine into the `suspended` state via the Fly
+     Machines API (`POST /machines/{id}/suspend` — same endpoint
+     the sidecar's own idle handler calls; bypasses the 10-min idle
+     timer to keep the test under a few minutes wallclock). Then
+     clicks the dashboard link and asserts (a) `.cm-content`
+     contains the seeded `documentclass` sentinel within 1000 ms
+     of click, and (b) a single keystroke produces a Yjs
+     `TAG_DOC_UPDATE` (0x00) `framesent` event within 1000 ms.
+     Aspirational — expected RED until the "widen SSR seed for
+     non-fresh projects" follow-up below lands, since today's
+     non-fresh path shows the blank `.editor-placeholder` for the
+     full ~11.5 s WS-open path. Keeps current GT-6
+     (`verifyLiveGt6FastContentAppearance`) as the regression lock
+     on M13.2(a).
 
   **Known follow-ups for M13.2:**
 
