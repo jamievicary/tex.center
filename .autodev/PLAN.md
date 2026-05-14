@@ -23,10 +23,10 @@ landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
 only exercises the optimistic suspended-resume path; user reports
 20 s+ on `stopped`-state Machines (see `260_answer.md`).**
 
-Active priority queue (post iter-267): **M13.2(b).5 R1 (SSR seed
-widening — needs shared blob store) → deploy R2 sidecar idle-
-handler fix from iter 267 → M15.multipage-preview → M11.1c
-headless-tree adoption → M16.aesthetic.** M14.title-bar landed
+Active priority queue (post iter-268): **M15 diagnose-and-fix (pin
+landed iter 268, expected RED) → M13.2(b).5 R1 (SSR seed widening
+— needs shared blob store) → deploy R2 sidecar idle-handler fix
+from iter 267 → M11.1c headless-tree adoption → M16.aesthetic.** M14.title-bar landed
 iter 264. M13.2(b).4 stopped-state pin landed iter 266 (RED gold
 case as expected). M13.2(b).5 R2 (sidecar idle-handler stays
 alive on suspend-throw) landed iter 267.
@@ -309,9 +309,24 @@ Promoted from `241_question.md` / `241_answer.md`. Pin-RED-first:
 seed a project body producing ≥3 pages (existing `\newpage` flows),
 open `/editor`, assert preview pane contains ≥2 `canvas[data-page]`
 elements **or** a single canvas of height > viewport.height * 1.8.
-Smoke RED on live before promoting. Then diagnose against the
-three hypotheses in `241_answer.md` (wire-format `totalLength` cap,
-`PdfViewer` snapshot short-circuit, CSS overflow).
+
+- **Pin landed iter 268.**
+  `tests_gold/playwright/verifyLivePdfMultiPage.spec.ts` creates
+  its own fresh project (mirrors GT-8's per-invocation cold-start
+  shape), waits for the seeded-template pdf-segment, types four
+  `\newpage` breaks into the body before `\end{document}`, then
+  asserts viewer-agnostically: ≥2 paged canvases or a single
+  canvas > 1.8 × viewport height. Diagnostic measurement captures
+  `canvasCount`, `pagedCanvasCount`, `tallestPx`, `viewportH`,
+  `hostScrollH` so the failure message is enough to start the
+  diagnosis without re-running. Expected RED until the fix iter
+  below lands.
+- **Next iter: diagnose + fix.** Log `pdf.numPages` and
+  `pdfBytes.length` in `PdfViewer.render` at first segment arrival
+  to discriminate (a) wire-format `totalLength` cap vs (b) viewer
+  snapshot short-circuit. (a) traces to sidecar `assembleSegment`
+  or upstream supertex emit; (b) lives in `PdfViewer.svelte`'s
+  `$effect`. (c) CSS overflow is the cheap-eliminate.
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
