@@ -49,6 +49,6 @@ Traceback (most recent call last):
 AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
 ----------------------------------------------------------------------
-Ran 19 tests in 60.853s
+Ran 19 tests in 60.831s
 
 FAILED (failures=1)

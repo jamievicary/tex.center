@@ -234,21 +234,29 @@ Single iteration. Local gold: drag → reload → widths persist.
 
   **Plan (three iterations):**
 
-  1. **M13.2(b).1 (next iter, impl):** drop `auto_destroy:
-     true` from `machineConfig`; replace the sidecar's idle
-     `process.exit(0)` with a self-suspend (`POST
-     /v1/apps/{app}/machines/{self}/suspend`) using the
-     `FLY_API_TOKEN` already in the Machine's environment.
-     The dispatcher's `driveToStarted`
-     (`upstreamResolver.ts:237–261`) already handles
-     `suspended → started` correctly. Smoke-probe `flyctl
-     machine suspend` on a shared-cpu-1x:1024MB Machine
-     first; if suspend is refused for our config, fall back
-     to "stopped, not destroyed" (drop `auto_destroy`, keep
-     `process.exit(0)`) — still removes the dominant image-
-     pull leg even without the kernel-state win. Update
-     gold-spec teardown to explicitly destroy per-project
-     Machines (don't rely on idle-stop reaping them).
+  1. **M13.2(b).1 — code LANDED iter 249, awaiting
+     deploy.** `auto_destroy: false` in
+     `upstreamFromEnv.ts` (was `true`); sidecar idle path
+     replaced with `createIdleHandler` +
+     `buildSuspendSelfFromEnv` in
+     `apps/sidecar/src/index.ts` which POSTs to
+     `https://api.machines.dev/v1/apps/{FLY_APP_NAME}/machines/{FLY_MACHINE_ID}/suspend`
+     using the `FLY_API_TOKEN` env var. Falls back to a
+     clean `process.exit(0)` on missing env vars or API
+     error. Unit-tested in
+     `apps/sidecar/test/idleSuspend.test.mjs`. **Suspend
+     smoke-probe iter 249: HTTP 200 ok:true** on
+     `tex-center-sidecar/080d909a19d938` (shared-cpu-1x,
+     1024 MB, `fra`); resume `suspended → started` ~0.7 s.
+     The "stopped not destroyed" fallback is not needed.
+     **`FLY_API_TOKEN` secret staged on
+     `tex-center-sidecar` iter 249** (`flyctl secrets set
+     --stage`); applies on next deploy. **Next iter's
+     first step: build + deploy new sidecar image,
+     repin `SIDECAR_IMAGE` on `tex-center` control
+     plane.** Gold-spec teardown update (explicit destroy
+     per-project Machines) deferred to ride with
+     M13.2(b).3 if needed.
   2. **M13.2(b).2 (impl):** optimistic project delete.
      `apps/web/src/lib/server/deleteProject.ts` currently
      awaits `destroyMachine(force:true)` *before* the DB

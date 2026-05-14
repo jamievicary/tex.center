@@ -149,10 +149,11 @@ assert.equal(
   assert.ok(createCall);
   assert.equal(createCall.req.region, "fra");
   assert.equal(createCall.req.config.image, "registry/sidecar:abc");
-  // auto_destroy=true: idle-stop / crash / signal → machine is reaped
-  // by Fly without an explicit DELETE. Prevents leak accumulation when
-  // test teardown is interrupted (Playwright SIGTERM, harness OOM, etc).
-  assert.equal(createCall.req.config.auto_destroy, true);
+  // M13.2(b) iter 249: auto_destroy=false. Per-project Machines
+  // suspend (kernel snapshot) on idle and resume on next connect,
+  // avoiding the ~5 GB image-pull cost of cold-creation. The
+  // orphan sweep (filters by known project IDs) bounds leaks.
+  assert.equal(createCall.req.config.auto_destroy, false);
   assert.deepEqual(createCall.req.config.restart, { policy: "on-failure" });
   // Iter 154: per-project Machines must be sized large enough to
   // survive the sidecar's runtime total-vm footprint. 1GB is the
