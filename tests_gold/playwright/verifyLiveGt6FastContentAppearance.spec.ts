@@ -123,6 +123,47 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
             (await cmContent.textContent().catch(() => "")) ?? "";
         }
         const totalAppearanceMs = Date.now() - interactiveAt;
+
+        // M13.1 timeline: read the five editor lifecycle marks
+        // wired in iter 235. Marks are recorded against
+        // `performance.timeOrigin`, so we normalise to the earliest
+        // mark to get human-readable inter-step deltas. Any mark
+        // that never fired shows as "(absent)" — that itself is
+        // diagnostic (e.g. ws-open absent means the WS never
+        // opened by the time we gave up).
+        const markNames = [
+          "editor:route-mounted",
+          "editor:ws-open",
+          "editor:yjs-hydrated",
+          "editor:first-text-paint",
+          "editor:first-pdf-segment",
+        ];
+        const marks = (await authedPage
+          .evaluate((names) => {
+            const out: Record<string, number | null> = {};
+            for (const n of names) {
+              const e = performance.getEntriesByName(n);
+              out[n] = e.length > 0 ? e[0].startTime : null;
+            }
+            return out;
+          }, markNames)
+          .catch(() => ({}) as Record<string, number | null>)) as Record<
+          string,
+          number | null
+        >;
+        const presentTimes = Object.values(marks).filter(
+          (v): v is number => typeof v === "number",
+        );
+        const base = presentTimes.length > 0 ? Math.min(...presentTimes) : 0;
+        const timeline = markNames
+          .map((n) => {
+            const t = marks[n];
+            return t == null
+              ? `${n}=(absent)`
+              : `${n}=+${Math.round(t - base)}ms`;
+          })
+          .join(" ");
+
         throw new Error(
           `GT-6: seeded \`documentclass\` source did not appear in ` +
             `\`.cm-content\` within ${CONTENT_APPEARANCE_TIMEOUT_MS}ms ` +
@@ -135,7 +176,8 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
             }. project=${project.id} url=${authedPage.url()}. ` +
             `.cm-content textContent prefix: ${JSON.stringify(
               textSeen.slice(0, 120),
-            )}. Underlying: ${(err as Error).message}`,
+            )}. M13.1 timeline (relative to earliest mark): ` +
+            `${timeline}. Underlying: ${(err as Error).message}`,
         );
       }
     } finally {
