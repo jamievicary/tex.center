@@ -26,8 +26,14 @@ exists alongside but isn't routed to.
    test.mjs`, `apps/sidecar/test/persistenceSeed.test.mjs`,
    `apps/web/test/upstreamResolver.test.mjs`. Awaits a live gold
    run; outcomes branch (α)/(β) below.
-2. **M18 PDF preview quality.** DPR-aware canvas sizing in
-   `PdfViewer.svelte`. New.
+2. **M18 PDF preview quality. PARTIAL (iter 295).** DPR-aware
+   canvas sizing landed: new `pdfRenderScale(baseScale, dpr)` helper,
+   `PdfViewer.svelte` renders at `1.5 × devicePixelRatio` backing
+   pixels and hands CSS-px dimensions to the fade controller. Lock:
+   `apps/web/test/pdfRenderScale.test.mjs`. Open follow-ups:
+   ResizeObserver-driven re-render on `.preview` width change
+   (coalesced trailing 100ms), and a gold visual-snapshot pin under
+   forced DPR=2 (Playwright `--device-scale-factor=2`).
 3. **M19 settings dialog + email-in-topbar.** Cog popover w/
    fade-duration slider; swap displayName→email. New.
 4. **M21 max-visible page tracking.** New.
@@ -301,20 +307,29 @@ retained as regression / shape-baseline.
 
 ### M18.preview-quality — DPR-aware PDF rendering
 
-From `293_answer.md` (1). `PdfViewer.svelte` today uses
-`getViewport({ scale: 1.5 })` and sets `canvas.width/height` to
-viewport pixels with no CSS-pixel/backing-store split. Result on
-HiDPI or stretched preview pane: visible pixelation.
+From `293_answer.md` (1).
 
-Plan:
-- Render at `scale_base * window.devicePixelRatio`; set
-  `canvas.style.width/height` in CSS px and
-  `canvas.width/height` in device px.
-- Add `CanvasDescriptor.cssWidth/cssHeight`; pass to
-  `pdfFadeController` for wrapper geometry.
-- ResizeObserver on `.preview` re-renders on width change
-  (coalesced trailing 100ms).
-- Pin: gold visual-snapshot under forced DPR=2.
+**M18.1 DPR-aware backing store. Closed iter 295.**
+`apps/web/src/lib/pdfRenderScale.ts` exposes
+`pdfRenderScale(baseScale, dpr) → {cssScale, pixelScale}`;
+`PdfViewer.svelte` reads `window.devicePixelRatio` once per commit,
+renders the canvas at `pixelScale` (so backing-store ≥ display
+resolution on HiDPI), and hands `cssScale`-sized dimensions to the
+fade controller for layout. Non-finite / non-positive DPR falls back
+to 1. Lock: `apps/web/test/pdfRenderScale.test.mjs`.
+
+**M18.2 (open).** ResizeObserver on `.preview` re-renders on width
+change (coalesced trailing 100ms) so the backing store also tracks
+divider drags. Today the wrapper has `max-width:100%` and the canvas
+`width:100%`, so a shrunk pane still looks fine (down-scaling); a
+widened pane up-scales until the next commit. Low priority — wait
+for user feedback before sinking the iteration cost.
+
+**M18.3 (open).** Gold visual-snapshot pin under
+`devices.use({ deviceScaleFactor: 2 })`. Confirms the DPR multiplier
+actually reaches the canvas. Defer until the playwright snapshot
+infra grows a stable comparison primitive (M16.aesthetic also needs
+this).
 
 ### M19.settings — settings dialog + email in topbar
 
@@ -454,7 +469,8 @@ fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
 sidecar debug log (iter 286); M15 Step B static-source spec
 (iter 288); M15 Step B' in-body-edit spec (iter 289);
 clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
-project startup sweep + machine-count threshold bump (iter 293).
+project startup sweep + machine-count threshold bump (iter 293);
+M18.1 DPR-aware PDF backing store (iter 295).
 See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps

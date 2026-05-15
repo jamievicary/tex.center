@@ -6,6 +6,7 @@
     PdfFadeController,
     type FadeAdapter,
   } from "./pdfFadeController";
+  import { pdfRenderScale } from "./pdfRenderScale";
 
   let {
     src,
@@ -176,20 +177,34 @@
 
     // Off-DOM render every page; the canvas is fully painted before
     // it ever attaches to the document. No flash, no per-page pop-in.
+    //
+    // Pixel scale is multiplied by devicePixelRatio (cached once per
+    // commit so all pages share one DPR even if the screen changes
+    // mid-render). The descriptor handed to the fade controller
+    // carries CSS-px dimensions so layout is independent of DPR.
+    const { cssScale, pixelScale } = pdfRenderScale(
+      1.5,
+      typeof window === "undefined" ? 1 : window.devicePixelRatio,
+    );
     const descriptors: { canvas: HTMLCanvasElement; width: number; height: number }[] = [];
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       if (!isCurrent()) return;
-      const viewport = page.getViewport({ scale: 1.5 });
+      const cssViewport = page.getViewport({ scale: cssScale });
+      const pixelViewport = page.getViewport({ scale: pixelScale });
       const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      canvas.width = pixelViewport.width;
+      canvas.height = pixelViewport.height;
       canvas.className = "pdf-canvas";
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      await page.render({ canvasContext: ctx, viewport: pixelViewport }).promise;
       if (!isCurrent()) return;
-      descriptors.push({ canvas, width: viewport.width, height: viewport.height });
+      descriptors.push({
+        canvas,
+        width: cssViewport.width,
+        height: cssViewport.height,
+      });
     }
 
     controller ??= new PdfFadeController(makeAdapter(target));
