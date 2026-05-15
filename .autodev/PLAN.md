@@ -29,13 +29,15 @@ iter 273.
   (iter 256–279), red iter 280 once and may be flaky around the
   suspended-resume boundary; rerun + investigate if it persists.
 
-**Active priority queue:** M15 (Step B: shape-honest gold spec) →
-M15 (Step C: deploy + live diagnose) → M13.2(b).5 R1 →
-M16.aesthetic → M11.2 (CRUD via context menu / keyboard).
-M11.1c headless-tree cutover landed iter 284. M15 Step A landed
-iter 286 (sidecar `compile-source` + `daemon-stdin` /
-`daemon-stderr` records via opt-in `compileDebugLog` sink).
-M11.5 still gated on shared-R2 binary-asset work.
+**Active priority queue:** M15 (Step C: deploy + live diagnose) →
+M13.2(b).5 R1 → M16.aesthetic → M11.2 (CRUD via context menu /
+keyboard). M11.1c headless-tree cutover landed iter 284. M15
+Step A landed iter 286 (sidecar `compile-source` + `daemon-stdin`
+/ `daemon-stderr` records via opt-in `compileDebugLog` sink).
+M15 Step B landed iter 287 (`verifyLivePdfMultiPage` now asserts
+`\newpage` before `\end{document}` immediately after the keyboard
+sequence, and emits the full `.cm-content` source on either
+failure path). M11.5 still gated on shared-R2 binary-asset work.
 
 ## 2. Milestones
 
@@ -280,15 +282,20 @@ comparison.
   `apps/sidecar/test/serverCompileSourceLog.test.mjs` (5 cases
   covering shape, head/tail-on-large, missing-`\end{document}`,
   env-off silences, daemon stdin+stderr records).
-- **Step B. Shape-honest gold spec.** In
-  `verifyLivePdfMultiPage.spec.ts`, after the keyboard sequence
-  capture `.cm-content` and assert
-  `text.indexOf("\\newpage") < text.indexOf("\\end{document}")` —
-  surfaces the cursor-past-`\end{document}` failure mode
-  directly. Failure diagnostic includes the *full final source*
-  the page believes it has, not just the last 40 bytes. Optional
-  parallel spec using CodeMirror API positional anchoring to
-  test the unambiguous "body before `\end{document}`" shape.
+- **Step B. Shape-honest gold spec. Landed iter 287.**
+  `verifyLivePdfMultiPage.spec.ts` now, immediately after the
+  keyboard sequence (and a bounded 3 s poll for `\newpage` to
+  appear in the DOM), reads the `.cm-content` source by joining
+  `.cm-line` text content with `\n`, and asserts
+  `source.indexOf("\\newpage") < source.indexOf("\\end{document}")`.
+  Failure diagnostic on this assert names the cursor-past-
+  `\end{document}` failure mode in plain text and emits the full
+  source. The downstream no-segment-arrived failure path was also
+  rewritten to emit the full final source (was: 40-byte tail). The
+  optional CodeMirror-API positional-anchor parallel spec is
+  deferred — it's only worth writing once Step C names outcome (β),
+  in which case it becomes a useful "control" spec proving the
+  daemon is fine when the cursor is positioned explicitly.
 - **Step C. Deploy + diagnose.** Bundle Steps A+B into a
   sidecar deploy. Re-run live spec. Read `flyctl logs -a
   tex-center-sidecar --no-tail`. Three outcomes:

@@ -101,6 +101,53 @@ test.describe("live multi-page PDF preview (M15)", () => {
       await authedPage.keyboard.press("Enter");
       await authedPage.keyboard.type(MULTIPAGE_BODY, { delay: 5 });
 
+      // M15 Step B — surface the
+      // "body typed past `\end{document}`" failure mode directly,
+      // *before* the no-segment polling loop times out. If the test's
+      // keyboard sequence (Ctrl+End → ArrowUp → End → Enter) lands
+      // the cursor on the SEED's virtual blank trailing line, the
+      // typed body lands after `\end{document}` and supertex
+      // correctly emits one page — the bug is then client-side
+      // (cursor placement / SEED trailing newline / keyboard
+      // sequence), not the daemon. Per `284_answer.md` §"Resolution
+      // / plan".
+      const readCmSource = (): Promise<string> =>
+        authedPage.evaluate(() => {
+          const lines = Array.from(
+            document.querySelectorAll<HTMLElement>(".cm-content .cm-line"),
+          );
+          return lines.map((l) => l.textContent ?? "").join("\n");
+        });
+      // Allow CodeMirror's view to render the typed keystrokes
+      // before we read. `keyboard.type` resolves once the input
+      // events have dispatched; CodeMirror applies synchronously
+      // but the `.cm-line` DOM may need one paint tick for the new
+      // virtual lines to materialise.
+      let typedSource = await readCmSource();
+      const typingDeadline = Date.now() + 3_000;
+      while (
+        Date.now() < typingDeadline &&
+        !typedSource.includes("\\newpage")
+      ) {
+        await authedPage.waitForTimeout(100);
+        typedSource = await readCmSource();
+      }
+      const newpageIdx = typedSource.indexOf("\\newpage");
+      const endDocIdx = typedSource.indexOf("\\end{document}");
+      expect(
+        newpageIdx >= 0 && endDocIdx >= 0 && newpageIdx < endDocIdx,
+        `keyboard sequence produced wrong shape: \\newpage was not ` +
+          `typed before \\end{document}. ` +
+          `newpageIdx=${newpageIdx} endDocIdx=${endDocIdx} ` +
+          `sourceLen=${typedSource.length} ` +
+          `source=${JSON.stringify(typedSource)}. ` +
+          `If newpageIdx > endDocIdx, the cursor landed on the ` +
+          `SEED's virtual blank trailing line and the body was ` +
+          `inserted past \\end{document} — supertex correctly ` +
+          `short-circuits and emits only page 1; the bug is ` +
+          `client-side, not in the daemon.`,
+      ).toBe(true);
+
       // Wait for at least one post-edit pdf-segment so we know the
       // compile carrying the multipage body has shipped.
       const deadline = Date.now() + COMPILE_BUDGET_MS;
@@ -116,14 +163,10 @@ test.describe("live multi-page PDF preview (M15)", () => {
         // didn't reach `.cm-content`? WS not bound to this
         // project?). Three RED gold runs (271/272/273) gave us
         // zero data to choose between those modes.
-        const diag = await authedPage.evaluate(() => {
-          const cm = document.querySelector(".cm-content");
-          const text = cm?.textContent ?? "";
-          return {
-            cmContentLen: text.length,
-            cmContentTail: text.slice(-40),
-          };
-        });
+        // M15 Step B — emit the full final source the page believes
+        // it has, not just a 40-byte tail. The tail couldn't
+        // disambiguate "body before vs after \end{document}".
+        const finalSource = await readCmSource();
         // iter 275: compile-status timeline distinguishes
         // "coalescer never fired" / "compile errored" / "compile
         // succeeded but no segment" failure modes.
@@ -149,8 +192,8 @@ test.describe("live multi-page PDF preview (M15)", () => {
             `segmentsBefore=${segmentsBefore} ` +
             `pdfSegmentsAtFail=${pdfSegmentFrames.length} ` +
             `docUpdateSent=${docUpdateSent.value} ` +
-            `cmContentLen=${diag.cmContentLen} ` +
-            `cmContentTail=${JSON.stringify(diag.cmContentTail)} ` +
+            `finalSourceLen=${finalSource.length} ` +
+            `finalSource=${JSON.stringify(finalSource)} ` +
             `compileStatusEvents=${csSummary} ` +
             `lastErrorDetail=${JSON.stringify(lastErrorDetail)}`,
         ).toBeGreaterThan(segmentsBefore);
