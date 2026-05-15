@@ -37,6 +37,18 @@ import type {
   PdfSegment,
 } from "./types.js";
 
+/**
+ * M15 Step A diagnostic sink shape (matches `CompileDebugLog` in
+ * `../server.ts`; redeclared here so the compiler module has no
+ * back-reference to the server). When wired, the daemon emits a
+ * `daemon-stdin` record before each `recompile,…` write and a
+ * `daemon-stderr` record per forwarded stderr line.
+ */
+export type DaemonDebugLog = (
+  fields: Record<string, unknown>,
+  msg: string,
+) => void;
+
 export interface SupertexDaemonOptions {
   /** Project workspace dir; source must already live here. */
   workDir: string;
@@ -57,6 +69,10 @@ export interface SupertexDaemonOptions {
   killTimeoutMs?: number;
   /** Override `child_process.spawn` (used by tests). */
   spawnFn?: SpawnFn;
+  /** M15 Step A. Structured-log sink — see `DaemonDebugLog`. */
+  log?: DaemonDebugLog;
+  /** Project id, attached to every structured log record. */
+  projectId?: string;
 }
 
 export class SupertexDaemonCompiler implements Compiler {
@@ -69,6 +85,9 @@ export class SupertexDaemonCompiler implements Compiler {
   private readonly gracefulTimeoutMs: number;
   private readonly killTimeoutMs: number;
   private readonly spawnFn: SpawnFn;
+  private readonly log: DaemonDebugLog | undefined;
+  private readonly projectId: string | undefined;
+  private roundSeq = 0;
 
   private child: ChildProcess | null = null;
   private childExited: { code: number | null; signal: NodeJS.Signals | null } | null =
@@ -94,6 +113,8 @@ export class SupertexDaemonCompiler implements Compiler {
     this.gracefulTimeoutMs = opts.gracefulTimeoutMs ?? 5_000;
     this.killTimeoutMs = opts.killTimeoutMs ?? 2_000;
     this.spawnFn = opts.spawnFn ?? defaultSpawnFn;
+    this.log = opts.log;
+    this.projectId = opts.projectId;
   }
 
   async compile(req: CompileRequest): Promise<CompileResult> {
@@ -121,6 +142,16 @@ export class SupertexDaemonCompiler implements Compiler {
       await this.ensureReady();
       // recompile,<N> with N = targetPage; "end" if no target.
       const target = req.targetPage > 0 ? String(req.targetPage) : "end";
+      this.roundSeq += 1;
+      this.log?.(
+        {
+          projectId: this.projectId,
+          round: this.roundSeq,
+          target,
+          sourceLen: req.source.length,
+        },
+        "daemon-stdin",
+      );
       this.writeStdin(`recompile,${target}\n`);
       const events = await this.collectRound();
       if (events.violation !== undefined) {
@@ -371,6 +402,14 @@ export class SupertexDaemonCompiler implements Compiler {
       const line = this.stderrLineBuf.slice(0, nl);
       this.stderrLineBuf = this.stderrLineBuf.slice(nl + 1);
       process.stderr.write(`[supertex-daemon stderr] ${line}\n`);
+      this.log?.(
+        {
+          projectId: this.projectId,
+          round: this.roundSeq,
+          line,
+        },
+        "daemon-stderr",
+      );
     }
   }
 

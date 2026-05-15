@@ -29,12 +29,13 @@ iter 273.
   (iter 256–279), red iter 280 once and may be flaky around the
   suspended-resume boundary; rerun + investigate if it persists.
 
-**Active priority queue:** M15 (Step A: sidecar source-content
-logging) → M15 (Step B: shape-honest gold spec) → M15 (Step C:
-deploy + live diagnose) → M13.2(b).5 R1 → M16.aesthetic →
-M11.2 (CRUD via context menu / keyboard). M11.1c headless-tree
-cutover landed iter 284. M11.5 still gated on shared-R2 binary-
-asset work.
+**Active priority queue:** M15 (Step B: shape-honest gold spec) →
+M15 (Step C: deploy + live diagnose) → M13.2(b).5 R1 →
+M16.aesthetic → M11.2 (CRUD via context menu / keyboard).
+M11.1c headless-tree cutover landed iter 284. M15 Step A landed
+iter 286 (sidecar `compile-source` + `daemon-stdin` /
+`daemon-stderr` records via opt-in `compileDebugLog` sink).
+M11.5 still gated on shared-R2 binary-asset work.
 
 ## 2. Milestones
 
@@ -263,16 +264,22 @@ comparison.
 **Resolution plan, three ordered iteration steps (per
 `284_answer.md`):**
 
-- **Step A. Sidecar source-content logging.** Per-compile
-  structured logs in `apps/sidecar/src/server.ts` `runCompile`:
-  `sourceSha256`, `sourceHead` (first 80 bytes JSON-escaped),
-  `sourceTail` (last 80 bytes), `endDocPos` (byte offset of
-  `\end{document}` or -1). Per-recompile-round logs in
-  `apps/sidecar/src/compiler/supertexDaemon.ts`: each
-  `recompile,<N>` stdin write, each stderr line forwarded as
-  `daemon-stderr`. Gated behind `DEBUG_COMPILE_LOG` env (default
-  on while M15 open). Sidecar unit test against a recording
-  logger.
+- **Step A. Sidecar source-content logging. Landed iter 286.**
+  `apps/sidecar/src/server.ts` `runCompile` emits a structured
+  `compile-source` record with `projectId`, `sourceLen`,
+  `sourceBytes`, `sourceSha256`, `sourceHead` (first 80 bytes
+  utf8), `sourceTail` (last 80 bytes utf8), and `endDocPos` (byte
+  offset of `\end{document}` or -1). The daemon
+  (`apps/sidecar/src/compiler/supertexDaemon.ts`) emits
+  `daemon-stdin` once per `recompile,<target>` write and a
+  `daemon-stderr` record per forwarded stderr line. Plumbed
+  via a new `compileDebugLog?: CompileDebugLog` `SidecarOptions`
+  field; production wiring is `app.log.info`-shaped, env
+  `DEBUG_COMPILE_LOG` defaults the sink to ON unless the value is
+  `0`/`false`. Lock:
+  `apps/sidecar/test/serverCompileSourceLog.test.mjs` (5 cases
+  covering shape, head/tail-on-large, missing-`\end{document}`,
+  env-off silences, daemon stdin+stderr records).
 - **Step B. Shape-honest gold spec.** In
   `verifyLivePdfMultiPage.spec.ts`, after the keyboard sequence
   capture `.cm-content` and assert

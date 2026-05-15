@@ -18,6 +18,7 @@ import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 import Fastify, { type FastifyInstance } from "fastify";
 import websocketPlugin from "@fastify/websocket";
@@ -57,6 +58,7 @@ import {
 } from "./persistence.js";
 
 const COMPILE_DEBOUNCE_MS = 100;
+const END_DOCUMENT_BYTES = Buffer.from("\\end{document}", "utf8");
 
 interface ProjectState {
   id: string;
@@ -89,9 +91,24 @@ interface ProjectClient {
   viewingPage: number;
 }
 
+/**
+ * Structured-log sink for M15 compile diagnostics. `fields` is a
+ * record of structured properties; `msg` is the log-record name
+ * used for filtering (`compile-source`, `daemon-stdin`,
+ * `daemon-stderr`). Shape mirrors pino's `info(obj, msg)` so the
+ * production binding is `app.log.info.bind(app.log)`. Tests pass
+ * a recorder. `undefined` means logging is disabled — both server
+ * and compiler stay silent.
+ */
+export type CompileDebugLog = (
+  fields: Record<string, unknown>,
+  msg: string,
+) => void;
+
 export interface CompilerContext {
   projectId: string;
   workspace: ProjectWorkspace;
+  log?: CompileDebugLog;
 }
 
 export interface SidecarOptions {
@@ -123,6 +140,15 @@ export interface SidecarOptions {
    * Y.Doc only).
    */
   blobStore?: BlobStore;
+  /**
+   * M15 Step A: structured-log sink for compile diagnostics. When
+   * supplied (or env `DEBUG_COMPILE_LOG` is unset / not "0" / not
+   * "false"), `runCompile` emits a `compile-source` record per
+   * compile and the supertex daemon emits `daemon-stdin` /
+   * `daemon-stderr` records. Production wiring goes through
+   * `app.log.info`; tests pass a recorder.
+   */
+  compileDebugLog?: CompileDebugLog;
   /**
    * Milliseconds the sidecar should sit with **zero viewers**
    * before invoking `onIdle`. Both must be set for idle-stop to
@@ -171,6 +197,19 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   // the iter-221 "already in flight" toast cluster, then scrape via
   // `flyctl logs`.
   const traceCoalescer = process.env.SIDECAR_TRACE_COALESCER === "1";
+
+  // M15 Step A. Default-on while M15's `verifyLivePdfMultiPage` is
+  // RED so a live deploy emits per-compile source diagnostics
+  // queryable via `flyctl logs`. Off only when DEBUG_COMPILE_LOG is
+  // explicitly "0" or "false" (case-insensitive). Test callers
+  // override by passing `compileDebugLog` directly.
+  const envFlag = (process.env.DEBUG_COMPILE_LOG ?? "").toLowerCase();
+  const debugFromEnv = envFlag !== "0" && envFlag !== "false";
+  const compileDebugLog: CompileDebugLog | undefined =
+    opts.compileDebugLog ??
+    (debugFromEnv
+      ? (fields, msg) => app.log.info(fields, msg)
+      : undefined);
 
   const projects = new Map<string, ProjectState>();
 
@@ -257,7 +296,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       doc,
       text,
       viewers: new Set(),
-      compiler: compilerFactory({ projectId: id, workspace }),
+      compiler: compilerFactory({
+        projectId: id,
+        workspace,
+        ...(compileDebugLog ? { log: compileDebugLog } : {}),
+      }),
       workspace,
       persistence,
       restorePromise: null,
@@ -345,6 +388,24 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     app.log.info({ projectId: p.id, sourceLen: p.text.length }, "compile start");
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
     const source = p.text.toString();
+    if (compileDebugLog) {
+      const sourceBytes = Buffer.from(source, "utf8");
+      const endDocPos = sourceBytes.indexOf(END_DOCUMENT_BYTES);
+      const headLen = Math.min(80, sourceBytes.length);
+      const tailStart = Math.max(0, sourceBytes.length - 80);
+      compileDebugLog(
+        {
+          projectId: p.id,
+          sourceLen: source.length,
+          sourceBytes: sourceBytes.length,
+          sourceSha256: createHash("sha256").update(sourceBytes).digest("hex"),
+          sourceHead: sourceBytes.subarray(0, headLen).toString("utf8"),
+          sourceTail: sourceBytes.subarray(tailStart).toString("utf8"),
+          endDocPos,
+        },
+        "compile-source",
+      );
+    }
     // Mirror current source to the on-disk workspace before
     // compiling. M3.1 lays down the file; the FixtureCompiler
     // ignores it. M3.2+ compilers will read from this path.
@@ -657,7 +718,13 @@ function defaultCompilerFactory(
       );
     }
     if (which === "supertex-daemon") {
-      return (ctx) => new SupertexDaemonCompiler({ workDir: ctx.workspace.dir, supertexBin });
+      return (ctx) =>
+        new SupertexDaemonCompiler({
+          workDir: ctx.workspace.dir,
+          supertexBin,
+          projectId: ctx.projectId,
+          ...(ctx.log ? { log: ctx.log } : {}),
+        });
     }
     return (ctx) => new SupertexOnceCompiler({ workDir: ctx.workspace.dir, supertexBin });
   }
