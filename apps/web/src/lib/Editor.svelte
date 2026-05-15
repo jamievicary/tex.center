@@ -17,6 +17,7 @@
       doc: text.toString(),
       extensions: [
         basicSetup,
+        EditorView.lineWrapping,
         yCollab(text, null),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ],

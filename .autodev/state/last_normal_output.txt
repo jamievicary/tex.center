@@ -5,13 +5,13 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 80, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 996ms
+Done in 1s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
 packages/protocol typecheck: Done
@@ -20,8 +20,8 @@ packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778880754538 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778880754545 COMPLETED 745 FILES 0 ERRORS 3 WARNINGS 1 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778881520078 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778881520085 COMPLETED 745 FILES 0 ERRORS 3 WARNINGS 1 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -41,6 +41,8 @@ test_smoke_job_gates_deploy (test_deploy_workflow.TestDeployWorkflow.test_smoke_
 test_smoke_script_probes_all_endpoints (test_deploy_workflow.TestDeployWorkflow.test_smoke_script_probes_all_endpoints) ... ok
 test_steps_check_out_and_setup_flyctl (test_deploy_workflow.TestDeployWorkflow.test_steps_check_out_and_setup_flyctl) ... ok
 test_triggers_on_push_to_main (test_deploy_workflow.TestDeployWorkflow.test_triggers_on_push_to_main) ... ok
+test_lineWrapping_extension_present (test_editor_line_wrapping.TestEditorLineWrapping.test_lineWrapping_extension_present) ... ok
+test_lineWrapping_inside_extensions_array (test_editor_line_wrapping.TestEditorLineWrapping.test_lineWrapping_inside_extensions_array) ... ok
 test_all_files_present (test_editor_ux_gold_specs.TestGoldSpecsExist.test_all_files_present) ... ok
 test_asserts_seed_marker_in_cm_content (test_editor_ux_gold_specs.TestGtANoFlashLoad.test_asserts_seed_marker_in_cm_content) ... ok
 test_attaches_listener_before_assert_on_attached (test_editor_ux_gold_specs.TestGtANoFlashLoad.test_attaches_listener_before_assert_on_attached) ... ok
@@ -228,7 +230,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 203 tests in 68.300s
+Ran 205 tests in 68.314s
 
 OK
 tests_normal/run_tests.sh: PASS
