@@ -13,13 +13,17 @@ routed to (decision deferred post-MVP).
 **Active priority queue:**
 
 1. **M23 workspace file mirroring** (queued iter 310 from
-   `309_answer.md` item 2). M23.1 primitive landed iter 313;
-   `writeFile` / `deleteFile` / `renameFile` available on
-   `ProjectWorkspace` but not yet wired. **M23.2** (wire into
-   `persistence.ts`) is the next pick-up — without it the daemon's
-   `cwd: workDir` still can't resolve `\input{sec1}` for any
-   non-main file. Categorical product regression. See M23 section
-   below.
+   `309_answer.md` item 2). M23.1 primitive landed iter 313; M23.2
+   structural mirror + cold-boot rehydration landed iter 314 (every
+   `addFile` / `deleteFile` / `renameFile` now reaches disk, and the
+   hydration block writes every rehydrated non-main file to disk
+   before `awaitHydrated()` resolves). **M23.5** (open) handles
+   in-place `Y.Text` edits to non-main files via per-file
+   `Y.Text.observe` subscriptions — needed for the
+   "user edits sec1.tex in the editor" path. **M23.4** gold spec
+   (2-file project with `\input`) is the natural next pick-up; it
+   closes the categorical regression for the common (read-only aux
+   file) case.
 2. **M22 remaining slices.** M22.2 GT-F local Playwright cases
    (closes M9.editor-ux GT-F); M22.4b wire-shipoutPage batch
    (header 13 → 17 bytes, `PdfSegment.shipoutPage?`).
@@ -332,19 +336,29 @@ Slices:
   reap on delete + rename source. Validated via
   `validateProjectFileName`. Lock:
   `apps/sidecar/test/workspace.test.mjs` (four new blocks).
-  Dark code — not wired into `persistence.ts` yet.
-- **M23.2 (open).** Wire `apps/sidecar/src/persistence.ts` to call through
-  on every Yjs-acked file mutation (`addFile` / `deleteFile` /
-  `renameFile`). Subscribe to each non-main `Y.Text.observe` to
-  mirror text edits to disk; debounce via the same coalescer that
-  gates `writeMain`.
-- **M23.3 (open).** Cold-boot rehydration. On project open, after
-  persistence rehydrates from the blob store, mirror every
-  non-main file to disk *before* the first compile call.
+- **M23.2** (iter 314). Wire `apps/sidecar/src/persistence.ts` to
+  call through on every Yjs-acked file mutation (`addFile` /
+  `deleteFile` / `renameFile`) plus cold-boot rehydration inside
+  the hydration block. Lock:
+  `apps/sidecar/test/serverWorkspaceMirror.test.mjs`. **Note:**
+  in-place `Y.Text` edits on non-main files do NOT reach disk yet
+  (see M23.5). An earlier "write all files in `runCompile`"
+  attempt was abandoned mid-iteration because it raced with
+  concurrent `delete-file` ops (writeFile could resurrect a
+  deleted file via the tmp+rename atomicity); the
+  persistence-level structural mirror is race-free because
+  per-name ops serialise through `handleFileOp`'s await chain.
 - **M23.4 (open).** Gold spec: 2-file project (`main.tex` with
   `\input{sec1}` + `sec1.tex` body); assert a `pdf-segment` ships
   and the rendered page contains the body. Local Playwright if
   feasible; otherwise a sidecar-level integration test.
+- **M23.5 (open).** In-place `Y.Text` edit mirror for non-main
+  files. Subscribe per-file `Y.Text.observe` during hydration and
+  `addFile`; on observe, debounce-write to disk. Unsubscribe on
+  `deleteFile` / `renameFile` (old name). Required for the
+  "edit `sec1.tex` in the editor" path — without this, edits made
+  to aux files via the editor stay in Yjs but the next compile
+  sees the stale on-disk copy.
 
 ### M16.aesthetic — writerly chrome retune
 
@@ -380,7 +394,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold

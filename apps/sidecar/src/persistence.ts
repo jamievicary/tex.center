@@ -34,6 +34,15 @@
 // contents differ from the last-persisted snapshot. A per-file PUT
 // failure is logged and does not abort the rest — one transient
 // outage on `refs.bib` must not lose a `main.tex` edit.
+//
+// **Workspace mirror (M23.2).** An optional `ProjectWorkspace` is
+// kept in sync alongside Yjs: every successful `addFile` /
+// `deleteFile` / `renameFile` calls through to the corresponding
+// workspace method best-effort. The disk shape is a derived view of
+// the Yjs file tree; a mirror failure logs and is swallowed because
+// the runCompile loop in `server.ts` re-writes every file before
+// the next compile, so a transient disk error self-heals on the
+// next compile cycle.
 
 import * as Y from "yjs";
 
@@ -47,6 +56,7 @@ import {
 } from "@tex-center/protocol";
 
 import { errorMessage } from "./errors.js";
+import type { ProjectWorkspace } from "./workspace.js";
 
 export { validateProjectFileName };
 
@@ -242,9 +252,40 @@ export function createProjectPersistence(args: {
    * `projects.seed_doc`).
    */
   seedMainDoc?: string;
+  /**
+   * M23.2 workspace mirror. When provided, every successful file
+   * mutation (`addFile` / `deleteFile` / `renameFile`) is followed
+   * by a best-effort call to the matching `ProjectWorkspace`
+   * method so the on-disk scratch dir tracks the Yjs-backed file
+   * tree. The mirror is best-effort: a workspace failure logs and
+   * is swallowed — Yjs remains source of truth, and the
+   * runCompile loop in `server.ts` re-writes every file before
+   * the next compile so a transient mirror failure self-heals.
+   *
+   * `main.tex` itself is *not* mirrored from here — `runCompile`
+   * owns `writeMain(source)` on every compile cycle and that
+   * remains load-bearing (no Y.Text.observe wire needed for it).
+   */
+  workspace?: ProjectWorkspace;
 }): ProjectPersistence {
-  const { blobStore, projectId, doc, log } = args;
+  const { blobStore, projectId, doc, log, workspace } = args;
   const seedSource = args.seedMainDoc ?? MAIN_DOC_HELLO_WORLD;
+
+  // Best-effort workspace mirror: logs a warn on failure but never
+  // throws. Yjs is the source of truth; the next runCompile cycle
+  // re-writes every file from `persistence.files()`, so a transient
+  // disk error self-heals.
+  async function mirror(action: string, fn: () => Promise<void>): Promise<void> {
+    if (!workspace) return;
+    try {
+      await fn();
+    } catch (e) {
+      log.warn(
+        { err: errorMessage(e), projectId },
+        `workspace mirror failed: ${action}`,
+      );
+    }
+  }
 
   // Files we are willing to track. Pre-seeded with `MAIN_DOC_NAME`
   // so `files()` exposes a sensible list even if hydration fails;
@@ -316,6 +357,19 @@ export function createProjectPersistence(args: {
         // tolerated) leaves the entry unset so the next compile
         // re-establishes it.
         if (bytes) persistedByName.set(name, dec.decode(bytes));
+        // M23.2 cold-boot rehydration: mirror every non-main file
+        // to the on-disk workspace before `awaitHydrated()` resolves
+        // so `\input{sec1}` resolves against the supertex daemon's
+        // `cwd: workDir` on the first compile. `main.tex` is written
+        // on every compile cycle by `runCompile.writeMain`, so we
+        // skip it here. Best-effort: a workspace failure logs and
+        // is swallowed.
+        if (name !== MAIN_DOC_NAME && bytes) {
+          await mirror(
+            `hydrate writeFile(${name})`,
+            () => workspace!.writeFile(name, dec.decode(bytes)),
+          );
+        }
       }
       if (!hasMainBlob) {
         // Persist the seed immediately so subsequent hydrations
@@ -376,6 +430,7 @@ export function createProjectPersistence(args: {
         });
       }
       knownFiles.add(name);
+      await mirror(`writeFile(${name})`, () => workspace!.writeFile(name, body));
       return { ok: true };
     },
     async deleteFile(name): Promise<FileOpResult> {
@@ -396,6 +451,7 @@ export function createProjectPersistence(args: {
       if (t.length > 0) t.delete(0, t.length);
       knownFiles.delete(name);
       persistedByName.delete(name);
+      await mirror(`deleteFile(${name})`, () => workspace!.deleteFile(name));
       return { ok: true };
     },
     async renameFile(oldName, newName): Promise<FileOpResult> {
@@ -442,6 +498,10 @@ export function createProjectPersistence(args: {
       });
       knownFiles.delete(oldName);
       knownFiles.add(newName);
+      await mirror(
+        `renameFile(${oldName}→${newName})`,
+        () => workspace!.renameFile(oldName, newName),
+      );
       return { ok: true };
     },
     async maybePersist(): Promise<void> {
