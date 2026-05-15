@@ -54,6 +54,10 @@ export interface ProjectRow {
   id: string;            // uuid
   ownerId: string;       // -> users.id
   name: string;
+  // M15 Step D: optional seed for `main.tex` consulted by the
+  // sidecar on first hydration when no persisted blob exists.
+  // `null` means "use the canonical `MAIN_DOC_HELLO_WORLD`".
+  seedDoc: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,6 +128,7 @@ export const projectsTable: TableSpec = {
     c('id', 'uuid', { primaryKey: true }),
     c('owner_id', 'uuid', { references: { table: 'users', column: 'id' } }),
     c('name', 'text'),
+    c('seed_doc', 'text', { nullable: true }),
     c('created_at', 'timestamptz'),
     c('updated_at', 'timestamptz'),
   ],

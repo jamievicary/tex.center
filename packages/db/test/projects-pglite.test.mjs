@@ -11,6 +11,7 @@ import {
   deleteProject,
   findOrCreateUserByGoogleSub,
   getProjectById,
+  getProjectSeedDoc,
   upsertMachineAssignment,
   getMachineAssignmentByProjectId,
   listAllProjectIds,
@@ -46,6 +47,7 @@ try {
   assert.ok(p1b);
   assert.equal(p1b.id, p1.id);
   assert.equal(p1b.name, 'Thesis');
+  assert.equal(p1b.seedDoc, null, 'seed_doc defaults to null when not supplied');
   const miss = await getProjectById(
     db,
     '00000000-0000-0000-0000-000000000000',
@@ -136,6 +138,38 @@ try {
   assert.equal(allIds.has(pOther.id), true, 'pOther in listAllProjectIds');
   assert.equal(allIds.has(victim.id), false, 'deleted row absent from listAllProjectIds');
   assert.equal(allIds.size, 3, 'exactly the surviving rows');
+
+  // --- seedMainDoc round-trip (M15 Step D) -----------------------
+  // Placed at the end so the new row doesn't perturb the
+  // listProjectsByOwnerId / listAllProjectIds ordering above.
+  const TWO_PAGE_SEED =
+    '\\documentclass{article}\n' +
+    '\\begin{document}\n' +
+    'Page one.\n' +
+    '\\newpage\n' +
+    'Page two.\n' +
+    '\\end{document}\n';
+  const seeded = await createProject(db, {
+    ownerId: owner.id,
+    name: 'Seeded',
+    seedMainDoc: TWO_PAGE_SEED,
+  });
+  assert.equal(seeded.seedDoc, TWO_PAGE_SEED, 'returning row carries seed_doc');
+  assert.equal(
+    await getProjectSeedDoc(db, seeded.id),
+    TWO_PAGE_SEED,
+    'getProjectSeedDoc returns the seed bytes verbatim',
+  );
+  assert.equal(
+    await getProjectSeedDoc(db, p1.id),
+    null,
+    'getProjectSeedDoc returns null when not seeded',
+  );
+  assert.equal(
+    await getProjectSeedDoc(db, '00000000-0000-0000-0000-000000000000'),
+    null,
+    'getProjectSeedDoc returns null for unknown project',
+  );
 
   console.log('projects PGlite test: OK');
 } finally {

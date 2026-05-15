@@ -16,6 +16,15 @@ import type { DrizzleDb } from './users.js';
 export interface CreateProjectInput {
   readonly ownerId: string;
   readonly name: string;
+  /**
+   * M15 Step D: when present, persists as `projects.seed_doc`.
+   * The per-project sidecar reads it on first hydration in place
+   * of `MAIN_DOC_HELLO_WORLD`. Once a `main.tex` blob exists for
+   * the project the seed is no longer consulted, so this is a
+   * one-shot input — fine for the gold-side "open a project with
+   * a deterministic source" use case.
+   */
+  readonly seedMainDoc?: string;
 }
 
 export async function createProject(
@@ -28,11 +37,30 @@ export async function createProject(
       id: randomUUID(),
       ownerId: input.ownerId,
       name: input.name,
+      seedDoc: input.seedMainDoc ?? null,
     })
     .returning();
   const r = rows[0];
   if (!r) throw new Error('createProject: no row returned');
   return r;
+}
+
+/**
+ * Returns the `seed_doc` column for a project, or `null` when the
+ * column is null or the row does not exist. Used by the per-project
+ * upstream resolver to bake the seed into the Machine's env at
+ * creation time (see `apps/web/src/lib/server/upstreamResolver.ts`).
+ */
+export async function getProjectSeedDoc(
+  db: DrizzleDb,
+  id: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ seedDoc: projects.seedDoc })
+    .from(projects)
+    .where(eq(projects.id, id))
+    .limit(1);
+  return rows[0]?.seedDoc ?? null;
 }
 
 export async function getProjectById(

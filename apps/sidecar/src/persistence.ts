@@ -228,8 +228,23 @@ export function createProjectPersistence(args: {
   projectId: string;
   doc: Y.Doc;
   log: PersistenceLogger;
+  /**
+   * M15 Step D: override for the fresh-project `main.tex` seed.
+   * Consulted exactly once, on first hydration, only when no
+   * `main.tex` blob exists yet. When omitted (the production
+   * default), `MAIN_DOC_HELLO_WORLD` is used — preserving the
+   * canonical 4-line template UX contract from iter 167.
+   *
+   * Used today by the gold suite to materialise a deterministic
+   * multi-page source with zero editing keystrokes (`apps/web`'s
+   * upstream resolver bakes the seed into the per-project
+   * Machine's env at creation time, sourced from
+   * `projects.seed_doc`).
+   */
+  seedMainDoc?: string;
 }): ProjectPersistence {
   const { blobStore, projectId, doc, log } = args;
+  const seedSource = args.seedMainDoc ?? MAIN_DOC_HELLO_WORLD;
 
   // Files we are willing to track. Pre-seeded with `MAIN_DOC_NAME`
   // so `files()` exposes a sensible list even if hydration fails;
@@ -249,12 +264,12 @@ export function createProjectPersistence(args: {
 
   const hydrated: Promise<void> = (async () => {
     if (!blobStore) {
-      // In-memory mode: seed hello-world so a brand-new project
+      // In-memory mode: seed `seedSource` so a brand-new project
       // opens onto a non-empty document. Guard against re-seeding
       // a doc that already has main.tex content (tests sometimes
       // pre-populate the Y.Doc).
       const t = doc.getText(MAIN_DOC_NAME);
-      if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
+      if (t.length === 0) t.insert(0, seedSource);
       // `canPersist` stays false: blob-op paths are gated on it,
       // and there is no blob store to talk to. In-memory addFile
       // / deleteFile / renameFile still mutate `knownFiles` and
@@ -291,7 +306,7 @@ export function createProjectPersistence(args: {
         }
         if (!hasMainBlob) {
           const t = doc.getText(MAIN_DOC_NAME);
-          if (t.length === 0) t.insert(0, MAIN_DOC_HELLO_WORLD);
+          if (t.length === 0) t.insert(0, seedSource);
         }
       });
       for (const { name, bytes } of loaded) {
@@ -312,9 +327,9 @@ export function createProjectPersistence(args: {
         try {
           await blobStore.put(
             mainTexKey(projectId),
-            new TextEncoder().encode(MAIN_DOC_HELLO_WORLD),
+            new TextEncoder().encode(seedSource),
           );
-          persistedByName.set(MAIN_DOC_NAME, MAIN_DOC_HELLO_WORLD);
+          persistedByName.set(MAIN_DOC_NAME, seedSource);
         } catch (e) {
           log.warn(
             { err: errorMessage(e), projectId },

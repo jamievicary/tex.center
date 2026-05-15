@@ -11,23 +11,20 @@ refresh persistence. Per-project sidecar runs on Fly Machines in
 (`tex-center-sidecar` app with `app`-tagged deployment machines)
 exists alongside but isn't routed to.
 
-**Active priority queue (post iter 290):**
+**Active priority queue (post iter 292):**
 
-1. **M15 second-surprise branch.** Both M15 live pins (static
-   atomic-replace + in-body manual edit) GREEN iter 289 and again
-   iter 290. The user's bug report ("preview NEVER >1 page even
-   on manually-typed multi-page docs", `284_answer.md` addendum)
-   is not reproducible by any Playwright editing flow we've
-   written. Next step per PLAN M15: pull `seedMainDoc?: string`
-   impl from `287_answer.md` option (1) — protocol +
-   `projects.seed_doc` migration + sidecar first-hydration read —
-   and add a literal "no editing at all" gold case (open a
-   project whose seeded `main.tex` is the 5-line static
-   two-page LaTeX, assert ≥2 pages render with zero keyboard
-   input). ~30 LoC impl + new spec. If green, we have decisive
-   evidence the bug is in some path neither Playwright nor any
-   shipped pin exercises, and the next move is to ask the user
-   for a screen recording or source dump.
+1. **M15 Step D awaiting first live run.** `seedMainDoc?: string`
+   impl + `verifyLivePdfMultiPageSeeded.spec.ts` landed iter 292.
+   Plumbing: `createProject` → `projects.seed_doc` (0003
+   migration) → upstream resolver bakes base64-encoded seed into
+   per-project Machine env (`SEED_MAIN_DOC_B64`) on first
+   `createMachine` → sidecar decodes on boot, passes through to
+   `createProjectPersistence({ seedMainDoc })` → first hydration
+   uses override bytes in place of `MAIN_DOC_HELLO_WORLD`. Locks:
+   `migrations.test.mjs`, `schema.test.mjs`, `projects-pglite.\
+   test.mjs`, `apps/sidecar/test/persistenceSeed.test.mjs`,
+   `apps/web/test/upstreamResolver.test.mjs`. Awaits a live gold
+   run; outcomes branch (α)/(β) below.
 2. **M13.2(b).5 R1.** Widen SSR seed for non-fresh projects via
    shared blob store. Unblocks `verifyLiveGt6LiveEditableState\
    Stopped` (the only legitimately RED live spec). Requires
@@ -231,14 +228,29 @@ path, and (iii) the iter-284 (β) cursor-past-`\end{document}`
 hypothesis at source level (shape-sanity assert verifies typed
 bytes land between "Hello, world!" and `\end{document}`).
 
-**Next step (Step D).** Implement `seedMainDoc?: string` per
-`287_answer.md` option (1): add field to `createProject`,
-`projects.seed_doc TEXT` drizzle migration, sidecar
-first-hydration reads it from the web tier or via Machine env
-var. ~30 LoC + new gold spec `verifyLivePdfMultiPageSeeded.\
-spec.ts`: create a project whose seed is the 5-line
-STATIC_TWO_PAGE, open it, assert ≥2 pages render with zero
-keyboard input. Two outcomes:
+**Step D landed iter 292.** `seedMainDoc?: string` impl
+end-to-end:
+- `packages/db/src/migrations/0003_add_projects_seed_doc.sql`
+  adds `projects.seed_doc text NULL`; drizzle + schema updated.
+- `createProject({ ..., seedMainDoc })` persists to the column;
+  `getProjectSeedDoc(db, id)` reads it back.
+- `apps/web/src/lib/server/upstreamResolver.ts` accepts a
+  `seedDocFor: (id) => Promise<string|null>` option; when
+  non-null, the new Machine is created with `env.SEED_MAIN_DOC_\
+  B64=<base64>`. Wired through `upstreamFromEnv.ts` + the
+  production entry `apps/web/src/server.ts`.
+- `apps/sidecar/src/server.ts` decodes `SEED_MAIN_DOC_B64` on
+  boot and passes through to `createProjectPersistence({
+  seedMainDoc })`. `persistence.ts` uses the override in place
+  of `MAIN_DOC_HELLO_WORLD` only when no `main.tex` blob exists
+  yet (first-hydration default; never clobbers persisted
+  content).
+- Gold spec `tests_gold/playwright/verifyLivePdfMultiPageSeeded.\
+  spec.ts` creates a project with `seedMainDoc: STATIC_TWO_PAGE`,
+  opens it, and asserts ≥2 pages render with zero keyboard
+  input. Awaits live run.
+
+Two informative outcomes:
 - **(α) seeded case green-passes.** Decisive: bug is in some
   path neither the editing pins nor the seeded path exercises.
   Most likely candidate: the user's actual main.tex content

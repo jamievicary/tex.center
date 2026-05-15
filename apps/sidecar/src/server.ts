@@ -211,6 +211,27 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       ? (fields, msg) => app.log.info(fields, msg)
       : undefined);
 
+  // M15 Step D: optional override for the fresh-project seed,
+  // populated by the per-project upstream resolver from
+  // `projects.seed_doc` and passed as a base64-encoded env var on
+  // Machine creation. Decoded once at boot. Empty string (or
+  // unset) → fall through to `MAIN_DOC_HELLO_WORLD`. A decode
+  // failure is logged and ignored — the seed override is a
+  // best-effort optimisation, not a correctness primitive.
+  const seedMainDoc: string | undefined = (() => {
+    const raw = process.env.SEED_MAIN_DOC_B64;
+    if (!raw) return undefined;
+    try {
+      return Buffer.from(raw, "base64").toString("utf8");
+    } catch (e) {
+      app.log.warn(
+        { err: errorMessage(e) },
+        "SEED_MAIN_DOC_B64 decode failed; using default hello-world seed",
+      );
+      return undefined;
+    }
+  })();
+
   const projects = new Map<string, ProjectState>();
 
   // Idle-stop bookkeeping. `viewerCount` aggregates across every
@@ -290,6 +311,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       projectId: id,
       doc,
       log: app.log,
+      ...(seedMainDoc !== undefined ? { seedMainDoc } : {}),
     });
     const state: ProjectState = {
       id,

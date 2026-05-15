@@ -108,6 +108,27 @@ export interface UpstreamResolverOptions {
    * different timing populations.
    */
   readonly tcpProbeTimeoutSec?: number;
+  /**
+   * M15 Step D: optional seed-doc lookup. Called exactly once,
+   * during the first `createMachine` for a project (no existing
+   * assignment). When it resolves non-null, the per-project
+   * Machine is created with `SEED_MAIN_DOC_B64=<base64(seed)>` in
+   * its env, and the sidecar uses those bytes for `main.tex` on
+   * first hydration in place of `MAIN_DOC_HELLO_WORLD`. Any
+   * exception is logged via `onResolveError` (if provided) and
+   * treated as "no seed" — a seed-lookup transient must not
+   * block the editor from opening.
+   */
+  readonly seedDocFor?: (projectId: string) => Promise<string | null>;
+  /**
+   * Reporter for `seedDocFor` failures. Receives `{ projectId,
+   * message }`. Defaults to a console.error; pass `() => {}` to
+   * silence in tests.
+   */
+  readonly onSeedDocError?: (detail: {
+    projectId: string;
+    message: string;
+  }) => void;
 }
 
 const sleep = (ms: number): Promise<void> =>
@@ -197,9 +218,32 @@ export function createUpstreamResolver(
     // destroy by tag without consulting the assignments table.
     const baseMetadata =
       (opts.machineConfig.metadata as Record<string, string> | undefined) ?? {};
+    // M15 Step D: bake the seed (if any) into Machine env at
+    // creation time. Env vars on Fly Machines are immutable for the
+    // Machine's life, which is fine here — the sidecar only
+    // consults the seed when no `main.tex` blob exists, so once
+    // hydrated the env is moot. A `seedDocFor` throw is best-effort:
+    // log and proceed without the seed rather than blocking the
+    // upgrade.
+    let seedEnv: Record<string, string> | null = null;
+    if (opts.seedDocFor !== undefined) {
+      try {
+        const seed = await opts.seedDocFor(projectId);
+        if (seed !== null && seed.length > 0) {
+          seedEnv = {
+            SEED_MAIN_DOC_B64: Buffer.from(seed, "utf8").toString("base64"),
+          };
+        }
+      } catch (err) {
+        opts.onSeedDocError?.({ projectId, message: errorMessage(err) });
+      }
+    }
+    const baseEnv =
+      (opts.machineConfig.env as Record<string, string> | undefined) ?? {};
     const config: MachineConfig = {
       ...opts.machineConfig,
       metadata: { ...baseMetadata, texcenter_project: projectId },
+      ...(seedEnv !== null ? { env: { ...baseEnv, ...seedEnv } } : {}),
     };
     const created = await opts.machines.createMachine({
       region: opts.sidecarRegion,

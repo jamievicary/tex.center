@@ -471,4 +471,109 @@ const baseOpts = {
   );
 }
 
+// ---- case 12: seedDocFor → SEED_MAIN_DOC_B64 env on first create ----
+//
+// M15 Step D: when `projects.seed_doc` is non-null, the resolver
+// bakes its bytes (base64-encoded) into the new Machine's env so
+// the sidecar uses them for `main.tex` on first hydration.
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  const TWO_PAGE =
+    "\\documentclass{article}\n" +
+    "\\begin{document}\n" +
+    "Page one.\n" +
+    "\\newpage\n" +
+    "Page two.\n" +
+    "\\end{document}\n";
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    seedDocFor: async (id) => (id === "p-seed" ? TWO_PAGE : null),
+  });
+  await resolve("p-seed");
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.ok(
+    createCall.req.config.env,
+    "createMachine must receive an env block when seed is non-null",
+  );
+  assert.equal(
+    createCall.req.config.env.SEED_MAIN_DOC_B64,
+    Buffer.from(TWO_PAGE, "utf8").toString("base64"),
+  );
+}
+
+// ---- case 13: seedDocFor returning null → no SEED_MAIN_DOC_B64 env ----
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    seedDocFor: async () => null,
+  });
+  await resolve("p-unseeded");
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.equal(
+    createCall.req.config.env?.SEED_MAIN_DOC_B64 ?? null,
+    null,
+    "no env entry when seed is null",
+  );
+}
+
+// ---- case 14: seedDocFor throw is reported but does not block ----
+{
+  const store = makeStore();
+  const machines = makeMachinesStub({ onCreate: () => "started" });
+  const errs = [];
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    seedDocFor: async () => {
+      throw new Error("db transient");
+    },
+    onSeedDocError: (detail) => errs.push(detail),
+  });
+  const upstream = await resolve("p-seed-err");
+  assert.ok(upstream.host, "resolve must succeed even when seed lookup throws");
+  assert.equal(errs.length, 1, "onSeedDocError fires once");
+  assert.equal(errs[0].projectId, "p-seed-err");
+  assert.match(errs[0].message, /db transient/);
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.equal(
+    createCall.req.config.env?.SEED_MAIN_DOC_B64 ?? null,
+    null,
+    "no env entry when seed lookup throws",
+  );
+}
+
+// ---- case 15: seedDocFor only consulted on first create (cached path skips) ----
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-cached",
+    machineId: "m-existing",
+    region: "fra",
+    state: "running",
+  });
+  const machines = makeMachinesStub({
+    initial: [{ id: "m-existing", state: "started", region: "fra" }],
+  });
+  let seedCalls = 0;
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    seedDocFor: async () => {
+      seedCalls += 1;
+      return "irrelevant";
+    },
+  });
+  await resolve("p-cached");
+  assert.equal(seedCalls, 0, "seedDocFor not called when machine already exists");
+}
+
 console.log("upstreamResolver ok");

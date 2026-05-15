@@ -51,6 +51,7 @@ export const projects = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    seedDoc: text('seed_doc'),
     createdAt: ts('created_at'),
     updatedAt: ts('updated_at'),
   },

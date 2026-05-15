@@ -10,11 +10,15 @@ import { loadMigrations, MIGRATIONS_TABLE_SQL } from '../src/index.js';
 const migrationsDir = fileURLToPath(new URL('../src/migrations/', import.meta.url));
 const migrations = await loadMigrations(migrationsDir);
 
-assert.equal(migrations.length, 2, 'expected two migrations shipped today');
+assert.equal(migrations.length, 3, 'expected three migrations shipped today');
 
 assert.deepEqual(
   migrations.map((m) => m.name),
-  ['0001_initial', '0002_drop_users_email_unique'],
+  [
+    '0001_initial',
+    '0002_drop_users_email_unique',
+    '0003_add_projects_seed_doc',
+  ],
 );
 
 const first = migrations[0];
@@ -25,6 +29,10 @@ assert.match(first.sha256, /^[0-9a-f]{64}$/, 'sha256 must be lowercase hex');
 const second = migrations[1];
 assert.match(second.sql, /DROP CONSTRAINT IF EXISTS users_email_key/);
 assert.match(second.sha256, /^[0-9a-f]{64}$/, 'sha256 must be lowercase hex');
+
+const third = migrations[2];
+assert.match(third.sql, /ALTER TABLE projects ADD COLUMN seed_doc text/);
+assert.match(third.sha256, /^[0-9a-f]{64}$/, 'sha256 must be lowercase hex');
 
 // Loader must yield lexicographic order. Forge a synthetic case
 // by re-loading on the parent dir is unsafe; instead assert on a

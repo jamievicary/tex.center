@@ -30,6 +30,14 @@ export interface UpstreamFromEnvDeps {
    * to exercise the resolver against fake hostnames pass a no-op.
    */
   readonly tcpProbe?: (host: string, port: number) => Promise<void>;
+  /**
+   * M15 Step D: per-project `main.tex` seed lookup. Production
+   * wiring goes through `getProjectSeedDoc(db, ...)`. Resolver
+   * uses the returned bytes to populate the new Machine's env
+   * (`SEED_MAIN_DOC_B64`) at creation time. When omitted, no seed
+   * is plumbed and the sidecar defaults to `MAIN_DOC_HELLO_WORLD`.
+   */
+  readonly seedDocFor?: (projectId: string) => Promise<string | null>;
 }
 
 const DEFAULT_SIDECAR_REGION = "fra";
@@ -87,6 +95,7 @@ export function buildUpstreamFromEnv(
     // bind the listen port. In practice this is sub-second on a
     // warm image and a few seconds on a cold pull.
     tcpProbeTimeoutSec: 60,
+    ...(deps.seedDocFor !== undefined ? { seedDocFor: deps.seedDocFor } : {}),
   });
 }
 

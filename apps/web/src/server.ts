@@ -29,7 +29,11 @@ import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
 import { dbMachineAssignmentStore } from "./lib/server/upstreamResolver.js";
 import { buildUpstreamFromEnv } from "./lib/server/upstreamFromEnv.js";
 import { makeProjectAccessAuthoriser } from "./lib/server/wsAuth.js";
-import { getProjectById, getSessionWithUser } from "@tex-center/db";
+import {
+  getProjectById,
+  getProjectSeedDoc,
+  getSessionWithUser,
+} from "@tex-center/db";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = parsePort(process.env.PORT, 3000);
@@ -73,6 +77,16 @@ const resolveUpstream = buildUpstreamFromEnv(process.env, {
   makeMachinesClient: ({ token, appName }) =>
     new MachinesClient({ token, appName }),
   makeStore: () => dbMachineAssignmentStore(getDb().db),
+  // M15 Step D: bake `projects.seed_doc` (when non-null) into the
+  // per-project Machine's env at creation time. The sidecar uses
+  // those bytes for `main.tex` on first hydration in place of the
+  // canonical hello-world template. Used today by the gold suite
+  // to spin up projects with deterministic multi-page source
+  // without any editing keystrokes.
+  seedDocFor: async (projectId: string) => {
+    const { db } = getDb();
+    return getProjectSeedDoc(db, projectId);
+  },
 });
 
 // Apply pending DB migrations before accepting traffic. Gated by

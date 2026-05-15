@@ -113,4 +113,78 @@ const log = {
   assert.equal(blob.length, 0);
 }
 
+// 6. seedMainDoc override (M15 Step D) — in-memory mode picks up
+//    the override instead of MAIN_DOC_HELLO_WORLD.
+{
+  const TWO_PAGE =
+    "\\documentclass{article}\n" +
+    "\\begin{document}\n" +
+    "Page one body text.\n" +
+    "\\newpage\n" +
+    "Page two body text.\n" +
+    "\\end{document}\n";
+  const doc = new Y.Doc();
+  const p = createProjectPersistence({
+    blobStore: undefined,
+    projectId: "p-seeded-mem",
+    doc,
+    log,
+    seedMainDoc: TWO_PAGE,
+  });
+  await p.awaitHydrated();
+  assert.equal(doc.getText(MAIN_DOC_NAME).toString(), TWO_PAGE);
+}
+
+// 7. seedMainDoc override, blob-store mode, fresh project — Y.Text
+//    seeds with the override AND the persisted blob carries the
+//    override bytes.
+{
+  const TWO_PAGE =
+    "\\documentclass{article}\n" +
+    "\\begin{document}\n" +
+    "Page one body text.\n" +
+    "\\newpage\n" +
+    "Page two body text.\n" +
+    "\\end{document}\n";
+  const root = mkdtempSync(join(tmpdir(), "persistence-seed-override-"));
+  const store = new LocalFsBlobStore({ rootDir: root });
+  const projectId = "p-seeded-new";
+  const doc = new Y.Doc();
+  const p = createProjectPersistence({
+    blobStore: store,
+    projectId,
+    doc,
+    log,
+    seedMainDoc: TWO_PAGE,
+  });
+  await p.awaitHydrated();
+  assert.equal(doc.getText(MAIN_DOC_NAME).toString(), TWO_PAGE);
+  const blob = await store.get(mainTexKey(projectId));
+  assert.ok(blob !== null, "main.tex blob should be written with override");
+  assert.equal(new TextDecoder().decode(blob), TWO_PAGE);
+}
+
+// 8. seedMainDoc override, blob-store mode, EXISTING main.tex —
+//    the override does NOT clobber persisted user content. The
+//    seed is a first-hydration default only.
+{
+  const root = mkdtempSync(join(tmpdir(), "persistence-seed-override-existing-"));
+  const store = new LocalFsBlobStore({ rootDir: root });
+  const projectId = "p-seeded-existing";
+  const existing = "% user content survives override\n";
+  await store.put(mainTexKey(projectId), new TextEncoder().encode(existing));
+  const doc = new Y.Doc();
+  const p = createProjectPersistence({
+    blobStore: store,
+    projectId,
+    doc,
+    log,
+    seedMainDoc:
+      "\\documentclass{article}\n" +
+      "\\begin{document}\nIgnored\n\\end{document}\n",
+  });
+  await p.awaitHydrated();
+  assert.equal(doc.getText(MAIN_DOC_NAME).toString(), existing);
+}
+
 console.log("persistenceSeed test: OK");

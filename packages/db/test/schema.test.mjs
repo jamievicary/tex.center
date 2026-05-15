@@ -6,16 +6,27 @@
 // the SQL is the most plausible bug class for this layer until
 // Drizzle wiring lands and removes the duplication.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 import { allTables, usersTable, sessionsTable, projectsTable, projectFilesTable, machineAssignmentsTable } from '../src/schema.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sqlPath = resolve(here, '..', 'src', 'migrations', '0001_initial.sql');
-const sql = readFileSync(sqlPath, 'utf8');
+const initialSqlPath = resolve(here, '..', 'src', 'migrations', '0001_initial.sql');
+const sql = readFileSync(initialSqlPath, 'utf8');
+
+// Full concatenation of every shipped migration. `0001_initial` is
+// the source of CREATE TABLE statements; later migrations may
+// ADD/DROP columns, and the spec must agree with the cumulative
+// schema rather than any single file.
+const migrationsDir = resolve(here, '..', 'src', 'migrations');
+const allSql = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
+  .map((f) => readFileSync(join(migrationsDir, f), 'utf8'))
+  .join('\n');
 
 // --- Per-spec invariants -----------------------------------------------
 
@@ -76,8 +87,8 @@ for (const table of allTables) {
     for (const col of table.columns) {
         const colRe = new RegExp(`\\b${col.name}\\b\\s+${col.type}\\b`, 'i');
         assert.ok(
-            colRe.test(sql),
-            `migration is missing column ${table.name}.${col.name} of type ${col.type}`,
+            colRe.test(allSql),
+            `migrations are missing column ${table.name}.${col.name} of type ${col.type}`,
         );
     }
 }
