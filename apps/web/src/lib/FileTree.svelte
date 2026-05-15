@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
-  import { buildFileTree } from "./fileTree.js";
-  import FileTreeNode from "./FileTreeNode.svelte";
+  import { buildFileTree, type FileTreeNode } from "./fileTree.js";
+  import {
+    createFileTreeInstance,
+    type FileItemData,
+  } from "./fileTreeHeadless.js";
 
   let {
     files,
@@ -28,9 +32,70 @@
   } = $props();
 
   let newName = $state("");
-  let collapsed = $state(new Map<string, boolean>());
+
+  // Set of folder paths the user has explicitly collapsed.
+  // Default (empty) → every folder is expanded, matching the
+  // pre-cutover behaviour where a missing `collapsed` map entry
+  // was treated as "not collapsed".
+  let collapsed = $state(new Set<string>());
+
+  // Bumped inside the headless-tree adapter's `onStateChange` to
+  // force the flat-row `$derived` to re-evaluate when the tree
+  // mutates state in place (expand/collapse).
+  let tick = $state(0);
 
   let forest = $derived(buildFileTree(files));
+
+  function collectFolderPaths(nodes: readonly FileTreeNode[], out: string[]): string[] {
+    for (const n of nodes) {
+      if (n.kind === "folder") {
+        out.push(n.path);
+        collectFolderPaths(n.children, out);
+      }
+    }
+    return out;
+  }
+
+  // Rebuild the headless-tree instance whenever `forest` changes.
+  // Don't track `collapsed` here — user expand/collapse calls
+  // mutate the instance in place; only a files-list change (which
+  // forces a new forest) should construct a fresh instance.
+  let tree = $derived.by(() => {
+    const currentForest = forest;
+    return untrack(() => {
+      const folderPaths = collectFolderPaths(currentForest, []);
+      const initialExpanded = folderPaths.filter((p) => !collapsed.has(p));
+      return createFileTreeInstance(currentForest, {
+        initialExpanded,
+        onStateChange: (s) => {
+          const expandedSet = new Set(s.expandedItems ?? []);
+          const next = new Set<string>();
+          for (const p of folderPaths) if (!expandedSet.has(p)) next.add(p);
+          collapsed = next;
+          tick++;
+        },
+      });
+    });
+  });
+
+  interface Row {
+    id: string;
+    data: FileItemData;
+    level: number;
+    isFolder: boolean;
+    isExpanded: boolean;
+  }
+
+  let rows = $derived.by<Row[]>(() => {
+    tick;
+    return tree.getItems().map((item) => ({
+      id: item.getId(),
+      data: item.getItemData(),
+      level: item.getItemMeta().level,
+      isFolder: item.isFolder(),
+      isExpanded: item.isExpanded(),
+    }));
+  });
 
   function rejectionReason(candidate: string, ignore?: string): string | null {
     const trimmed = candidate.trim();
@@ -89,10 +154,10 @@
     onRenameFile(path, trimmed);
   }
 
-  function toggleFolder(path: string): void {
-    const next = new Map(collapsed);
-    next.set(path, !(next.get(path) === true));
-    collapsed = next;
+  function toggleFolder(id: string): void {
+    const inst = tree.getItemInstance(id);
+    if (inst.isExpanded()) inst.collapse();
+    else inst.expand();
   }
 
   function selectFile(path: string): void {
@@ -100,18 +165,51 @@
   }
 </script>
 
-<ul class="root">
-  {#each forest as node (node.path)}
-    <FileTreeNode
-      {node}
-      depth={0}
-      {selected}
-      collapsed={collapsed}
-      onToggleFolder={toggleFolder}
-      onSelect={selectFile}
-      onRename={onRenameFile ? promptRename : undefined}
-      onDelete={onDeleteFile}
-    />
+<ul class="root" role="tree">
+  {#each rows as row (row.id)}
+    {@const indent = `${row.level * 0.75}rem`}
+    {#if row.isFolder}
+      <li class="folder" role="treeitem" aria-expanded={row.isExpanded}>
+        <button
+          type="button"
+          class="row folder-row"
+          style:padding-left={indent}
+          aria-expanded={row.isExpanded}
+          onclick={() => toggleFolder(row.id)}
+        >
+          <span class="chev" aria-hidden="true">{row.isExpanded ? "▾" : "▸"}</span>
+          <span class="label">{row.data.name}/</span>
+        </button>
+      </li>
+    {:else}
+      <li class="file" role="treeitem">
+        <button
+          type="button"
+          class="row file-row"
+          class:active={row.data.path === selected}
+          style:padding-left={indent}
+          onclick={() => selectFile(row.data.path)}
+        >
+          <span class="label">{row.data.name}</span>
+        </button>
+        {#if onRenameFile && row.data.path !== MAIN_DOC_NAME}
+          <button
+            type="button"
+            class="ren"
+            aria-label={`rename ${row.data.path}`}
+            onclick={() => promptRename(row.data.path)}
+          >✎</button>
+        {/if}
+        {#if onDeleteFile && row.data.path !== MAIN_DOC_NAME}
+          <button
+            type="button"
+            class="del"
+            aria-label={`delete ${row.data.path}`}
+            onclick={() => onDeleteFile(row.data.path)}
+          >×</button>
+        {/if}
+      </li>
+    {/if}
   {/each}
 </ul>
 
@@ -155,6 +253,58 @@
     list-style: none;
     margin: 0;
     padding: 0.5rem 0;
+  }
+  li {
+    margin: 0;
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .row {
+    flex: 1;
+    min-width: 0;
+    padding: 0.4rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .row:hover {
+    background: #f3f4f6;
+  }
+  .file-row.active {
+    background: #e5e7eb;
+  }
+  .chev {
+    display: inline-block;
+    width: 0.9em;
+    color: #6b7280;
+    font-size: 0.85em;
+  }
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .del,
+  .ren {
+    flex: 0 0 auto;
+    padding: 0 0.5rem;
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    font: inherit;
+  }
+  .del:hover {
+    color: #b91c1c;
+  }
+  .ren:hover {
+    color: #1d4ed8;
   }
   .new {
     display: flex;

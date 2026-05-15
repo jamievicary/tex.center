@@ -28,8 +28,9 @@ iter 273.
   (iter 256–279), red iter 280 once and may be flaky around the
   suspended-resume boundary; rerun + investigate if it persists.
 
-**Active priority queue:** M13.2(b).5 R1 → M11.1c headless-tree
-adoption → M16.aesthetic. M11.5 still gated on shared-R2 binary-
+**Active priority queue:** M13.2(b).5 R1 → M16.aesthetic →
+M11.2 (CRUD via context menu / keyboard). M11.1c headless-tree
+cutover landed iter 284. M11.5 still gated on shared-R2 binary-
 asset work.
 
 ## 2. Milestones
@@ -115,13 +116,21 @@ styles. Sub-slices:
   optional `onStateChange` callback. Adapter is dark code: no UI
   call sites yet. Lock:
   `apps/web/test/fileTreeHeadless.test.mjs`.
-- **M11.1c (cutover)** adopt the adapter in `FileTree.svelte` —
-  replace `FileTreeNode.svelte`'s recursive markup with a flat
-  render driven by `tree.getItems()`, with per-row indent from
-  `item.getItemMeta().level`. Reactivity via Svelte 5 `$state`
-  fed by the adapter's `onStateChange`. Preserve behaviour
-  (collapse map, selection, rename/delete buttons). Component
-  test on the wiring.
+- **M11.1c (cutover). Landed iter 284.** `FileTree.svelte`
+  rewritten to drive a flat render from
+  `createFileTreeInstance(forest).getItems()`. Per-row indent
+  from `item.getItemMeta().level`. Tree instance is `$derived.by`
+  on `forest` (rebuilt only when `files` changes; user
+  expand/collapse mutates the instance in place). A `tick`
+  `$state` bumped inside the adapter's `onStateChange` forces
+  the flat-row derivation to re-evaluate. `collapsed: Set<string>`
+  tracks user-collapsed folders; default is all-expanded
+  (matches pre-cutover behaviour where a missing `collapsed`
+  map entry meant expanded). `FileTreeNode.svelte` deleted.
+  Lock: `tests_gold/playwright/editor.spec.ts` local case
+  asserts `.tree [role=treeitem] .label` exactly matches
+  `main.tex` once on the freshly-seeded route — proves the flat
+  template instantiated a row from the headless adapter.
 - **M11.2** create/delete/rename via context menu + keyboard
   (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
 - **M11.3** create folder via virtual-folder model. Unblocked
@@ -315,7 +324,8 @@ M13.2(b).2 (iter 254); M13.2(b).3 spec (iter 256); boot-time
 session sweep (iter 258/259); M14.title-bar (iter 264);
 M13.2(b).4 pin (iter 266); M13.2(b).5 R2 (iter 267); M15 sidecar
 fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
-280). See git log and `.autodev/logs/` for detail.
+280); M11.1c headless-tree cutover (iter 284). See git log and
+`.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 

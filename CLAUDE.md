@@ -25,6 +25,8 @@ As the main Claude agent for the session, you never edit any project code direct
 
 If the autodev agent needs to be terminated for any reason, create the file ./.autodev/finished.md. The iterator.sh script will notice it on its next iteration. The iterator can be restarted again with the script ./autodev/iterator.sh.
 
+The human is busy and extremely detail-oriented. He expects you to think hard before answering, and to be both concise and precise in your answers.
+
 ## Layout
 
 - `apps/` — SvelteKit web frontend + per-project sidecar.

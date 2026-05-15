@@ -46,6 +46,16 @@ test.describe("editor route", () => {
     await expect(authedPage.locator(".editor")).toBeVisible();
     await expect(authedPage.locator(".preview")).toBeVisible();
 
+    // M11.1c lock: the headless-tree-driven flat render emits
+    // one `[role=treeitem]` row per file. With no sidecar in the
+    // local webServer the file list is the initial
+    // `[MAIN_DOC_NAME]`, so we expect a single row labelled
+    // `main.tex` inside `.tree`.
+    const mainRow = authedPage
+      .locator(".tree [role=treeitem] .label")
+      .filter({ hasText: /^main\.tex$/ });
+    await expect(mainRow).toHaveCount(1);
+
     // M14: project title is rendered in the topbar and its
     // bounding-box centre x is within tolerance of the topbar's
     // centre x. With `grid-template-columns: 1fr auto 1fr` the
