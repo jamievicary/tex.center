@@ -6,9 +6,13 @@
   import { onDestroy } from "svelte";
   import { toasts, type Toast } from "./toastStore";
 
+  // Items rendered newest-on-top. The store keeps insertion
+  // order; we reverse for display so the most recent push appears
+  // at the top of the flex-column stack and older toasts drift
+  // downward as new ones arrive.
   let items = $state<ReadonlyArray<Toast>>([]);
   const unsub = toasts.subscribe((t) => {
-    items = t;
+    items = t.slice().reverse();
   });
   onDestroy(unsub);
 </script>
@@ -26,7 +30,7 @@
       {#if t.count > 1}
         <span class="count" data-toast-count={t.count}>×{t.count}</span>
       {/if}
-      {#if t.persistent}
+      {#if t.persistent || t.category === "info" || t.category === "success"}
         <button
           type="button"
           class="dismiss"

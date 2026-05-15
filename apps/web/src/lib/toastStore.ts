@@ -11,7 +11,7 @@
 // time a matching push extends the toast; a non-matching push
 // or window expiry ends the aggregation.
 //
-// TTL: defaults per category (errors: 6s, success: 3s, info: 4s,
+// TTL: defaults per category (errors: 6s, success: 3s, info: 5s,
 // debug-*: 2s). `persistent: true` disables auto-dismiss; the
 // consumer must call `dismiss(id)`.
 //
@@ -51,7 +51,7 @@ export interface Toast {
 export const AGGREGATE_WINDOW_MS = 500;
 
 const DEFAULT_TTL_MS: Record<ToastCategory, number> = {
-  info: 4_000,
+  info: 5_000,
   success: 3_000,
   error: 6_000,
   "debug-blue": 2_000,

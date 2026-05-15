@@ -14,8 +14,9 @@ routed to (decision deferred post-MVP).
 
 1. **M22 wire-message debug toasts.** M22.1 closed iter 304 (all
    outbound control sends now emit `outgoing-*` debug events).
-   Remaining: M22.2 GT-F local Playwright cases (closes
-   M9.editor-ux GT-F); M22.3 toast UX polish.
+   M22.3 closed iter 305 (info TTL 5 s, newest-on-top stack,
+   user-dismissible × on info/success). Remaining: M22.2 GT-F
+   local Playwright cases (closes M9.editor-ux GT-F).
 2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
    idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
    binding (sidecar persists source + latex artefacts on every
@@ -275,8 +276,19 @@ Slices:
   Lock: `apps/web/test/wsClientDebugEvents.test.mjs` case 9 + the
   expanded toast-mapping matrix in case 7.
 - **M22.2** finish GT-F local Playwright cases.
-- **M22.3** toast UX polish: info TTL 4s→5s; stack order
-  newest-on-top; user-dismissible × on info/success.
+- **M22.3** Closed iter 305. Three UX changes in
+  `apps/web/src/lib/`:
+  - `toastStore.ts` `DEFAULT_TTL_MS.info` `4_000 → 5_000`.
+  - `Toasts.svelte` subscribe handler reverses the store array so
+    newest renders at the top of the flex-column stack;
+    aggregating pushes still update the existing toast in place.
+  - `Toasts.svelte` dismiss-button guard widened from
+    `t.persistent` to also fire on
+    `t.category === "info" || t.category === "success"`.
+    Error stays auto-dismiss-only (6 s).
+  Locks: `apps/web/test/toastStore.test.mjs` case 2 (info-at-5s,
+  error-at-6s); case 5 also pins the store's oldest-first
+  insertion order, which the renderer reverses.
 
 ### M17.preview-render — PDF preview cross-fade
 

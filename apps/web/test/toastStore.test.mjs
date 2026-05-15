@@ -93,14 +93,14 @@ function snapshotFromSub(store) {
   s.push({ category: "error", text: "e" });
   s.push({ category: "success", text: "ok", persistent: true });
   assert.equal(snapshotFromSub(s).length, 3);
-  // Advance past info default (4000ms) but not error (6000ms).
-  clk.advance(4000);
+  // Advance past info default (5000ms) but not error (6000ms).
+  clk.advance(5000);
   let snap = snapshotFromSub(s);
-  assert.equal(snap.length, 2, "info toast should auto-dismiss at 4s");
+  assert.equal(snap.length, 2, "info toast should auto-dismiss at 5s");
   assert.ok(snap.some((t) => t.category === "error"));
   assert.ok(snap.some((t) => t.category === "success"));
   // Advance past error TTL.
-  clk.advance(2000);
+  clk.advance(1000);
   snap = snapshotFromSub(s);
   assert.equal(snap.length, 1, "error toast should auto-dismiss at 6s");
   assert.equal(snap[0].category, "success");
@@ -194,6 +194,15 @@ function snapshotFromSub(store) {
   s.push({ category: "info", text: "d" });
   const snap = snapshotFromSub(s);
   assert.equal(snap.length, 4, "no merging without a shared aggregateKey");
+  // The store retains oldest-first insertion order. The renderer
+  // (`Toasts.svelte`) reverses this for newest-on-top display, so
+  // any future refactor that perturbs the store ordering must
+  // adjust the renderer to match.
+  assert.deepEqual(
+    snap.map((t) => t.text),
+    ["a", "b", "c", "d"],
+    "store retains oldest-first insertion order for renderer to reverse",
+  );
 }
 
 // Case 6: dismiss removes the toast and prevents its TTL from
