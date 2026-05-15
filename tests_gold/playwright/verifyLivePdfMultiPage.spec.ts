@@ -69,10 +69,8 @@ test.describe("live multi-page PDF preview (M15)", () => {
       name: `pw-probe-multipage-${Date.now()}`,
     });
 
-    const { pdfSegmentFrames, docUpdateSent } = captureFrames(
-      authedPage,
-      project.id,
-    );
+    const { pdfSegmentFrames, docUpdateSent, compileStatusEvents } =
+      captureFrames(authedPage, project.id);
 
     try {
       await authedPage.goto(`/editor/${project.id}`);
@@ -126,6 +124,24 @@ test.describe("live multi-page PDF preview (M15)", () => {
             cmContentTail: text.slice(-40),
           };
         });
+        // iter 275: compile-status timeline distinguishes
+        // "coalescer never fired" / "compile errored" / "compile
+        // succeeded but no segment" failure modes.
+        const csCounts = compileStatusEvents.reduce<Record<string, number>>(
+          (acc, e) => {
+            acc[e.state] = (acc[e.state] ?? 0) + 1;
+            return acc;
+          },
+          {},
+        );
+        const csSummary =
+          Object.entries(csCounts)
+            .map(([s, n]) => `${s}×${n}`)
+            .join(",") || "none";
+        const lastErrorDetail =
+          [...compileStatusEvents]
+            .reverse()
+            .find((e) => e.state === "error")?.detail ?? null;
         expect(
           pdfSegmentFrames.length,
           `no post-edit pdf-segment carrying the multipage body ` +
@@ -134,7 +150,9 @@ test.describe("live multi-page PDF preview (M15)", () => {
             `pdfSegmentsAtFail=${pdfSegmentFrames.length} ` +
             `docUpdateSent=${docUpdateSent.value} ` +
             `cmContentLen=${diag.cmContentLen} ` +
-            `cmContentTail=${JSON.stringify(diag.cmContentTail)}`,
+            `cmContentTail=${JSON.stringify(diag.cmContentTail)} ` +
+            `compileStatusEvents=${csSummary} ` +
+            `lastErrorDetail=${JSON.stringify(lastErrorDetail)}`,
         ).toBeGreaterThan(segmentsBefore);
       }
 

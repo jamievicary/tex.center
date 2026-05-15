@@ -341,8 +341,26 @@ elements **or** a single canvas of height > viewport.height * 1.8.
   live `docUpdateSent` counter, and the timeout branch of the
   segments assertion surfaces `docUpdateSent`,
   `pdfSegmentsAtFail`, and `.cm-content` text length+tail in the
-  failure message. No assertion weakened. Next gold run pins the
-  failure mode.
+  failure message. No assertion weakened. Iter-274 gold run came
+  back with `segmentsBefore=1 pdfSegmentsAtFail=1 docUpdateSent=121
+  cmContentLen=182 cmContentTail=" body text.\\newpage Page five
+  body text."` — typing landed and DOC_UPDATE frames reached the
+  WS, but no second pdf-segment ever arrived. The sidecar-level
+  pin `test_supertex_multipage_emit` (5-page compile with
+  `targetPage=0`) is green, and the deployed sidecar image
+  (`sha256:ceca0de6…`, git `c63eb6c` = iter 269) carries the
+  `targetPage=0` fix. So the bug is somewhere in the live
+  recompile path between client edits and sidecar `runCompile` —
+  not in the daemon itself. **Iter 275 diagnostic.** Extended
+  `captureFrames` to also record sidecar `compile-status` control
+  frames (running/idle/error + detail); the spec's timeout
+  failure now surfaces `compileStatusEvents=running×N,idle×M,…`
+  plus `lastErrorDetail`. Three failure modes become
+  distinguishable from one gold run: (a) empty events → sidecar
+  coalescer never fired a post-edit compile; (b) running→error →
+  compile reached daemon and failed (detail tells us how);
+  (c) running→idle but no segment → sidecar succeeded but didn't
+  ship segment frames. Next gold run picks one.
 - **Diagnosis + fix landed iter 269.** Root cause was the
   sidecar's `targetPage = maxViewingPage(p)` default in
   `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon

@@ -38,6 +38,22 @@ export interface FrameCapture {
    * `verifyLivePdfMultiPage` post-edit-segment diagnosis.
    */
   readonly docUpdateSent: { value: number };
+  /**
+   * All sidecar `compile-status` control frames received on the
+   * project WS, in arrival order. Each entry is the parsed JSON
+   * payload (`{ type: "compile-status", state, detail? }`).
+   * Introduced iter 275 to distinguish post-typing failure modes
+   * in `verifyLivePdfMultiPage` once the iter-274 client-side
+   * diagnostic ruled out "typing didn't reach the WS":
+   *
+   *   - empty array → sidecar's coalescer never fired a compile
+   *     after the edits;
+   *   - `running` then `error` → compile reached the daemon and
+   *     failed (detail surfaces the daemon error);
+   *   - `running` then `idle` but no pdf-segment → compile
+   *     succeeded but emitted no segment (sidecar-layer bug).
+   */
+  compileStatusEvents: { state: string; detail?: string }[];
 }
 
 /**
@@ -56,6 +72,7 @@ export function captureFrames(page: Page, projectId: string): FrameCapture {
   const pdfSegmentFrames: Buffer[] = [];
   const overlapErrors: string[] = [];
   const docUpdateSent = { value: 0 };
+  const compileStatusEvents: { state: string; detail?: string }[] = [];
 
   page.on("websocket", (ws) => {
     if (!ws.url().includes(`/ws/project/${projectId}`)) return;
@@ -71,6 +88,27 @@ export function captureFrames(page: Page, projectId: string): FrameCapture {
         if (json.includes("already in flight")) {
           overlapErrors.push(json);
         }
+        try {
+          const obj = JSON.parse(json) as {
+            type?: string;
+            state?: string;
+            detail?: string;
+          };
+          if (
+            obj &&
+            obj.type === "compile-status" &&
+            typeof obj.state === "string"
+          ) {
+            const entry: { state: string; detail?: string } = {
+              state: obj.state,
+            };
+            if (typeof obj.detail === "string") entry.detail = obj.detail;
+            compileStatusEvents.push(entry);
+          }
+        } catch {
+          // Non-JSON control payload (shouldn't happen post-protocol
+          // v1, but defensive parsing keeps the fixture robust).
+        }
       }
     });
     ws.on("framesent", ({ payload }) => {
@@ -82,5 +120,10 @@ export function captureFrames(page: Page, projectId: string): FrameCapture {
     });
   });
 
-  return { pdfSegmentFrames, overlapErrors, docUpdateSent };
+  return {
+    pdfSegmentFrames,
+    overlapErrors,
+    docUpdateSent,
+    compileStatusEvents,
+  };
 }
