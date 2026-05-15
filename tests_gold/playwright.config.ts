@@ -76,9 +76,7 @@ export default defineConfig({
   //     (`fixtures/sharedProjectMutex.ts`), so the GT-A..GT-D /
   //     GT-7 / PdfNoFlash specs that all mutate the same project
   //     never run concurrently.
-  // Higher worker counts add Fly Machine pressure (per-spec project
-  // creation) and aren't tuned for here.
-  workers: 2,
+  workers: 1,
   reporter: [["list"]],
   timeout: TEST_TIMEOUT_MS,
   use: {
@@ -93,13 +91,27 @@ export default defineConfig({
       testIgnore: ["**/verifyLive*.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
-        baseURL: `http://127.0.0.1:${LOCAL_PORT}`,
+        // `baseURL` is deliberately omitted: the per-worker
+        // `baseURL` fixture in `fixtures/authedPage.ts` provides
+        // each worker its own URL (`http://127.0.0.1:${3000 +
+        // workerIndex}`). Setting it at the project level here
+        // overrides the fixture (project config wins option
+        // precedence over fixture defaults), and every worker's
+        // tests collapsed onto port 3000, which is the bug
+        // that surfaced at workers=4 — see iter-303 work.
       },
     },
     {
       name: "live",
       use: {
         ...devices["Desktop Chrome"],
+        // `baseURL` IS set at the project level for live (unlike
+        // local) because the value is worker-invariant
+        // (`https://tex.center` for every worker) AND specs that
+        // import `test` from `@playwright/test` directly — e.g.
+        // `verifyLive.spec.ts`'s `request.get("/healthz")` —
+        // would otherwise fail with "Invalid URL". The fixture in
+        // `authedPage.ts` provides the same value, so no conflict.
         baseURL: "https://tex.center",
       },
     },

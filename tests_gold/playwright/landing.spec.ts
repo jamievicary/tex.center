@@ -3,7 +3,10 @@
 // or marketing copy — only the sign-in widget. This test asserts
 // that invariant at the DOM level.
 
-import { expect, test } from "@playwright/test";
+// Import from the gold-suite's extended `test` so this spec picks
+// up the per-worker `baseURL` override (each local Playwright
+// worker runs its own SvelteKit dev server on `3000 + workerIndex`).
+import { expect, test } from "./fixtures/authedPage.js";
 
 const SIGNIN_TEXT = "Sign in with Google";
 

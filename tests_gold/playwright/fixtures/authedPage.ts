@@ -2,37 +2,42 @@
 // `tc_session` cookie attached, ready to hit authenticated
 // routes on either the `local` or `live` target.
 //
-// Composition:
-//   - The worker-scoped `db` fixture resolves the right
-//     transport for the active project:
-//       * `live` → start `flyctl proxy` to `tex-center-db`,
-//         open a Drizzle handle against `127.0.0.1:LOCAL_PORT`,
-//         read signing key + user id from env.
-//       * `local` → read `DATABASE_URL`, `SESSION_SIGNING_KEY`,
-//         and `TEXCENTER_LOCAL_USER_ID` from env (set by
-//         `globalSetup.ts` which boots an in-process PGlite-
-//         over-TCP server), open a Drizzle handle to that URL.
-//   - The test-scoped `authedPage` fixture mints a session
-//     row for the resolved user id, sets the cookie on a fresh
-//     browser context, yields a `Page`, and deletes the row on
-//     teardown.
+// Fixture hierarchy:
 //
-// If a target's required env is missing the worker fixture
-// calls `test.skip` with the list of missing keys, so the
-// default gold run stays green and only the appropriate
-// invocation exercises this path.
+//   localStack (worker) — local target only. Boots a per-worker
+//     PGlite + SvelteKit dev server (`./localStack.ts`) so workers
+//     have no shared backend state. Production Postgres handles
+//     concurrency fine but PGlite-over-TCP has a server-side
+//     prepared-statement isolation bug that surfaces under
+//     concurrent connections from multiple workers — per-worker
+//     isolation sidesteps it.
 //
-// Required env (`live` target):
-//   - `TEXCENTER_LIVE_DB_PASSWORD`, `SESSION_SIGNING_KEY`,
-//     `TEXCENTER_LIVE_USER_ID`. Optional overrides per
-//     `resolveLiveDbConfig` in `authedCookie.ts`.
+//   baseURL (worker, overrides Playwright's built-in option) —
+//     returns the live deploy URL, or the per-worker local dev
+//     server URL (`3000 + workerIndex`). Used by Playwright to
+//     resolve relative URLs in `page.goto`, and by `authedPage`
+//     to scope the session cookie.
 //
-// Required env (`local` target): set by `globalSetup.ts`
-// automatically; absent only if `globalSetup` was skipped.
+//   db (worker) — opens the right Drizzle handle for the
+//     resolved project:
+//       * `live` → flyctl proxy + live Postgres (per-worker
+//         localPort = base + workerIndex).
+//       * `local` → the worker's PGlite from `localStack`,
+//         with a freshly-inserted per-worker user row (deleted
+//         on worker teardown; FK cascade reaps forgotten
+//         afterEach state).
+//
+//   authedPage (test) — mints a session row for `db.userId`,
+//     attaches the cookie to a fresh context, yields the page,
+//     and reaps the row on teardown.
 
 import { randomUUID } from "node:crypto";
 
-import { test as base, type Page } from "@playwright/test";
+import {
+  test as base,
+  type Page,
+  type PlaywrightTestOptions,
+} from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import {
@@ -48,12 +53,12 @@ import {
   buildLiveDbUrl,
   buildSessionCookieSpec,
   resolveLiveDbConfig,
-  resolveLocalDbEnv,
 } from "../../lib/src/authedCookie.js";
 import {
   startFlyProxy,
   type FlyProxyHandle,
 } from "../../lib/src/flyProxy.js";
+import { startLocalStack, type LocalStack } from "./localStack.js";
 
 export interface DbFixture {
   readonly db: DbHandle;
@@ -62,34 +67,71 @@ export interface DbFixture {
   readonly proxy?: FlyProxyHandle;
 }
 
-interface Fixtures {
+interface WorkerFixtures {
+  /** Per-worker local stack — null for live target. */
+  localStack: LocalStack | null;
+}
+
+interface TestFixtures {
   db: DbFixture;
   authedPage: Page;
 }
 
-export const test = base.extend<Fixtures, Record<string, never>>({
-  db: [
+export const test = base.extend<
+  TestFixtures & Pick<PlaywrightTestOptions, "baseURL">,
+  WorkerFixtures
+>({
+  localStack: [
     async ({}, use, workerInfo) => {
+      if (workerInfo.project.name === "live") {
+        await use(null);
+        return;
+      }
+      const stack = await startLocalStack({
+        workerIndex: workerInfo.workerIndex,
+      });
+      try {
+        await use(stack);
+      } finally {
+        await stack.close();
+      }
+    },
+    { scope: "worker" },
+  ],
+
+  // `baseURL` is a Playwright-built-in test-scoped option, so this
+  // override stays test-scoped (worker-scope override is rejected
+  // by Playwright at fixture registration time). The value still
+  // comes from the worker-scoped `localStack`, so it's effectively
+  // constant per worker — just resolved on each test's setup path.
+  baseURL: [
+    async ({ localStack }, use, testInfo) => {
+      if (testInfo.project.name === "live") {
+        await use("https://tex.center");
+      } else if (localStack !== null) {
+        await use(localStack.baseURL);
+      } else {
+        await use(undefined);
+      }
+    },
+    { option: true },
+  ],
+
+  db: [
+    async ({ localStack }, use, workerInfo) => {
       const projectName = workerInfo.project.name;
       if (projectName === "live") {
         const resolved = resolveLiveDbConfig(process.env);
         if (!resolved.ok) {
           // Per `166_question.md`: live verification must fail loudly
-          // when credentials are absent, not skip silently. The
-          // tests_gold Python runner is the canonical entry point and
-          // populates these from `creds/`; if we reach this branch
-          // it means the spec was invoked directly with an incomplete
-          // env, which is still a real configuration breakage worth
-          // surfacing.
+          // when credentials are absent.
           throw new Error(
             `authedPage: missing required env for live: ${resolved.missing.join(", ")}`,
           );
         }
-        // Per-worker fly proxy port: base + workerIndex. Required
-        // when workers > 1; harmless at workers=1 (workerIndex=0).
-        // The bootstrap's own proxy uses a separate base
-        // (TEXCENTER_GT_BOOTSTRAP_DB_LOCAL_PORT, default 5443) and
-        // stays open for the suite lifetime.
+        // Per-worker fly proxy port: base + workerIndex. The
+        // bootstrap's own proxy uses a separate base
+        // (TEXCENTER_GT_BOOTSTRAP_DB_LOCAL_PORT, default 5443).
         const localPort =
           resolved.config.localPort + workerInfo.workerIndex;
         const workerConfig = { ...resolved.config, localPort };
@@ -111,24 +153,10 @@ export const test = base.extend<Fixtures, Record<string, never>>({
           await proxy.close();
         }
       } else {
-        const resolved = resolveLocalDbEnv(process.env);
-        if (!resolved.ok) {
-          test.skip(
-            true,
-            `authedPage: missing required env for local: ${resolved.missing.join(", ")} (globalSetup may have been skipped)`,
-          );
-          return;
+        if (localStack === null) {
+          throw new Error("authedPage: localStack is null on a local worker");
         }
-        const db = createDb(resolved.config.url, { onnotice: () => {} });
-        // Per-worker user: each Playwright worker has its own user
-        // row for the suite's lifetime, so concurrent specs cannot
-        // collide on the seed user's project list (the empty-state
-        // assertion in `projects.spec.ts` is the canonical example
-        // — without per-worker isolation, worker A creating a
-        // project in `editor.spec.ts` racing worker B's empty-state
-        // check would fail the latter). The row is deleted on
-        // worker teardown; FK cascade reaps any forgotten
-        // afterEach state.
+        const db = createDb(localStack.db.url, { onnotice: () => {} });
         const workerUserId = randomUUID();
         const workerEmail = `pw-worker-${workerInfo.workerIndex}-${workerUserId}@local.invalid`;
         const workerGoogleSub = `pw-worker-${workerUserId}`;
@@ -140,7 +168,7 @@ export const test = base.extend<Fixtures, Record<string, never>>({
         try {
           await use({
             db,
-            signingKey: resolved.config.signingKey,
+            signingKey: localStack.signingKey,
             userId: workerUserId,
           });
         } finally {
@@ -155,14 +183,17 @@ export const test = base.extend<Fixtures, Record<string, never>>({
     { scope: "worker" },
   ],
 
-  authedPage: async ({ browser, db }, use, testInfo) => {
+  authedPage: async ({ browser, db, baseURL }, use) => {
+    if (!baseURL) {
+      throw new Error("authedPage: baseURL fixture returned undefined");
+    }
     const minted = await mintSession({
       db: db.db.db,
       signingKey: db.signingKey,
       userId: db.userId,
     });
-    const context = await browser.newContext();
-    const host = hostFromBaseURL(testInfo.project.use.baseURL);
+    const context = await browser.newContext({ baseURL });
+    const host = new URL(baseURL).hostname;
     await context.addCookies([
       buildSessionCookieSpec({
         value: minted.cookieValue,
@@ -182,10 +213,3 @@ export const test = base.extend<Fixtures, Record<string, never>>({
 });
 
 export { expect } from "@playwright/test";
-
-function hostFromBaseURL(baseURL: string | undefined): string {
-  if (!baseURL) {
-    throw new Error("authedPage: project has no baseURL");
-  }
-  return new URL(baseURL).hostname;
-}
