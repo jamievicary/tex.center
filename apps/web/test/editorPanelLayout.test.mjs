@@ -111,6 +111,34 @@ test("clamp leaves a well-fitting layout untouched", () => {
   assert.equal(out.preview, 320);
 });
 
+test("clamp output always fits within the viewport after defences", () => {
+  // The post-clamp invariant: tree + preview + 2*divider + MIN_EDITOR_PX
+  // never exceeds total, unless the viewport is below the
+  // MIN_TREE+MIN_PREVIEW+MIN_EDITOR+dividers floor (in which case both
+  // columns fall back to their mins regardless). Sweeping inputs across
+  // the parameter space pins this invariant — and proves the
+  // preview-defends-editor-min branch removed in iter 290 was dead:
+  // any input that would have triggered it is already handled by the
+  // tree-squeeze branch above.
+  const floor = MIN_TREE_PX + MIN_PREVIEW_PX + MIN_EDITOR_PX + 2 * DIVIDER_PX;
+  for (const total of [400, 558, 600, 700, 900, 1200, 1600]) {
+    for (const tree of [10, 150, 220, 400, 600]) {
+      for (const preview of [null, 10, 200, 300, 500, 900]) {
+        const out = clampPanelWidths({ tree, preview, total });
+        assert.ok(out.tree >= MIN_TREE_PX, `tree min: ${JSON.stringify({ tree, preview, total, out })}`);
+        assert.ok(out.preview >= MIN_PREVIEW_PX, `preview min: ${JSON.stringify({ tree, preview, total, out })}`);
+        if (total >= floor) {
+          const used = out.tree + out.preview + 2 * DIVIDER_PX + MIN_EDITOR_PX;
+          assert.ok(
+            used <= total,
+            `editor min defended: used=${used} total=${total} ${JSON.stringify({ tree, preview, out })}`,
+          );
+        }
+      }
+    }
+  }
+});
+
 if (process.exitCode === 1) {
   console.log("FAIL");
   process.exit(1);

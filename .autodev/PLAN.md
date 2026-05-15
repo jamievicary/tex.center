@@ -399,10 +399,9 @@ fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
   iter-251 parse-smoke sketch landed iter 252 as
   `tests_normal/cases/parse_playwright_fixtures.mjs` (AST walker
   for block-scoped redeclaration).
-- **Dead branch in `clampPanelWidths`** (iter 280 observation):
-  the `preview > maxPreview` arm is unreachable given the
-  linear-constraint algebra. Either delete it or add a scenario
-  test that proves a hit. Park for next `N%10==0` cleanup.
+- ~~Dead branch in `clampPanelWidths`~~. Deleted iter 290; the
+  invariant the branch was defending is now pinned by a parameter-
+  sweep case in `editorPanelLayout.test.mjs`.
 
 ## Leaked-subprocess hygiene (per `150_answer.md`)
 

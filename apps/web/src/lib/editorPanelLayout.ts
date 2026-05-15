@@ -92,10 +92,6 @@ export function clampPanelWidths(input: {
   } else if (tree > maxTree) {
     tree = maxTree;
   }
-  const maxPreview = input.total - dividers - MIN_EDITOR_PX - tree;
-  if (preview > maxPreview && maxPreview >= MIN_PREVIEW_PX) {
-    preview = maxPreview;
-  }
   return { tree, preview };
 }
 
