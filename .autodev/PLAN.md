@@ -13,85 +13,52 @@ exists alongside but isn't routed to. Iteration indicator wired
 through Dockerfile build-arg into the topbar (regression-locked).
 
 All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
-240; delete-project pin (`verifyLiveDeleteProject`) GREEN iter 251.
+240; delete-project pin (`verifyLiveDeleteProject`) GREEN iter 251;
+M17 no-flash pin (`verifyLivePdfNoFlashBetweenSegments`) GREEN
+iter 273.
 
-**Current live focus: M13.2(b) — fully-live editor within 1000 ms
-on cold project access.** M13.2(b).1 (no-auto-destroy + self-suspend)
-landed iter 249, deployed iter 250. M13.2(b).2 (optimistic delete)
-landed iter 254. M13.2(b).3 (suspended-resume gold spec) green iter
-256/260. **M13.2(b).4 (stopped-state pin) open — current GT-6 spec
-only exercises the optimistic suspended-resume path; user reports
-20 s+ on `stopped`-state Machines (see `260_answer.md`).**
+**Open red gold cases (post iter 280):**
 
-Active priority queue (post iter-273): **M13.2(b).5 R1 (SSR seed
-widening — needs shared blob store) → M11.1c headless-tree
-adoption → M16.aesthetic.** M17 Playwright pin
-(`verifyLivePdfNoFlashBetweenSegments`) landed iter 273. Iter 272
-landed gold-runner self-heal: port-3000 listener auto-kill in
-`spawnDevServer` + startup orphan-sidecar sweep in
-`bootstrapLiveProject` (was teardown-only). Closes the leak-loop
-where one runner crash wedged subsequent iterations on both
-`test_playwright` (port in use) and
-`test_machine_count_under_threshold` (orphans accumulate). M15
-sidecar fix + R2 sidecar idle-handler deployed as
-`tex-center-sidecar` v39 (verified iter 271). M17 implementation
-landed iter 271; Playwright pin landed iter 273. M17 promoted from `269_question.md` /
-`269_answer.md`. M15 fix (sidecar `targetPage=0`
-default) landed iter 269 alongside a local sidecar-level pin
-(`test_supertex_multipage_emit`). M14.title-bar landed
-iter 264. M13.2(b).4 stopped-state pin landed iter 266 (RED gold
-case as expected). M13.2(b).5 R2 (sidecar idle-handler stays
-alive on suspend-throw) landed iter 267.
-See
-`260_answer.md` for sequencing rationale and library/palette
-decisions.
+- `verifyLivePdfMultiPage` (M15) — blocked on supertex agent's
+  response to `vendor/supertex/discussion/764_question.md`
+  (filed iter 279). Diagnosis below.
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — blocked
+  on M13.2(b).5 R1 (SSR seed widening, needs shared blob store).
+- `verifyLiveGt6LiveEditableState` (M13.2(b).3) — was green
+  (iter 256–279), red iter 280 once and may be flaky around the
+  suspended-resume boundary; rerun + investigate if it persists.
 
-Full diagnoses: GT-5 in `.autodev/logs/202.md`; M7.4.x closing in
-`.autodev/discussion/230_answer.md`; M13 timeline in
-`.autodev/logs/236.md`; M13.2(b) cold-Machine audit in
-`.autodev/discussion/246_answer.md`.
+**Active priority queue:** M13.2(b).5 R1 → M11.1c headless-tree
+adoption → M16.aesthetic. M11.5 still gated on shared-R2 binary-
+asset work.
 
 ## 2. Milestones
 
 ### M9.editor-ux — live editor UX bugs
 
 Done and locked: clickable logo, no-flash editor load, compile
-coalescer (extracted iter 200), sustained-typing safety, toast
-store + component scaffold, toast consumers for `file-op-error`
-and compile errors, debug-mode toggle
+coalescer (extracted iter 200 into
+`apps/sidecar/src/compileCoalescer.ts`), sustained-typing safety,
+toast store + component scaffold, toast consumers for
+`file-op-error` and compile errors, debug-mode toggle
 (URL/localStorage/Ctrl+Shift+D) with protocol fan-out via
 `WsDebugEvent`. Sidecar `assembleSegment` directory-scan fallback
-removed. Gold restructure (iter 197 + 210): warm-up + project
-creation in `globalSetup.ts`
-(`fixtures/liveProjectBootstrap.ts`), test-scoped fixture reads
-env, per-test `timeout` = 45s.
+removed.
 
 Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
 `aggregateKey` within 500ms re-arms TTL and bumps `count`.
 
-Closed regression slices (live + local locks retained):
-
-- **gt6 slow `.cm-content` appearance.** Closed iter 240 by
-  M13.2(a) SSR seed gate. Lock: `verifyLiveGt6FastContentAppearance`.
-- **gt7 daemon crash under rapid typing.** Closed iter 227,
-  upstream fix in `vendor/supertex` `2fb543e`. Locks: GT-7/8 live
-  + four local supertex tests. Narrative:
-  `.autodev/discussion/225_answer.md`, `226_*`.
-- **M7.4.x — GT-5.** Closed iter 231, upstream fix `8c3dec0`.
-  Locks: GT-5 live + `supertexWarmDocBodyEditNoop.test.mjs`.
-- **M9.live-hygiene.leaked-machines.** Landed iter 243 (per-project
-  Machines tagged via `config.metadata.texcenter_project`, count
-  guardrail filters shared-pool); orphan-tagged auto-sweep added
-  iter 247 (`tests_gold/lib/src/sweepOrphanedSidecarMachines.ts`
-  in `globalSetup` teardown). The 2 legacy untagged orphans
-  destroyed iter 250.
-- **M9.live-hygiene.delete-project.** Endpoint + UI landed iter 245
-  (`apps/web/src/lib/server/deleteProject.ts`, `?/delete` form
-  action), live spec pre-condition fixed iter 246 (poll on
-  `machine_assignments` row not SSR text). Lock:
-  `verifyLiveDeleteProject` (green iter 251). R2 blob reap deferred
-  (requires shared `BLOB_STORE` binding).
+Closed regression slices, all with live locks retained: gt6 slow
+`.cm-content` (closed iter 240 via M13.2(a) SSR seed gate; lock
+`verifyLiveGt6FastContentAppearance`); gt7 daemon crash under
+rapid typing (closed iter 227, upstream `2fb543e`; locks GT-7/8 +
+four local supertex tests); M7.4.x GT-5 (closed iter 231,
+upstream `8c3dec0`); M9.live-hygiene.leaked-machines (per-project
+Machine tagging + orphan-tag sweep landed iter 243/247);
+M9.live-hygiene.delete-project (landed iter 245; lock
+`verifyLiveDeleteProject`). Narratives:
+`.autodev/discussion/225_answer.md`, `226_*`, `230_answer.md`.
 
 Remaining slices:
 
@@ -114,368 +81,157 @@ Remaining slices:
 "native Svelte 5, no third-party tree lib" rule is dropped.
 Adopting `@headless-tree/core` + its Svelte adapter — headless
 state-machine for expand/select/rename/DnD, our own markup and
-styles. Rationale: a11y + keyboard nav + DnD primitives are a
-maintenance liability; headless library carries them; styling
-stays ours (clean fit with M16 aesthetic). Sub-slices:
+styles. Sub-slices:
 
 - **M11.1 rendering substrate. Landed iter 261.**
-  `apps/web/src/lib/fileTree.ts` (`buildFileTree` pure
-  path-grouping forest, folders-first/alphabetic sort) +
-  `apps/web/src/lib/FileTreeNode.svelte` (self-recursive
-  collapsible node) consumed by `FileTree.svelte`. The data
-  layer (`fileTree.ts`) survives the headless-tree migration;
-  `FileTreeNode.svelte`'s recursive markup is replaced in M11.1c.
-  Lock: `apps/web/test/fileTree.test.mjs`.
+  `apps/web/src/lib/fileTree.ts` (`buildFileTree`) +
+  `apps/web/src/lib/FileTreeNode.svelte`. Data layer survives the
+  headless migration; `FileTreeNode.svelte`'s markup is replaced
+  in M11.1c. Lock: `apps/web/test/fileTree.test.mjs`.
 - **M11.1b** relax `validateProjectFileName` to permit
   `/`-separated segments, update sidecar persistence to
   `mkdir -p` parent dirs on write/rename and reap empty parents
-  on delete. Folders become a live concept end-to-end. Required
-  before M11.3 has any effect.
+  on delete. Required before M11.3 has any effect.
 - **M11.1c (new)** adopt `@headless-tree/core` + its Svelte
   adapter. Wire its state to `buildFileTree` output; replace
   `FileTreeNode.svelte`'s markup with a headless-tree-driven
-  view; preserve behaviour (flat names render flat, folders
-  render collapsible). Component test on the wiring
-  (expand/collapse/selection).
+  view; preserve behaviour. Component test on the wiring.
 - **M11.2** create/delete/rename via context menu + keyboard
-  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs;
-  headless-tree provides keyboard primitives.
-- **M11.3** create folder via virtual-folder model (no sentinel
-  file; folder materialises on first child). Gated on M11.1b.
+  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
+- **M11.3** create folder via virtual-folder model. Gated on
+  M11.1b.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
-  Headless-tree drag handler emits `{ source, target }`.
-- **M11.5** OS drop-upload + drag-out download. Drop-upload still
-  **blocked by FUTURE_IDEAS "binary asset upload"** for non-UTF-8
-  payloads. Drag-out download is unblocked (browser-native
-  `DataTransfer`; blob-URL fallback for non-Chromium).
+- **M11.5** OS drop-upload + drag-out download. Drop-upload
+  blocked by FUTURE_IDEAS "binary asset upload"; drag-out
+  download unblocked.
 
-### M12.panels — draggable dividers (post-MVP UX)
+### M12.panels — draggable dividers
 
-Landed iter 257. Inline implementation in
-`apps/web/src/routes/editor/[projectId]/+page.svelte`: pointer-
-capture drag updates `--col-tree` / `--col-preview` CSS custom
-properties; editor pane is `1fr`. Min widths 150/200/200
-(tree/editor/preview). Per-project widths persisted to
-`localStorage["editor-widths:${projectId}"]`. Local gold lock:
-`tests_gold/playwright/editorPanelDividers.spec.ts` (two cases —
-drag tree, drag preview; both assert reload-persistence). The
-"file picker collapsible to zero with re-open chevron" was
-explicitly deferred for scope; recorded as a FUTURE_IDEAS
-candidate.
+**Landed iter 257.** Inline implementation in editor `+page.svelte`
+with `--col-tree` / `--col-preview` CSS custom properties; editor
+pane is `1fr`. Min widths 150/200/200. Per-project widths in
+`localStorage["editor-widths:${projectId}"]`. Iter 280 extracted
+the layout math into pure-TS `apps/web/src/lib/editorPanelLayout.ts`
+with unit test `apps/web/test/editorPanelLayout.test.mjs`. Gold
+locks: `tests_gold/playwright/editorPanelDividers.spec.ts`.
 
 ### M13.open-latency — instrument-then-fix
 
-- **M13.1 instrumentation. Closed iter 236.** `performance.mark`
-  helpers at `apps/web/src/lib/editorMarks.ts`. Diagnostic
-  conclusion: route→ws-open ~11.5 s dominates entirely (cold
-  per-project Machine). See `.autodev/logs/236.md`.
+- **M13.1 instrumentation. Closed iter 236.**
+  `apps/web/src/lib/editorMarks.ts`. Diagnostic conclusion:
+  route→ws-open ~11.5s dominates (cold per-project Machine).
 - **M13.2(a) SSR seed gate. Closed iter 238, GT-6 green iter 240.**
-  `apps/web/src/routes/editor/[projectId]/+page.server.ts` returns
-  a `seed` when no `machine_assignments` row exists; editor renders
-  `<pre class="editor-seed">` inside `.editor` while
-  `snapshot.hydrated` is false. Two load-bearing design calls:
-  (1) seed is visual-only, never inserted into the local Y.Doc
-  (CRDT can't dedupe two independent `insert(0, …)` ops with
-  different `clientID`); (2) placeholder is `<pre>`, not
-  `.cm-content`, so existing live specs typing into `.cm-content`
-  still wait for the real CodeMirror mount. GT-6 polls `.editor`
-  textContent.
-- **M13.2(b) — fully-live within 1000 ms on cold access. OPEN.**
-  GT-6 only asserts the SSR seed `<pre>`; the real bar is Yjs
-  connected + CodeMirror bound + typing not dropped.
+  `+page.server.ts` returns a `seed` when no `machine_assignments`
+  row exists; editor renders `<pre class="editor-seed">` inside
+  `.editor` until `snapshot.hydrated`. Load-bearing: seed is
+  visual-only, never inserted into the local Y.Doc (CRDT can't
+  dedupe two independent `insert(0, …)` ops with different
+  `clientID`); placeholder is `<pre>`, not `.cm-content`, so
+  existing live specs typing into `.cm-content` still wait for
+  the real CodeMirror mount.
+- **M13.2(b) — fully-live within 1000 ms on cold access. PARTIAL.**
 
-  1. **M13.2(b).1. Landed iter 249, deployed iter 250; resume-bug
-     fix landed + deployed iter 255.** `auto_destroy: false` in
-     `apps/web/src/lib/server/upstreamFromEnv.ts`. Sidecar idle
-     handler in `apps/sidecar/src/index.ts` calls
-     `POST /machines/{self}/suspend`; on resume it must NOT close
-     the app and must NOT exit (the Fly response-then-freeze
-     semantic means the suspend fetch resolves post-resume with the
-     listener still bound — iter 249 got this wrong, iter 255 fixed
-     it). On `null` `suspendSelf` (local dev) or fetch-throws,
-     fallback path closes app + `exit(0)`. `server.ts` passes
-     `{ rearm }` to `onIdle` so the post-resume path can re-arm the
-     idle gate. Unit tests in `apps/sidecar/test/idleSuspend.test.mjs`.
-  2. **M13.2(b).2 — optimistic project delete. Landed iter 254.**
-     `deleteProject` now deletes the DB row first, then kicks off
-     Fly `destroyMachine` as fire-and-forget. The result exposes a
-     `destroyComplete: Promise<{destroyed, error?}>` for tests; the
-     `/projects` `?/delete` action ignores it and redirects
-     immediately. Non-404 destroy failures are logged via the
-     injectable `logError` (default `console.error`) and never
-     raised. Orphan-tag sweep in `globalSetup` teardown remains the
-     safety net. Unit tests in `apps/web/test/deleteProject.test.mjs`
-     including a gated-promise test asserting the helper returns
-     before `destroyMachine` settles. Live gold
-     (`verifyLiveDeleteProject`) unchanged; its 30 s wait for the
-     row link to disappear remains in place — a tighter
-     post-click latency assertion was considered but rejected as
-     flake-prone over the live network (form POST → 303 → fresh
-     GET /projects, p99 well above 500 ms on a cold path).
-  3. **M13.2(b).3 — suspended-resume cold-editable gold case. Spec landed iter 256.**
-     `tests_gold/playwright/verifyLiveGt6LiveEditableState.spec.ts`.
-     Cold-starts a fresh project, leaves `/editor`, drives the
-     per-project Machine into the `suspended` state via the Fly
-     Machines API (`POST /machines/{id}/suspend` — same endpoint
-     the sidecar's own idle handler calls; bypasses the 10-min idle
-     timer to keep the test under a few minutes wallclock). Then
-     clicks the dashboard link and asserts (a) `.cm-content`
-     contains the seeded `documentclass` sentinel within 1000 ms
-     of click, and (b) a single keystroke produces a Yjs
-     `TAG_DOC_UPDATE` (0x00) `framesent` event within 1000 ms.
-     Landed iter 256; observed GREEN by iter 260 gold run
-     (cmContentReadyMs=857, keystrokeAckMs=17). The suspended-resume
-     path is faster than expected: `.cm-content` populates within
-     budget without the seed-widening follow-up, because the
-     suspended Machine resumes in ~300 ms and the existing
-     `.editor-placeholder`/SSR-seed path no longer dominates. The
-     "widen SSR seed for non-fresh projects" follow-up below
-     remains useful for the cold-stopped (non-suspended) case but
-     is no longer load-bearing for M13.2(b).3. Keeps current GT-6
-     (`verifyLiveGt6FastContentAppearance`) as the regression lock
-     on M13.2(a).
-
-  4. **M13.2(b).4 — stopped-state cold-editable pin. Landed iter 266.**
-     `tests_gold/playwright/verifyLiveGt6LiveEditableStateStopped.spec.ts`
-     drives the per-project Machine into `stopped` via Fly's
-     `POST /machines/{id}/stop` (rather than `/suspend` as
-     M13.2(b).3 does), polls until `state === "stopped"`, then
-     measures `cmContentReadyMs` / `keystrokeAckMs` against the
-     1000 ms budget. Expected RED until M13.2(b).5 lands the fix;
-     pin gives M13.2(b).5 work a concrete target separable from
-     the suspended-resume path.
-     Follow-up still owed: sidecar idle-handler test asserting
-     `suspended` (not `stopped`) is the actual outcome of the
-     idle-timer fallback. Park in M13.2(b).5 R2 work.
-  5. **M13.2(b).5 — fix for stopped-state cold load. PARTIAL —
-     R2 sidecar contribution landed iter 267, deploy + R1
-     outstanding.**
-     Two candidate roots, addressable independently:
-     - **R1. OPEN.** Widen SSR seed for non-fresh projects
-       (already a known follow-up below). Fetches persisted
-       source from shared blob store so `.cm-content` shows real
-       content during the Machine cold-start. Prerequisite for
-       `verifyLiveGt6LiveEditableStateStopped` flipping green
-       (the spec directly drives `/stop` and so reaches the
-       cold-restart path regardless of R2). Requires shared
-       `BLOB_STORE` binding.
-     - **R2. LANDED iter 267 (deploy outstanding).** Sidecar
-       `createIdleHandler` no longer exits on `suspendSelf`
-       failure. The throw path now logs and re-arms the idle
-       gate instead of `app.close()` + `exit(0)`; the next idle
-       window retries. Net: in production the sidecar itself can
-       no longer drop a Machine into `stopped`. Local-dev path
-       (`suspendSelf === null`) keeps the close-and-exit
-       behaviour. Unit test
-       (`apps/sidecar/test/idleSuspend.test.mjs`) now wired into
-       `tests_normal/cases/test_node_suites.py` and pins the new
-       contract (suspend-throw → no close, no exit, rearm; second
-       idle window retries). Stopped state is still reachable
-       externally (Fly host eviction, manual `flyctl machine
-       stop`, gold spec `/stop` API), so the gold pin remains RED
-       until R1 lands.
+  1. **M13.2(b).1 no-auto-destroy + self-suspend.** Landed iter
+     249/250; resume-bug fix iter 255. `auto_destroy:false` in
+     `upstreamFromEnv.ts`; sidecar idle handler in
+     `apps/sidecar/src/index.ts` calls
+     `POST /machines/{self}/suspend`. On `null` `suspendSelf` or
+     fetch-throws, fallback path closes app + `exit(0)`.
+     `server.ts` passes `{ rearm }` to `onIdle`. Tests:
+     `apps/sidecar/test/idleSuspend.test.mjs`.
+  2. **M13.2(b).2 optimistic project delete.** Landed iter 254.
+     `deleteProject` deletes DB row first, then fire-and-forget
+     `destroyMachine`. Result exposes `destroyComplete` for
+     tests; `?/delete` action ignores it. Orphan-tag sweep in
+     gold `globalSetup` teardown remains the safety net. Tests:
+     `apps/web/test/deleteProject.test.mjs`.
+  3. **M13.2(b).3 suspended-resume gold case.** Spec landed iter
+     256; green by iter 260 (cmContentReadyMs=857,
+     keystrokeAckMs=17). Suspended Machine resumes in ~300 ms;
+     no seed widening needed for this path.
+     `verifyLiveGt6LiveEditableState.spec.ts`. Red iter 280 once
+     — may need flake investigation.
+  4. **M13.2(b).4 stopped-state cold-editable pin. RED, expected.**
+     `verifyLiveGt6LiveEditableStateStopped.spec.ts` drives
+     `POST /machines/{id}/stop`, polls `state==="stopped"`, then
+     measures `cmContentReadyMs` / `keystrokeAckMs` vs 1000 ms.
+     Gives M13.2(b).5 a concrete target.
+  5. **M13.2(b).5 — fix for stopped-state cold load. PARTIAL.**
+     - **R1. OPEN.** Widen SSR seed for non-fresh projects:
+       fetch persisted source from shared blob store so
+       `.cm-content` shows real content during Machine cold-start.
+       Prerequisite for (b).4 flipping green. Requires shared
+       `BLOB_STORE` binding (web side currently has none).
+     - **R2. LANDED iter 267.** Sidecar `createIdleHandler` no
+       longer exits on `suspendSelf` failure; throw path logs and
+       re-arms instead of `app.close()` + `exit(0)`. Local-dev
+       path (`suspendSelf === null`) keeps the close-and-exit
+       behaviour. Stopped state still reachable externally (Fly
+       host eviction, manual `flyctl machine stop`, gold spec
+       `/stop`), so the pin remains RED until R1.
 
   **Known follow-ups for M13.2:**
-
-  - Non-fresh projects (those with a `machine_assignments` row)
-    still show the blank `.editor-placeholder` for ~11.5 s on
-    reconnect into a cold-stopped Machine. Widen the seed surface
-    to fetch the current persisted source from R2/blob-store in
-    `+page.server.ts` when a row exists. Requires the web side to
-    read the same blob store the sidecar writes; currently
-    `BLOB_STORE` lives only on each per-project Machine. Schedule
-    alongside M11.5 binary-asset wire work (shared R2 bucket).
-  - GT-A passes because it polls `.cm-content` which only appears
-    post-hydrate; the seed placeholder is a separate DOM element.
-    If a future iteration consolidates seed and real editor under
-    one `.cm-content`, GT-A's invariant must be carried through.
   - `machine_assignments`-row deletion via `cleanupProjectMachine`
     re-arms the SSR seed gate even though the sidecar's blob store
     may still hold the user's edits. Benign while the blob store
     remains per-Machine; once shared, the gate must flip from
     "no machine assignment" to "no persisted blob".
-
-Default sequencing (updated iter 262 per `260_answer.md`):
-**M13.2(b).5 → M15 → M11.1c → M16.** R1 (SSR seed widening)
-is M13.2(b).5 fix work, runs after the M13.2(b).4 pin lands RED.
-M11.5 still gated on binary-asset wire work.
+  - GT-A passes because it polls `.cm-content` which only appears
+    post-hydrate; the seed placeholder is a separate DOM element.
+    If a future iteration consolidates seed and real editor under
+    one `.cm-content`, GT-A's invariant must be carried through.
 
 ### M14.title-bar — centred project title in editor topbar
 
 **Landed iter 264.** `data.project.name` rendered as
-`<h1 class="project-title" data-testid="project-title">` inside
-the editor topbar. Topbar layout changed from `flex
-justify-content: space-between` to
-`grid grid-template-columns: 1fr auto 1fr` so the title column is
-mathematically centred regardless of brand-group / who-group
-widths. Title truncates with `text-overflow: ellipsis` on
-overflow. Lock: third assertion block in
-`tests_gold/playwright/editor.spec.ts` (`renders three-panel
-layout`) — |title-centre-x − topbar-centre-x| ≤ 2 px on a
-freshly-loaded `/editor/<id>` with a 200-status project. Style
-aligns with M16 once that lands (Source Serif 4, larger size).
+`<h1 class="project-title" data-testid="project-title">`. Topbar
+layout: `grid grid-template-columns: 1fr auto 1fr`. Title
+truncates with `text-overflow: ellipsis`. Lock: third assertion
+block in `tests_gold/playwright/editor.spec.ts` —
+|title-centre-x − topbar-centre-x| ≤ 2px.
 
 ### M15.multipage-preview — page-1-only PDF bug (iter 262)
 
-Promoted from `241_question.md` / `241_answer.md`. Pin-RED-first:
-seed a project body producing ≥3 pages (existing `\newpage` flows),
-open `/editor`, assert preview pane contains ≥2 `canvas[data-page]`
-elements **or** a single canvas of height > viewport.height * 1.8.
+Promoted from `241_question.md` / `241_answer.md`.
 
-- **Pin landed iter 268.**
-  `tests_gold/playwright/verifyLivePdfMultiPage.spec.ts` creates
-  its own fresh project, waits for the seeded-template pdf-segment,
-  types four `\newpage` breaks before `\end{document}`, then
-  asserts viewer-agnostically: ≥2 paged canvases or a single
-  canvas > 1.8 × viewport height.
-- **Selector + diagnostics refresh landed iter 274.** Spec's
-  `pagedCanvasCount` branch (counting `canvas[data-page]`) was
-  permanently 0 after iter-271 moved `data-page` to the
-  `.pdf-page` wrapper; switched to counting `.pdf-page` wrappers
-  directly. The `tallestPx > 1.8 × viewport` fallback branch is
-  unchanged. Separately, the spec has been RED with `no post-edit
-  pdf-segment carrying the multipage body arrived` for iters
-  271/272/273 with no diagnostic data on which stage broke
-  (typing not landing? DOC_UPDATE not sent? compile not firing?);
-  `captureFrames` now also buckets outgoing TAG_DOC_UPDATE into a
-  live `docUpdateSent` counter, and the timeout branch of the
-  segments assertion surfaces `docUpdateSent`,
-  `pdfSegmentsAtFail`, and `.cm-content` text length+tail in the
-  failure message. No assertion weakened. Iter-274 gold run came
-  back with `segmentsBefore=1 pdfSegmentsAtFail=1 docUpdateSent=121
-  cmContentLen=182 cmContentTail=" body text.\\newpage Page five
-  body text."` — typing landed and DOC_UPDATE frames reached the
-  WS, but no second pdf-segment ever arrived. The sidecar-level
-  pin `test_supertex_multipage_emit` (5-page compile with
-  `targetPage=0`) is green, and the deployed sidecar image
-  (`sha256:ceca0de6…`, git `c63eb6c` = iter 269) carries the
-  `targetPage=0` fix. So the bug is somewhere in the live
-  recompile path between client edits and sidecar `runCompile` —
-  not in the daemon itself. **Iter 275 diagnostic.** Extended
-  `captureFrames` to also record sidecar `compile-status` control
-  frames (running/idle/error + detail); the spec's timeout
-  failure now surfaces `compileStatusEvents=running×N,idle×M,…`
-  plus `lastErrorDetail`. Three failure modes become
-  distinguishable from one gold run: (a) empty events → sidecar
-  coalescer never fired a post-edit compile; (b) running→error →
-  compile reached daemon and failed (detail tells us how);
-  (c) running→idle but no segment → sidecar succeeded but didn't
-  ship segment frames. Next gold run picks one.
-- **Diagnosis iter 276.** Iter-275 diagnostic came back with
-  `compileStatusEvents=running×11,idle×11 lastErrorDetail=null` —
-  failure mode (c). Iter 276 read live `tex-center-sidecar` logs
-  directly via `flyctl logs` and found the smoking gun on every
-  one of those 11 compile rounds:
-  ```
-  supertex: edit /tmp/…/main.tex@85 past last consumed byte 70 — no recompile
-  [supertex-daemon event] round-done
-  msg=compile ok segments=0 bytesShipped=0
-  ```
-  This is the iter-726 supertex short-circuit (see
-  `vendor/supertex/discussion/726_*`) firing inappropriately on a
-  document-body insertion. The 726 fix's predicate (`edit_byte >=
-  read_end_highwater` → no recompile) was designed for "edit in
-  trailing whitespace past `\end{document}`". Here the daemon's
-  recorded highwater pins at byte 70 (end of seeded
-  `\end{document}\n`) while the user inserts new content **before**
-  `\end{document}` — content that the engine needs to consume.
-  Each compile's first-byte-diff lands past 70 (the daemon's
-  *previous tracked state* is whatever the prior no-op-skipped
-  compile saw, not the original SEED), so the short-circuit fires
-  again; highwater never grows; vicious cycle.
-- **Local repro investigation iter 276.** Wrote
-  `tests_gold/lib/test/supertexIncrementalMultipageEmit.test.mjs`
-  + `tests_gold/cases/test_supertex_incremental_multipage_emit.py`
-  driving `SupertexDaemonCompiler` against an 11-step cumulative
-  growth of `MULTIPAGE_BODY` between `Hello, world!\n` and
-  `\end{document}\n`, with `targetPage=0` on every compile. PASS
-  locally: every step emits a segment carrying the full
-  incremental page count (final=5). So the daemon DOES handle the
-  controlled local shape correctly — meaning the live trigger
-  needs additional state we haven't replicated yet (cold-Machine
-  checkpoint restore, partial Yjs sync timing, or different
-  coalescer cadence). Pin retained as a regression lock and a
-  shape-baseline for the next investigation iteration.
-- **Escalation iter 279.** Wrote
-  `vendor/supertex/discussion/764_question.md` (option ii from iter
-  276) describing the live shape, the smoking-gun stderr line, the
-  local-pin contrast (green for the same sequence of writes), and
-  candidate predicate fixes. M15 close-out is now blocked on the
-  supertex agent picking that up in its next iteration. tex-center
-  side has no further work until either (a) supertex lands a fix
-  and the upstream commit is rolled into `SIDECAR_IMAGE`, or (b)
-  supertex responds with a reason the bug is downstream — in which
-  case option (i) (extending the local pin until it reproduces)
-  becomes the next move.
-- **Diagnosis + fix landed iter 269.** Root cause was the
-  sidecar's `targetPage = maxViewingPage(p)` default in
-  `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
-  protocol clamps shipouts to `recompile,<N>`; with no viewer ever
-  setting `viewingPage > 1` (page-2 canvas doesn't exist until
-  page 2 is shipped — chicken-and-egg), every compile shipped
-  page 1 only. Local probe via a 5-page source confirmed
-  `targetPage=1 → 1 page ref in PDF, targetPage=0 ("end") → 5
-  page refs`. Fix: pass `targetPage: 0` unconditionally so
-  supertex always renders every page. Sidecar-level pin:
-  `tests_gold/cases/test_supertex_multipage_emit.py` +
-  `tests_gold/lib/test/supertexMultipageEmit.test.mjs`. The
-  live `verifyLivePdfMultiPage` gold spec will flip green on the
-  next gold run after `SIDECAR_IMAGE` redeploy. The
-  per-viewer targetPage optimisation is parked as a long-doc
-  perf hatch — re-introduce only if compile-cost on a 50+ page
-  doc becomes load-bearing.
+**Fix landed iter 269.** Root cause: sidecar's
+`targetPage = maxViewingPage(p)` default in
+`apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
+protocol clamps shipouts to `recompile,<N>`; with no viewer ever
+setting `viewingPage > 1` (chicken-and-egg), every compile
+shipped page 1 only. Fix: pass `targetPage: 0` unconditionally.
+Sidecar-level pin
+`tests_gold/cases/test_supertex_multipage_emit.py` green.
 
-### M17.preview-render — PDF preview flashing + cross-fade (iter 270)
+**Live `verifyLivePdfMultiPage` still RED — separate upstream bug,
+escalated iter 279.** Smoking-gun (live sidecar logs, iter 276):
 
-Promoted from `269_question.md` / `269_answer.md`. **Implementation
-landed iter 271** (controller + DOM rewrite + unit test). Local
-Playwright pin still owed — defer to a follow-up iteration.
+```
+supertex: edit /tmp/…/main.tex@85 past last consumed byte 70 — no recompile
+```
 
-Defining defect (now fixed):
-`apps/web/src/lib/PdfViewer.svelte` `render()` did
-`target.replaceChildren()` then rebuilt canvases serially —
-preview pane was empty for hundreds of ms on every compile, pages
-popped in one at a time. Acceptance:
+This is iter-726 supertex short-circuit (see
+`vendor/supertex/discussion/726_*`) firing inappropriately on a
+document-body insertion. The predicate
+(`edit_byte >= read_end_highwater` → no recompile) was designed
+for "edit in trailing whitespace past `\end{document}`"; here the
+daemon's highwater pins at byte 70 (end of seeded
+`\end{document}\n`) while the user inserts new content **before**
+`\end{document}`. Highwater never grows; vicious cycle.
 
-- **M17.a — no flash on update.** Render new canvases off-DOM
-  (PDF.js works on a detached canvas's 2D context); swap into
-  per-page wrappers in one synchronous DOM op once all pages have
-  rendered.
-- **M17.b — cross-fade.** Per-page wrapper `<div class="pdf-page">`
-  with two absolutely-positioned canvases during the swap window;
-  new canvas opacity 0→1, old 1→0 over ~180 ms; old unmounts on
-  `transitionend`. Trailing wrappers append/remove as page count
-  changes (fade-in / fade-out same transition). Geometry-change
-  case: animate wrapper width/height alongside.
-- **renderToken extension.** New render mid-fade commits any
-  in-flight fade instantly (snapshot opacity, remove old canvas,
-  clear transition) before starting the new off-DOM render; the
-  most-recent committed canvas becomes "old" for the next fade.
-- **IntersectionObserver retargeted to wrapper**, not canvas —
-  survives fades, `tracker.reset()` no longer needed per render.
-- **Pin.** Local Playwright
-  `verifyLivePdfNoFlashBetweenSegments.spec.ts`: across 1s window
-  spanning two `pdf-segment` arrivals, poll DOM at 20 ms cadence;
-  assert `min(canvas[data-page] count) >= 1`. Secondary opacity-
-  in-(0,1) sample optional. Plus a non-DOM unit test for the
-  fade-controller state machine
-  (`apps/web/test/pdfFadeController.test.mjs`).
+Local repro pin `test_supertex_incremental_multipage_emit.py` +
+`tests_gold/lib/test/supertexIncrementalMultipageEmit.test.mjs`
+PASSES — controlled local shape doesn't trigger the bug, so the
+live trigger needs additional state we haven't replicated
+(cold-Machine checkpoint restore, partial Yjs sync timing, or
+different coalescer cadence). Pin retained as regression lock and
+shape-baseline.
 
-**Status (iter 271).** M17.a + M17.b landed. New module
-`apps/web/src/lib/pdfFadeController.ts` owns the per-page fade
-state machine (mid-fade interrupt → snapshot, cross-fade,
-add/remove wrapper transitions) with `apps/web/test/pdfFadeController.test.mjs`
-covering the eight code paths via a recording adapter (no DOM).
-`PdfViewer.svelte` renders all pages off-DOM then hands the
-controller a per-page canvas descriptor list; wrappers carry
-`data-page` (not canvases) so the IntersectionObserver target is
-stable across renders and `tracker.reset()` is gone. Live
-Playwright pin `verifyLivePdfNoFlashBetweenSegments.spec.ts`
-(20 ms in-page sampler across a keystroke-triggered second
-pdf-segment, asserts `min(.pdf-page > canvas count) >= 1`)
-landed iter 273. Selector targets the wrapper-child canvas, not
-`[data-page]` on the canvas (which moved to the wrapper in
-iter 271).
+**Blocked on supertex agent picking up
+`vendor/supertex/discussion/764_question.md` (filed iter 279).**
+Options when answer lands: (a) supertex commits a predicate fix
+→ roll upstream into `SIDECAR_IMAGE` and redeploy; (b) bug is
+downstream → extend local pin until it reproduces.
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
@@ -488,14 +244,25 @@ OFL, variable) + **Inter** (UI affordances, buttons, table
 headers; OFL, variable). Self-host both. Monospace in CodeMirror
 pane unchanged.
 
-Palette (4 colours): **Paper** `#FAF7F0` (chrome background) +
-**Ink** `#1F1B16` (text) + **Quill** `#2E4C6D` (accent / links /
-primary buttons) + **Margin** `#D9CFBF` (rules, dividers, chevron
-tints). Editor pane background and PDF canvas stay neutral.
+Palette (4 colours): **Paper** `#FAF7F0` + **Ink** `#1F1B16` +
+**Quill** `#2E4C6D` (accent / links / primary buttons) +
+**Margin** `#D9CFBF` (rules, dividers, chevron tints). Editor
+pane background and PDF canvas stay neutral.
 
-Pin: Playwright visual-snapshot diff on `/` and `/projects`,
-plus a tight topbar-element snapshot on the editor route. No
-CSS changes iter 262 — proposal only, applied in a later slice.
+Pin: Playwright visual-snapshot diff on `/` and `/projects`, plus
+a tight topbar-element snapshot on the editor route.
+
+### M17.preview-render — PDF preview cross-fade
+
+**Landed iter 271 (impl) + iter 273 (pin).**
+`apps/web/src/lib/pdfFadeController.ts` owns the per-page fade
+state machine (mid-fade interrupt → snapshot, cross-fade,
+add/remove wrapper transitions). `PdfViewer.svelte` renders all
+pages off-DOM then hands the controller per-page canvas
+descriptors; wrappers carry `data-page` so the
+IntersectionObserver target is stable across renders. Tests:
+`apps/web/test/pdfFadeController.test.mjs` (recording adapter, no
+DOM) + live Playwright `verifyLivePdfNoFlashBetweenSegments`.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
@@ -513,20 +280,14 @@ Rate limits, observability surface, narrower deploy tokens.
 
 M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability
 (iter 163); M9.cold-start-retry (iter 164 + 168 TCP-probe);
-M9.resource-hygiene (iter 175 spec teardown + count guardrail;
-iter 176 idle-stop arm at startup); M9.gold-restructure (iter 197,
-warm-up + fast per-spec timeouts); M10.branding (iter 194, logo
-SVGs at `apps/web/src/lib/logos/{linear,stacked}.svg`, inlined via
-Vite `?raw` import; brand wrapper is
-`<span role="img" aria-label="tex.center">`, editor route uses
-`<a class="brand">`); iter-200 coalescer extraction
-(`apps/sidecar/src/compileCoalescer.ts`); M13.1 instrumentation
-(iter 236); M13.2(a) SSR seed gate (iter 238, GT-6 green iter 240);
-M13.2(b).1 no-auto-destroy + self-suspend (iter 249, deployed iter
-250); M13.2(b).2 optimistic delete (iter 254); boot-time session
-sweep (iter 258, `SWEEP_SESSIONS_ON_BOOT=1` set on `tex-center`
-iter 259 — first live sweep removed 16 legacy rows). See git log and
-`.autodev/logs/` for detail.
+M9.resource-hygiene (iter 175/176); M9.gold-restructure (iter 197);
+M10.branding (iter 194); iter-200 coalescer extraction; M13.1
+(iter 236); M13.2(a) (iter 238); M13.2(b).1 (iter 249/250);
+M13.2(b).2 (iter 254); M13.2(b).3 spec (iter 256); boot-time
+session sweep (iter 258/259); M14.title-bar (iter 264);
+M13.2(b).4 pin (iter 266); M13.2(b).5 R2 (iter 267); M15 sidecar
+fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
+280). See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 
@@ -534,10 +295,13 @@ iter 259 — first live sweep removed 16 legacy rows). See git log and
   per-project Machine. Shared-pool app-tagged machines exist but
   aren't routed to. Decision deferred to post-MVP.
 - **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. The
-  iter-251 sketch (parse-smoke over `tests_gold/playwright/*.ts`)
-  landed iter 252 as `tests_normal/cases/parse_playwright_fixtures.mjs`
-  + `test_playwright_fixtures_parse.py` (AST walker for block-scoped
-  redeclaration; would have caught the iter-247 wedge at root).
+  iter-251 parse-smoke sketch landed iter 252 as
+  `tests_normal/cases/parse_playwright_fixtures.mjs` (AST walker
+  for block-scoped redeclaration).
+- **Dead branch in `clampPanelWidths`** (iter 280 observation):
+  the `preview > maxPreview` arm is unreachable given the
+  linear-constraint algebra. Either delete it or add a scenario
+  test that proves a hit. Park for next `N%10==0` cleanup.
 
 ## Leaked-subprocess hygiene (per `150_answer.md`)
 
