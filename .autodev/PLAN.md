@@ -29,8 +29,14 @@ routed to (decision deferred post-MVP).
 4. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change + forced-DPR=2 visual
    snapshot. Both deferred until reported.
-5. **M11.5a text drop-upload.** Drop `.tex` onto file tree →
-   existing `upload-file` text path.
+5. **M11.5a text drop-upload.** Closed iter 306. Wrapping
+   `<div class="ft-host">` around the tree's contents accepts
+   `dragover` + `drop` for `Files` payloads;
+   `classifyDroppedNames(names, files)` mirrors the picker-flow
+   `rejectionReason` (trim, `validateProjectFileName`,
+   `MAIN_DOC_NAME`, dedup against existing + within-drop), accepted
+   names flow through the existing `onUploadFile(name, content)`
+   wire path. Locks: `apps/web/test/fileDropUpload.test.mjs`.
 6. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar.
@@ -97,7 +103,13 @@ Remaining sub-slices:
   (`F2`, `Del`-with-confirm).
 - **M11.3** create folder via virtual-folder model.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
-- **M11.5a** OS drop-upload — text files. Unblocked; small.
+- **M11.5a** OS drop-upload — text files. **Closed iter 306.**
+  `apps/web/src/lib/fileDropUpload.ts` exports
+  `classifyDroppedNames`; `FileTree.svelte` wraps in
+  `<div class="ft-host">` and handles `dragover` / `dragleave` /
+  `drop` for `dataTransfer.types` containing `Files`. Visual
+  affordance: 2 px dashed `#2563eb` outline-color when isDragOver.
+  Lock: `apps/web/test/fileDropUpload.test.mjs`.
 - **M11.5b** OS drop-upload — binary assets. Blocked by
   FUTURE_IDEAS "binary asset upload" wire design.
 - **M11.5c** drag-out download from tree to OS. Unblocked.

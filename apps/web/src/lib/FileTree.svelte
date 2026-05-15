@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
   import { buildFileTree, type FileTreeNode } from "./fileTree.js";
+  import { classifyDroppedNames } from "./fileDropUpload.js";
   import {
     createFileTreeInstance,
     type FileItemData,
@@ -120,6 +121,71 @@
 
   let uploadInput: HTMLInputElement | undefined = $state();
 
+  // M11.5a: drop-text-upload affordance. The whole tree column is
+  // a drop zone; while the user is dragging a `Files` payload over
+  // it, the `dragover` flag flips on for a visible outline. Drop
+  // funnels names through `classifyDroppedNames` and uploads each
+  // accepted entry via `onUploadFile` (the same wire path as the
+  // picker-flow upload). Rejects surface as `window.alert` for
+  // parity with the picker UX.
+  let isDragOver = $state(false);
+
+  function dragHasFiles(e: DragEvent): boolean {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    for (let i = 0; i < types.length; i++) {
+      if (types[i] === "Files") return true;
+    }
+    return false;
+  }
+
+  function onDragOver(e: DragEvent): void {
+    if (!onUploadFile) return;
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    isDragOver = true;
+  }
+
+  function onDragLeave(e: DragEvent): void {
+    // Only clear when the pointer truly leaves the wrapper. A
+    // `dragleave` fires on every child traversal, but
+    // `relatedTarget` is null/outside-the-zone only on the boundary
+    // exit. Without this guard the affordance flickers as the
+    // pointer crosses children.
+    const related = e.relatedTarget as Node | null;
+    const current = e.currentTarget as Node | null;
+    if (related && current && current.contains(related)) return;
+    isDragOver = false;
+  }
+
+  async function onDrop(e: DragEvent): Promise<void> {
+    if (!onUploadFile) return;
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    isDragOver = false;
+    const list = e.dataTransfer?.files;
+    if (!list || list.length === 0) return;
+    const items: File[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const f = list.item(i);
+      if (f) items.push(f);
+    }
+    const { accepted, rejected } = classifyDroppedNames(
+      items.map((f) => f.name),
+      files,
+    );
+    for (const r of rejected) {
+      window.alert(`Cannot upload "${r.name}": ${r.reason}.`);
+    }
+    const acceptSet = new Set(accepted);
+    for (const file of items) {
+      if (!acceptSet.has(file.name.trim())) continue;
+      const content = await file.text();
+      onUploadFile(file.name.trim(), content);
+    }
+  }
+
   async function handleUploadChange(e: Event): Promise<void> {
     const input = e.currentTarget as HTMLInputElement;
     const list = input.files;
@@ -165,6 +231,14 @@
   }
 </script>
 
+<div
+  class="ft-host"
+  class:dragover={isDragOver}
+  data-testid="filetree-host"
+  ondragover={onDragOver}
+  ondragleave={onDragLeave}
+  ondrop={onDrop}
+>
 <ul class="root" role="tree">
   {#each rows as row (row.id)}
     {@const indent = `${row.level * 0.75}rem`}
@@ -247,8 +321,21 @@
     <p class="err" role="alert">server: {serverError}</p>
   {/if}
 {/if}
+</div>
 
 <style>
+  .ft-host {
+    min-height: 100%;
+    box-sizing: border-box;
+    /* Transparent 2px outline reserved so the dragover state can
+       light up without shifting the children. */
+    outline: 2px dashed transparent;
+    outline-offset: -2px;
+  }
+  .ft-host.dragover {
+    outline-color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+  }
   ul.root {
     list-style: none;
     margin: 0;
