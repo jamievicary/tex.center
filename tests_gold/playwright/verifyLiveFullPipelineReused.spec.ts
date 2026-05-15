@@ -72,11 +72,12 @@ test.describe("live full pipeline reused (M8.pw.4 reused project)", () => {
     authedPage,
     db,
   }) => {
-    // Reused-project lifecycle: existing Machine may be stopped
-    // (idle-stop) and need a cold start, or may already be running
-    // — both paths must finish inside the same 5min cap the fresh
-    // spec uses.
-    test.setTimeout(300_000);
+    // Budget: variance-prone — observed 2.3 s on the warm path
+    // (iter 302), but a previously-stopped Machine triggers a cold
+    // start that takes ~60-90 s. 150 s = 1.5× the cold-path upper
+    // bound; if the warm path consistently dominates this can be
+    // tightened.
+    test.setTimeout(150_000);
 
     // Idempotent seed. If a previous iteration already created the
     // row, ON CONFLICT DO NOTHING leaves it untouched (including

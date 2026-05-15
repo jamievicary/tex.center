@@ -77,7 +77,10 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(420_000);
+    // Budget: 1.5× observed (iter 302: 23.6 s). Regression-guard, not
+    // a generic safety net — a real perf hit on cold-start + suspend
+    // cycle will trip this before the diagnostic assertions below.
+    testInfo.setTimeout(40_000);
 
     const token = process.env.FLY_API_TOKEN!;
     const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";

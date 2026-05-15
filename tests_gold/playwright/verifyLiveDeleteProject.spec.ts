@@ -104,7 +104,11 @@ test.describe("live delete-project (M9.live-hygiene delete verb)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(300_000);
+    // Budget: 1.5× observed (iter 302: 2.9 s on warm path). Note the
+    // internal hang-guards (EDITOR_CONTENT_TIMEOUT_MS 120 s, LIST 30 s)
+    // still bound the slow cold-start path with diagnostic messages
+    // — but the testInfo budget will fire first on a real regression.
+    testInfo.setTimeout(30_000);
 
     const flyToken = process.env.FLY_API_TOKEN ?? "";
     const sidecarApp = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";

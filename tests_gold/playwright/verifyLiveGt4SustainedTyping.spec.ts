@@ -53,7 +53,11 @@ test.describe("live sustained typing (GT-D)", () => {
   test("sustained typing: no overlap error, final state matches, ≥1 pdf-segment", async ({
     authedPage,
     liveProject,
-  }) => {
+  }, testInfo) => {
+    // Budget: 1.5× max observed (iter 302: 36.2 s; re-run: 35.8 s).
+    // Without this override the spec would inherit the 45 s default
+    // and brush against its own typical runtime.
+    testInfo.setTimeout(60_000);
     // Shared frame-capture helper (see `fixtures/wireFrames.ts`).
     const { pdfSegmentFrames, overlapErrors } = captureFrames(
       authedPage,

@@ -56,7 +56,12 @@ test.describe("live fast .cm-content appearance after dashboard click (GT-6)", (
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(120_000);
+    // Budget: 1.5× observed (iter 302: 587 ms). The 500 ms product
+    // assertion is the real assertion; this is the outer wallclock
+    // cap. A small floor of 30 s allows for the seeded-project
+    // creation + cold-start tail on slow days without masking
+    // regressions of the 500 ms guarantee itself.
+    testInfo.setTimeout(30_000);
 
     // Mint a fresh project owned by the test user. The seed
     // template (containing the canonical `documentclass` sentinel)

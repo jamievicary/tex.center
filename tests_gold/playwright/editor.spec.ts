@@ -34,8 +34,14 @@ test.describe("editor route", () => {
     const response = await authedPage.goto(`/editor/${p.id}`);
     expect(response?.status()).toBe(200);
 
-    // Topbar.
-    await expect(authedPage.getByRole("img", { name: "tex.center" })).toBeVisible();
+    // Topbar. The first assertion absorbs SvelteKit dev-mode cold
+    // route-compile latency (Vite compiles `/editor/[projectId]` on
+    // first hit; under workers=2 this can land >5 s — beyond the
+    // implicit 5 s `toBeVisible` budget). Subsequent assertions
+    // share the same now-compiled route and don't need the slack.
+    await expect(
+      authedPage.getByRole("img", { name: "tex.center" }),
+    ).toBeVisible({ timeout: 15_000 });
     await expect(
       authedPage.locator('form[action="/auth/logout"] button[type="submit"]'),
     ).toBeVisible();

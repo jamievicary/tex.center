@@ -30,12 +30,16 @@
 // Required env (`local` target): set by `globalSetup.ts`
 // automatically; absent only if `globalSetup` was skipped.
 
+import { randomUUID } from "node:crypto";
+
 import { test as base, type Page } from "@playwright/test";
+import { eq } from "drizzle-orm";
 
 import {
   createDb,
   closeDb,
   deleteSession,
+  users,
   type DbHandle,
 } from "@tex-center/db";
 
@@ -81,17 +85,25 @@ export const test = base.extend<Fixtures, Record<string, never>>({
             `authedPage: missing required env for live: ${resolved.missing.join(", ")}`,
           );
         }
+        // Per-worker fly proxy port: base + workerIndex. Required
+        // when workers > 1; harmless at workers=1 (workerIndex=0).
+        // The bootstrap's own proxy uses a separate base
+        // (TEXCENTER_GT_BOOTSTRAP_DB_LOCAL_PORT, default 5443) and
+        // stays open for the suite lifetime.
+        const localPort =
+          resolved.config.localPort + workerInfo.workerIndex;
+        const workerConfig = { ...resolved.config, localPort };
         const proxy = await startFlyProxy({
-          app: resolved.config.app,
-          localPort: resolved.config.localPort,
-          remotePort: resolved.config.remotePort,
+          app: workerConfig.app,
+          localPort: workerConfig.localPort,
+          remotePort: workerConfig.remotePort,
         });
-        const db = createDb(buildLiveDbUrl(resolved.config));
+        const db = createDb(buildLiveDbUrl(workerConfig));
         try {
           await use({
             db,
-            signingKey: resolved.config.signingKey,
-            userId: resolved.config.userId,
+            signingKey: workerConfig.signingKey,
+            userId: workerConfig.userId,
             proxy,
           });
         } finally {
@@ -108,13 +120,34 @@ export const test = base.extend<Fixtures, Record<string, never>>({
           return;
         }
         const db = createDb(resolved.config.url, { onnotice: () => {} });
+        // Per-worker user: each Playwright worker has its own user
+        // row for the suite's lifetime, so concurrent specs cannot
+        // collide on the seed user's project list (the empty-state
+        // assertion in `projects.spec.ts` is the canonical example
+        // — without per-worker isolation, worker A creating a
+        // project in `editor.spec.ts` racing worker B's empty-state
+        // check would fail the latter). The row is deleted on
+        // worker teardown; FK cascade reaps any forgotten
+        // afterEach state.
+        const workerUserId = randomUUID();
+        const workerEmail = `pw-worker-${workerInfo.workerIndex}-${workerUserId}@local.invalid`;
+        const workerGoogleSub = `pw-worker-${workerUserId}`;
+        await db.db.insert(users).values({
+          id: workerUserId,
+          email: workerEmail,
+          googleSub: workerGoogleSub,
+        });
         try {
           await use({
             db,
             signingKey: resolved.config.signingKey,
-            userId: resolved.config.userId,
+            userId: workerUserId,
           });
         } finally {
+          await db.db
+            .delete(users)
+            .where(eq(users.id, workerUserId))
+            .catch(() => {});
           await closeDb(db).catch(() => {});
         }
       }

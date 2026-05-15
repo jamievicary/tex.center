@@ -77,10 +77,12 @@ import { TAG_PDF_SEGMENT } from "./wireFrames.js";
 const LIVE_BASE_URL = "https://tex.center";
 
 // Budget for the one-shot warm-up: cold Fly Machine boot + sidecar
-// start + first lualatex round. Per `196_answer.md`: ~60-90s
-// realistic, 240s gives safe headroom for deploy-time variance and
-// is well above the "regression-vs-noise" threshold.
-const WARMUP_TIMEOUT_MS = 240_000;
+// start + first lualatex round. Iter 302 observed 11.9 s end-to-end;
+// `196_answer.md` documents 60-90 s as realistic worst case. 90 s
+// budget = ~8× observed median + a working margin for first-of-day
+// image-pull cold starts. Was 240 s — too generous; dead-time on
+// the slow path is now bounded at 1.5 min rather than 4.
+const WARMUP_TIMEOUT_MS = 90_000;
 
 // Use a non-default local port to avoid colliding with the
 // per-worker flyProxy that `authedPage.db` will open later in the

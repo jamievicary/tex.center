@@ -25,6 +25,10 @@ import type { ProjectRow } from "@tex-center/db";
 
 import { readProjectFromEnv } from "./liveProjectBootstrap.js";
 import { test as base } from "./authedPage.js";
+import {
+  acquireSharedProjectLock,
+  releaseSharedProjectLock,
+} from "./sharedProjectMutex.js";
 
 interface Fixtures {
   liveProject: ProjectRow;
@@ -51,7 +55,16 @@ export const test = base.extend<Fixtures, Record<string, never>>({
           "missing when globalSetup ran.",
       );
     }
-    await use(project);
+    // Cross-worker mutex: the shared-project specs each
+    // read/write the bootstrapped project, so they must run
+    // serially even when other live specs are in flight on a
+    // second worker. See `sharedProjectMutex.ts`.
+    await acquireSharedProjectLock();
+    try {
+      await use(project);
+    } finally {
+      await releaseSharedProjectLock();
+    }
   },
 });
 

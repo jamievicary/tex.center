@@ -65,10 +65,8 @@ test.describe("live full pipeline (M8.pw.4)", () => {
     authedPage,
     db,
   }) => {
-    // Cold-start of a per-project Machine + first lualatex run
-    // dominates. Five minutes is the same budget
-    // `verifyLiveWsUpgrade` uses for the same cold start.
-    test.setTimeout(300_000);
+    // Budget: 1.5× max observed (iter 302: 17.9 s; re-run: 23.3 s).
+    test.setTimeout(40_000);
 
     const project = await createProject(db.db.db, {
       ownerId: db.userId,

@@ -58,7 +58,15 @@ test.describe("live cold-from-stopped editable state (M13.2(b).4)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(420_000);
+    // Budget: stop+cold-restart is the suite's worst case (full
+    // runtime tear-down then re-spawn, image cache may be cold).
+    // Observed variance 38 s → 90 s+ across recent runs depending
+    // on Fly's image-pull state. 300 s envelopes legitimately slow
+    // cold-restart days while still being half the previous 7 min;
+    // when the cold-restart path is healthy the test fails fast at
+    // the 1 s product assertion inside `cmContentReadyMs`, so the
+    // typical wallclock is unchanged.
+    testInfo.setTimeout(300_000);
 
     const token = process.env.FLY_API_TOKEN!;
     const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";

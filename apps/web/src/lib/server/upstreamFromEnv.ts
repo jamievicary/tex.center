@@ -76,6 +76,26 @@ export function buildUpstreamFromEnv(
     // RSS, so even a small-RSS process is killed if its mappings
     // exceed the limit.
     guest: { memory_mb: 1024, cpu_kind: "shared", cpus: 1 },
+    // Native Fly health check on the sidecar's listen port.
+    // Complements the resolver's own `waitForUpstreamReady` TCP
+    // probe (which the web tier uses to gate WS upgrades): with
+    // this declared, Fly's edge proxy ALSO refuses to route to a
+    // Machine whose check is failing, closing the small race
+    // window between Fly flipping `state` to `started` and the
+    // sidecar Node process actually binding to 3001. The check
+    // name is exposed in `GET /machines/<id>` under `checks`, so
+    // operators (and the resolver, if it ever wants to short-
+    // circuit `waitForUpstreamReady`) can observe pass/fail
+    // without dialling the port themselves.
+    checks: {
+      "sidecar-tcp": {
+        type: "tcp",
+        port: sidecarPort,
+        interval: "2s",
+        timeout: "1s",
+        grace_period: "2s",
+      },
+    },
   };
 
   const machines = deps.makeMachinesClient({ token, appName });

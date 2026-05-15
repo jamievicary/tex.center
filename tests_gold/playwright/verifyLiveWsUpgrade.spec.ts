@@ -55,10 +55,10 @@ test.describe("live WS-upgrade with cookie", () => {
       "WS-upgrade probe needs FLY_API_TOKEN + SIDECAR_APP_NAME",
     );
 
-    // Cold-start a per-project Machine can take ~30–60s. The
-    // upgrade promise plus the destroy round-trip in `finally`
-    // both fit inside 5 minutes with margin.
-    test.setTimeout(5 * 60_000);
+    // Budget: spec is currently skipped (no live exercise in iter
+    // 302). 90 s is 1.5× the documented cold-start cap (~60 s);
+    // tighten once a real observed runtime exists.
+    test.setTimeout(90_000);
 
     const drizzle = db.db.db;
 

@@ -26,7 +26,13 @@ fi
 export PATH="$PWD/.tools/node/bin:$PATH"
 
 if compgen -G "tests_gold/cases/test_*.py" >/dev/null; then
-    python3 -m unittest discover -s tests_gold/cases -p "test_*.py" -v
+    # Each case shells out to its own toolchain (pnpm/tsx/supertex/
+    # lualatex/pglite), so they're already process-isolated. The
+    # parallel runner dispatches them across N workers
+    # (`TEXCENTER_GOLD_PARALLEL`, default 4) and emits each module's
+    # output atomically so the iterator's awk parser still sees the
+    # serial unittest line shapes.
+    python3 tests_gold/run_parallel_cases.py
 else
     echo "tests_gold/run_tests.sh: no gold cases configured; treating as pass."
 fi

@@ -87,7 +87,9 @@ test.describe("live multi-page PDF preview (M15)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(360_000);
+    // Budget: 1.5× max observed across cases (iter 302: ~26 s; re-run:
+    // 38 s on the slower case).
+    testInfo.setTimeout(60_000);
 
     // Fresh project per invocation — keeps the seed window clean
     // and avoids polluting the shared GT-A/B/C/D liveProject body.
@@ -308,7 +310,9 @@ test.describe("live multi-page PDF preview (M15)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(360_000);
+    // Budget: 1.5× max observed across cases (iter 302: ~26 s; re-run:
+    // 38 s on the slower case).
+    testInfo.setTimeout(60_000);
 
     const project = await createProject(db.db.db, {
       ownerId: db.userId,

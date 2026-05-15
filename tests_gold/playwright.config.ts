@@ -68,7 +68,17 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
-  workers: 1,
+  // workers=2 cuts the live-spec wallclock roughly in half. Two
+  // safety nets keep cross-worker state coherent:
+  //   - per-worker fly proxy port allocation (see
+  //     `fixtures/authedPage.ts` — base + workerIndex);
+  //   - cross-process mutex around the bootstrapped shared project
+  //     (`fixtures/sharedProjectMutex.ts`), so the GT-A..GT-D /
+  //     GT-7 / PdfNoFlash specs that all mutate the same project
+  //     never run concurrently.
+  // Higher worker counts add Fly Machine pressure (per-spec project
+  // creation) and aren't tuned for here.
+  workers: 2,
   reporter: [["list"]],
   timeout: TEST_TIMEOUT_MS,
   use: {

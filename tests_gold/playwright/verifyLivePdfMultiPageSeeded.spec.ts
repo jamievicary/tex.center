@@ -95,7 +95,10 @@ test.describe("live seeded multi-page PDF preview (M15 Step D)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(360_000);
+    // Budget: iter 302 observed 25.8 s; the validation re-run hit
+    // 45.2 s on a colder Machine. 75 s = 1.5× the latest observed
+    // worst case, ~3× the median.
+    testInfo.setTimeout(75_000);
 
     // Fresh project per invocation. The seed_doc column is the
     // only thing this spec cares about — no editing, no typing.

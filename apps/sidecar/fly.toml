@@ -31,3 +31,20 @@ primary_region = "fra"
   memory = "1gb"
   cpu_kind = "shared"
   cpus = 1
+
+# Native Fly health check on the sidecar's internal listen port.
+# The sidecar is not publicly exposed (no [[services]] with `ports`
+# block) but [checks] work without one — they're a pure
+# liveness/readiness probe Fly's edge consults before routing 6PN
+# traffic. Mirrors the per-project Machine config in
+# `apps/web/src/lib/server/upstreamFromEnv.ts`. Without this, Fly's
+# `state` flips to `started` the moment init runs — well before
+# the Node process has bound port 3001 — and the only readiness
+# signal is the web tier's TCP probe.
+[checks]
+  [checks.sidecar-tcp]
+    port = 3001
+    type = "tcp"
+    interval = "2s"
+    timeout = "1s"
+    grace_period = "2s"

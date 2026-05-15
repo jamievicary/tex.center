@@ -66,7 +66,8 @@ test.describe("live cold-project \\newpage daemon-crash regression (GT-8)", () =
     authedPage,
     db,
   }, testInfo) => {
-    testInfo.setTimeout(360_000);
+    // Budget: 1.5× max observed (iter 302: 30.5 s; re-run: 37.1 s).
+    testInfo.setTimeout(60_000);
 
     // Mint a fresh project owned by the test user (a cold sidecar
     // Machine will be assigned on first WS connect). We do this
