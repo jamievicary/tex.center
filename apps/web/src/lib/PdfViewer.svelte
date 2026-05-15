@@ -7,6 +7,7 @@
     type FadeAdapter,
   } from "./pdfFadeController";
   import { pdfRenderScale } from "./pdfRenderScale";
+  import { CROSS_FADE_STRATEGY } from "./pdfCrossFade";
 
   let {
     src,
@@ -91,24 +92,40 @@
         w.style.aspectRatio = `${width} / ${height}`;
       },
       startCrossFade({ wrapper, leaving, entering }) {
+        // M17.b layering: entering stays opacity 1 *under* the
+        // leaving canvas; leaving fades 1 → 0. See
+        // `pdfCrossFade.ts` for why this avoids mid-fade BG
+        // bleed-through.
         const w = wrapper as HTMLDivElement;
         const enter = entering as HTMLCanvasElement;
         const leave = leaving as HTMLCanvasElement | null;
-        enter.classList.add("pdf-canvas--enter");
-        enter.style.opacity = "0";
-        if (leave) leave.classList.add("pdf-canvas--leave");
-        // Force reflow so the transition kicks in from opacity 0.
-        void enter.offsetWidth;
-        enter.style.opacity = "1";
-        if (leave) leave.style.opacity = "0";
-        const onEnd = (ev: TransitionEvent) => {
-          if (ev.propertyName !== "opacity") return;
-          enter.removeEventListener("transitionend", onEnd);
+        enter.style.zIndex = String(CROSS_FADE_STRATEGY.enteringZIndex);
+        enter.style.opacity = String(CROSS_FADE_STRATEGY.enteringOpacity);
+        if (leave) {
+          leave.style.zIndex = String(CROSS_FADE_STRATEGY.leavingZIndex);
+          leave.style.opacity = String(
+            CROSS_FADE_STRATEGY.leavingInitialOpacity,
+          );
+          // Force reflow so the upcoming opacity change transitions
+          // from the initial value rather than snapping.
+          void leave.offsetWidth;
+          leave.style.opacity = String(
+            CROSS_FADE_STRATEGY.leavingTargetOpacity,
+          );
+          const onEnd = (ev: TransitionEvent) => {
+            if (ev.propertyName !== "opacity") return;
+            leave.removeEventListener("transitionend", onEnd);
+            const idx = (Number(w.dataset.page) || 0) - 1;
+            if (idx >= 0) controller?.onFadeEnd(idx);
+          };
+          leave.addEventListener("transitionend", onEnd);
+        } else {
+          // No leaving canvas: the controller doesn't actually
+          // schedule a cross-fade in this case (initial mount uses
+          // `fadeInWrapper`). Defensive no-op for completeness.
           const idx = (Number(w.dataset.page) || 0) - 1;
           if (idx >= 0) controller?.onFadeEnd(idx);
-          enter.classList.remove("pdf-canvas--enter");
-        };
-        enter.addEventListener("transitionend", onEnd);
+        }
       },
       commitFadeImmediately({ wrapper, leaving, entering }) {
         const w = wrapper as HTMLDivElement;
@@ -118,8 +135,8 @@
           leave.remove();
         }
         if (enter) {
-          enter.classList.remove("pdf-canvas--enter");
-          enter.style.opacity = "1";
+          enter.style.zIndex = String(CROSS_FADE_STRATEGY.enteringZIndex);
+          enter.style.opacity = String(CROSS_FADE_STRATEGY.enteringOpacity);
         }
         void w.offsetWidth;
       },

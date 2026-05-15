@@ -11,7 +11,7 @@ refresh persistence. Per-project sidecar runs on Fly Machines in
 (`tex-center-sidecar` app with `app`-tagged deployment machines)
 exists alongside but isn't routed to.
 
-**Active priority queue (post iter 296):**
+**Active priority queue (post iter 299):**
 
 1. **M15 Step D outcome (α): seeded case GREEN.** The
    `verifyLivePdfMultiPageSeeded.spec.ts` first live run (iter 295)
@@ -25,33 +25,37 @@ exists alongside but isn't routed to.
    source via a new discussion question. No further M15 work
    without that input — engineering against an unreproducible bug
    would only generate dark code.
-2. **M17 reopen — cross-fade blend math.** Switch to single-
-   layer opacity (leaving canvas above, opacity 1→0; entering
-   canvas below, opacity 1). Pin via center-pixel-flatness
-   check.
-3. **M22 wire-message debug toasts.** Front→back coverage for
+2. **M22 wire-message debug toasts.** Front→back coverage for
    `outgoing-*` events; close M9.editor-ux GT-F.
-4. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
+3. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
    former M13.2(b).5 R1: shared `BLOB_STORE` widens from "seed
    main.tex" to "full project tree" so cold-stopped resume
    restores `.aux`/checkpoint as well as source.
-5. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+4. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection; M21.1 (logic + wire switch) closed iter 296.
    Low priority — failure mode today is extra-pages-compiled-late,
    not data loss.
-6. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
+5. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change (coalesced trailing
    100ms), and a gold visual-snapshot pin under forced DPR=2
    (Playwright `--device-scale-factor=2`). Both PLAN-tagged "wait
    for user feedback" — defer until reported.
-7. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
+6. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
    → `upload-file` (text path, already exists). Binary stays
    blocked.
-8. **M16.aesthetic.** Type pair + 4-colour palette retune for
+7. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual-snapshot diffs on `/` and `/projects`
    plus a topbar snapshot on the editor route.
-9. **M11.2.** Create/delete/rename via context menu + keyboard
+8. **M11.2.** Create/delete/rename via context menu + keyboard
     (`F2`, `Del`-with-confirm), reusing extant sidecar verbs.
+
+**M17.b closed iter 299.** Single-layer-opacity cross-fade math
+pinned in `apps/web/src/lib/pdfCrossFade.ts` +
+`apps/web/test/pdfCrossFade.test.mjs` (flat-grey invariant + linear
+interpolation property + legacy-strategy regression guard).
+`PdfViewer.svelte` adapter rewritten: entering canvas under at
+opacity 1; leaving canvas above, fades 1→0. The dead
+`pdf-canvas--enter`/`--leave` class additions removed.
 
 **M19 closed iter 298.** Settings dialog complete: slider
 (iter 297), email-in-topbar swap + Esc/focus a11y (iter 298).
@@ -437,16 +441,20 @@ Slices:
 
 ### M17.b reopen — cross-fade blend math
 
-From `293_answer.md` (5). Current stacked-opacities path
-exhibits a mid-fade background-bleed dip
-(`T·NEW + (1−T)²·OLD` instead of `T·NEW + (1−T)·OLD`).
-
-Fix A: single opacity layer — leaving canvas on top, opacity
-`1→0`; entering canvas underneath, opacity 1.
-
-Pin: extend `verifyLivePdfNoFlashBetweenSegments` (or new
-`verifyLivePdfCrossfadeFlatness`) to sample the centre pixel of
-a flat-grey region at T≈0.5 and assert |RGB − target| ≤ 1.
+**Closed iter 299.** `apps/web/src/lib/pdfCrossFade.ts` exports
+the `CROSS_FADE_STRATEGY` constant (entering opacity 1, z-index 0;
+leaving opacity 1→0, z-index 1) and a `crossFadeAt(t, old, new,
+bg)` helper. `PdfViewer.svelte`'s `startCrossFade` /
+`commitFadeImmediately` adapter methods read the strategy
+constants. Visible composite is exactly `(1−t)·OLD + t·NEW` for
+all `t` and any `BG` — no mid-fade bleed-through. Pinned at the
+math layer (`apps/web/test/pdfCrossFade.test.mjs`: flat-grey
+invariant, linear interpolation property, and legacy-strategy
+regression guard) rather than via a Playwright pixel sample —
+deterministic regardless of GPU compositor rounding or
+hardware-specific blending. The existing
+`verifyLivePdfNoFlashBetweenSegments` continues to guard the
+end-to-end wrapper-count shape.
 
 ### M16.aesthetic — writerly chrome retune
 
@@ -507,7 +515,8 @@ clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
 project startup sweep + machine-count threshold bump (iter 293);
 M18.1 DPR-aware PDF backing store (iter 295); M21.1 max-visible
 wire switch (iter 296); M19.1 + M19.2 fade slider (iter 297);
-M19.2 email swap + M19.3 Esc/focus a11y (iter 298, closes M19).
+M19.2 email swap + M19.3 Esc/focus a11y (iter 298, closes M19);
+M17.b cross-fade blend math (iter 299).
 See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
