@@ -13,12 +13,13 @@ routed to (decision deferred post-MVP).
 **Active priority queue:**
 
 1. **M23 workspace file mirroring** (queued iter 310 from
-   `309_answer.md` item 2). Today `apps/sidecar/src/workspace.ts`
-   only writes `main.tex`; auxiliary files (`addFile`/`upload-file`)
-   live only in Yjs/blob storage and never reach the on-disk
-   workspace dir the supertex daemon spawns in, so `\input{sec1}`
-   cannot resolve. Categorical product regression — ranks above
-   M20.2 / M21.2 / M22.x perf work. See M23 section below.
+   `309_answer.md` item 2). M23.1 primitive landed iter 313;
+   `writeFile` / `deleteFile` / `renameFile` available on
+   `ProjectWorkspace` but not yet wired. **M23.2** (wire into
+   `persistence.ts`) is the next pick-up — without it the daemon's
+   `cwd: workDir` still can't resolve `\input{sec1}` for any
+   non-main file. Categorical product regression. See M23 section
+   below.
 2. **M22 remaining slices.** M22.2 GT-F local Playwright cases
    (closes M9.editor-ux GT-F); M22.4b wire-shipoutPage batch
    (header 13 → 17 bytes, `PdfSegment.shipoutPage?`).
@@ -325,21 +326,22 @@ any multi-file project.
 
 Slices:
 
-- **M23.1** Extend `ProjectWorkspace` with `writeFile(name,
-  content)`, `deleteFile(name)`, `renameFile(oldName, newName)`.
-  Atomic write-to-tmp-then-rename pattern (matches `writeMain`).
-  Slashed paths need parent `mkdir -p` plus empty-parent reap on
-  delete (mirror `LocalFsBlobStore.delete`).
-  `validateProjectFileName` for sanitisation.
-- **M23.2** Wire `apps/sidecar/src/persistence.ts` to call through
+- **M23.1** (iter 313). `ProjectWorkspace.writeFile(name, content)`,
+  `deleteFile(name)`, `renameFile(oldName, newName)` — atomic
+  write-tmp-rename, `mkdir -p` parents on writes, empty-parent
+  reap on delete + rename source. Validated via
+  `validateProjectFileName`. Lock:
+  `apps/sidecar/test/workspace.test.mjs` (four new blocks).
+  Dark code — not wired into `persistence.ts` yet.
+- **M23.2 (open).** Wire `apps/sidecar/src/persistence.ts` to call through
   on every Yjs-acked file mutation (`addFile` / `deleteFile` /
   `renameFile`). Subscribe to each non-main `Y.Text.observe` to
   mirror text edits to disk; debounce via the same coalescer that
   gates `writeMain`.
-- **M23.3** Cold-boot rehydration. On project open, after
+- **M23.3 (open).** Cold-boot rehydration. On project open, after
   persistence rehydrates from the blob store, mirror every
   non-main file to disk *before* the first compile call.
-- **M23.4** Gold spec: 2-file project (`main.tex` with
+- **M23.4 (open).** Gold spec: 2-file project (`main.tex` with
   `\input{sec1}` + `sec1.tex` body); assert a `pdf-segment` ships
   and the rendered page contains the body. Local Playwright if
   feasible; otherwise a sidecar-level integration test.
@@ -378,7 +380,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold

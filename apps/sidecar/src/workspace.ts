@@ -1,17 +1,21 @@
 // Per-project on-disk scratch directory.
 //
-// Mirrors the Yjs-backed `main.tex` source to a real file so a
-// future supertex-driven compiler (M3.2+) can spawn a process
-// against it. Today the mirror is dark code: `FixtureCompiler`
-// ignores it. Kept behind a small lifecycle helper so the server
-// stays oblivious to the scratch-root layout.
+// Mirrors the Yjs-backed source tree to real files so the
+// supertex daemon (spawned with `cwd: workDir`) can resolve
+// `\input{sec1}` and friends through lualatex's kpathsea against
+// the current directory. `writeMain` covers `main.tex`; M23.1
+// `writeFile` / `deleteFile` / `renameFile` cover everything else.
 //
-// Writes are atomic (write-to-tmp then rename) — supertex's watch
-// mode in M3.3 picks files up via inotify, and a half-written file
-// would trigger a spurious rollback.
+// All writes are atomic (write-to-tmp then rename) — supertex's
+// re-read on each `recompile,…` would otherwise risk picking up a
+// half-written file. Deletes reap now-empty parent directories so
+// the on-disk shape mirrors the key space (matches
+// `LocalFsBlobStore.delete`).
 
-import { mkdir, rm, rename, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+
+import { validateProjectFileName } from "@tex-center/protocol";
 
 export interface ProjectWorkspaceOptions {
   rootDir: string;
@@ -47,9 +51,55 @@ export class ProjectWorkspace {
     await rename(tmp, target);
   }
 
+  async writeFile(name: string, content: string): Promise<void> {
+    await this.init();
+    const target = this.pathFor(name);
+    await mkdir(dirname(target), { recursive: true });
+    const tmp = `${target}.tmp`;
+    await writeFile(tmp, content, "utf8");
+    await rename(tmp, target);
+  }
+
+  async deleteFile(name: string): Promise<void> {
+    await this.init();
+    const target = this.pathFor(name);
+    await rm(target, { force: true });
+    await this.reapEmptyParents(target);
+  }
+
+  async renameFile(oldName: string, newName: string): Promise<void> {
+    await this.init();
+    const src = this.pathFor(oldName);
+    const dst = this.pathFor(newName);
+    if (src === dst) return;
+    await mkdir(dirname(dst), { recursive: true });
+    await rename(src, dst);
+    await this.reapEmptyParents(src);
+  }
+
   async dispose(): Promise<void> {
     if (!this.initialised) return;
     await rm(this.dir, { recursive: true, force: true });
     this.initialised = false;
+  }
+
+  private pathFor(name: string): string {
+    const reason = validateProjectFileName(name);
+    if (reason !== null) throw new Error(`invalid file name: ${reason}`);
+    return join(this.dir, ...name.split("/"));
+  }
+
+  private async reapEmptyParents(target: string): Promise<void> {
+    let dir = dirname(target);
+    while (dir.startsWith(this.dir) && dir !== this.dir) {
+      try {
+        await rmdir(dir);
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "ENOTEMPTY" || code === "EEXIST" || code === "ENOENT") return;
+        throw err;
+      }
+      dir = dirname(dir);
+    }
   }
 }

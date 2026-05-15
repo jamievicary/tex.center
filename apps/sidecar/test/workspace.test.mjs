@@ -1,8 +1,11 @@
 // Unit-tests `ProjectWorkspace`: lazy mkdir, atomic main.tex
-// writes, dispose removes the dir, projectId validation.
+// writes, dispose removes the dir, projectId validation. M23.1
+// also locks writeFile / deleteFile / renameFile against the
+// slashed-paths + atomic-write + empty-parent-reap pattern.
 
 import assert from "node:assert/strict";
 import { mkdtempSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -51,6 +54,104 @@ const root = mkdtempSync(join(tmpdir(), "ws-test-"));
   const ws = new ProjectWorkspace({ rootDir: root, projectId: "neverused" });
   await ws.dispose();
   assert.equal(existsSync(ws.dir), false);
+}
+
+{
+  // writeFile creates flat-name files atomically and overwrites cleanly.
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "m23-flat" });
+  await ws.writeFile("sec1.tex", "section one\n");
+  assert.equal(readFileSync(join(ws.dir, "sec1.tex"), "utf8"), "section one\n");
+
+  await ws.writeFile("sec1.tex", "section one v2\n");
+  assert.equal(readFileSync(join(ws.dir, "sec1.tex"), "utf8"), "section one v2\n");
+
+  // No leftover .tmp file after a successful write.
+  assert.deepEqual(readdirSync(ws.dir).sort(), ["sec1.tex"]);
+
+  await ws.dispose();
+}
+
+{
+  // writeFile on slashed names mkdir -p's the parent directories.
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "m23-nested" });
+  await ws.writeFile("chapters/intro.tex", "intro\n");
+  await ws.writeFile("chapters/sub/deep.tex", "deep\n");
+  assert.equal(
+    readFileSync(join(ws.dir, "chapters", "intro.tex"), "utf8"),
+    "intro\n",
+  );
+  assert.equal(
+    readFileSync(join(ws.dir, "chapters", "sub", "deep.tex"), "utf8"),
+    "deep\n",
+  );
+
+  // deleteFile on the deepest leaf reaps `chapters/sub/` and
+  // `chapters/` is left intact because `intro.tex` still lives there.
+  await ws.deleteFile("chapters/sub/deep.tex");
+  assert.equal(
+    await stat(join(ws.dir, "chapters", "sub")).then(() => true, () => false),
+    false,
+  );
+  assert.equal(
+    await stat(join(ws.dir, "chapters", "intro.tex")).then(() => true, () => false),
+    true,
+  );
+
+  // Deleting the last file under `chapters/` reaps it too — but not
+  // the project work dir itself.
+  await ws.deleteFile("chapters/intro.tex");
+  assert.equal(
+    await stat(join(ws.dir, "chapters")).then(() => true, () => false),
+    false,
+  );
+  assert.equal(existsSync(ws.dir), true);
+
+  // Deleting a non-existent file is a no-op.
+  await ws.deleteFile("does-not-exist.tex");
+
+  await ws.dispose();
+}
+
+{
+  // renameFile moves across directory boundaries and reaps the
+  // emptied source parent.
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "m23-rename" });
+  await ws.writeFile("chapters/intro.tex", "intro\n");
+  await ws.renameFile("chapters/intro.tex", "intro.tex");
+
+  assert.equal(
+    await stat(join(ws.dir, "chapters")).then(() => true, () => false),
+    false,
+  );
+  assert.equal(readFileSync(join(ws.dir, "intro.tex"), "utf8"), "intro\n");
+
+  // Rename within a kept directory: the parent must survive.
+  await ws.writeFile("chapters/a.tex", "a\n");
+  await ws.writeFile("chapters/b.tex", "b\n");
+  await ws.renameFile("chapters/a.tex", "chapters/a-renamed.tex");
+  assert.deepEqual(readdirSync(join(ws.dir, "chapters")).sort(), [
+    "a-renamed.tex",
+    "b.tex",
+  ]);
+
+  // Rename to the same name is a silent no-op.
+  await ws.renameFile("intro.tex", "intro.tex");
+  assert.equal(readFileSync(join(ws.dir, "intro.tex"), "utf8"), "intro\n");
+
+  await ws.dispose();
+}
+
+{
+  // writeFile / deleteFile / renameFile validate names via the
+  // shared protocol validator: traversal and bad shapes throw.
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "m23-validate" });
+  await assert.rejects(() => ws.writeFile("../escape", "boom"));
+  await assert.rejects(() => ws.writeFile("a/", "boom"));
+  await assert.rejects(() => ws.writeFile("a//b", "boom"));
+  await assert.rejects(() => ws.writeFile("", "boom"));
+  await assert.rejects(() => ws.deleteFile("../escape"));
+  await assert.rejects(() => ws.renameFile("ok.tex", "../bad"));
+  await ws.dispose();
 }
 
 console.log("workspace test: OK");
