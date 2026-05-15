@@ -5,12 +5,12 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 0, reused 1, downloaded 0, added 0
 Packages: -81
 --------------------------------------------------------------------------------
-Progress: resolved 0, reused 66, downloaded 0, added 0, done
+Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1.3s
 Scope: 6 of 7 workspace projects
-packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
@@ -20,8 +20,10 @@ packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778813671817 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778813671822 COMPLETED 738 FILES 0 ERRORS 2 WARNINGS 1 FILES_WITH_PROBLEMS
+apps/web typecheck: Loading svelte-check in workspace: /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web
+apps/web typecheck: Getting Svelte diagnostics...
+apps/web typecheck: ====================================
+apps/web typecheck: svelte-check found 0 errors and 2 warnings in 1 file
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -221,7 +223,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 196 tests in 122.807s
+Ran 196 tests in 129.026s
 
 OK
 tests_normal/run_tests.sh: PASS
