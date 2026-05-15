@@ -165,8 +165,9 @@ function newClient() {
   c.destroy();
 }
 
-// Case 7: debugEventToToast covers all six event kinds with the
-// expected category and a non-empty aggregateKey.
+// Case 7: debugEventToToast covers all event kinds (incoming +
+// outgoing) with the expected category and a non-empty
+// aggregateKey.
 {
   const cases = [
     { kind: "pdf-segment", bytes: 100 },
@@ -176,6 +177,11 @@ function newClient() {
     { kind: "file-list", count: 3 },
     { kind: "hello", protocol: 1 },
     { kind: "file-op-error", reason: "duplicate" },
+    { kind: "outgoing-viewing-page", page: 2 },
+    { kind: "outgoing-create-file", name: "a.tex" },
+    { kind: "outgoing-upload-file", name: "a.tex", bytes: 42 },
+    { kind: "outgoing-delete-file", name: "a.tex" },
+    { kind: "outgoing-rename-file", oldName: "a.tex", newName: "b.tex" },
   ];
   const expectedCategories = [
     "debug-blue",
@@ -185,6 +191,11 @@ function newClient() {
     "debug-grey",
     "debug-grey",
     "debug-red",
+    "debug-green",
+    "debug-green",
+    "debug-green",
+    "debug-green",
+    "debug-green",
   ];
   for (let i = 0; i < cases.length; i++) {
     const out = debugEventToToast(cases[i]);
@@ -221,6 +232,48 @@ function newClient() {
     reason: "unknown name",
   });
   assert.notEqual(e1.aggregateKey, e2.aggregateKey);
+}
+
+// Case 9: outgoing control sends (viewing-page / create-file /
+// upload-file / delete-file / rename-file) each emit a single
+// debug event after the socket is open, with the per-event shape
+// matching the wire payload. Pre-open sends are silent (the
+// underlying frame would no-op on the wire).
+{
+  const { c, sock, events } = newClient();
+  // Pre-open: each method is called but produces no debug event.
+  c.setViewingPage(1);
+  c.createFile("a.tex");
+  c.uploadFile("a.tex", "hello");
+  c.deleteFile("a.tex");
+  c.renameFile("a.tex", "b.tex");
+  assert.equal(
+    events.filter((e) => e.kind.startsWith("outgoing-")).length,
+    0,
+  );
+  // After open: each fires exactly one event.
+  sock.open();
+  events.length = 0;
+  c.setViewingPage(3);
+  c.createFile("c.tex");
+  c.uploadFile("d.tex", "abc");
+  c.deleteFile("e.tex");
+  c.renameFile("f.tex", "g.tex");
+  assert.equal(events.length, 5);
+  assert.deepEqual(events[0], { kind: "outgoing-viewing-page", page: 3 });
+  assert.deepEqual(events[1], { kind: "outgoing-create-file", name: "c.tex" });
+  assert.deepEqual(events[2], {
+    kind: "outgoing-upload-file",
+    name: "d.tex",
+    bytes: 3,
+  });
+  assert.deepEqual(events[3], { kind: "outgoing-delete-file", name: "e.tex" });
+  assert.deepEqual(events[4], {
+    kind: "outgoing-rename-file",
+    oldName: "f.tex",
+    newName: "g.tex",
+  });
+  c.destroy();
 }
 
 // Case 8: omitting onDebugEvent must not throw when frames

@@ -12,8 +12,10 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue:**
 
-1. **M22 wire-message debug toasts.** Front→back coverage for
-   `outgoing-*` events; closes M9.editor-ux GT-F.
+1. **M22 wire-message debug toasts.** M22.1 closed iter 304 (all
+   outbound control sends now emit `outgoing-*` debug events).
+   Remaining: M22.2 GT-F local Playwright cases (closes
+   M9.editor-ux GT-F); M22.3 toast UX polish.
 2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
    idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
    binding (sidecar persists source + latex artefacts on every
@@ -262,11 +264,16 @@ the user can see.
 From `293_answer.md` (7,8). Closes M9.editor-ux GT-F.
 
 Slices:
-- **M22.1** emit `outgoing-*` debug events in `wsClient.ts` for
-  every send (`viewing-page`, `recompile-request`, `create-file`,
-  `delete-file`, `rename-file`, `upload-file`); map to toasts
-  via `debugToasts.ts`. Per-event aggregateKey. Gated on
-  `?debug=1` only.
+- **M22.1** Closed iter 304. `WsDebugEvent` extended with
+  `outgoing-viewing-page`, `outgoing-create-file`,
+  `outgoing-upload-file`, `outgoing-delete-file`,
+  `outgoing-rename-file`; each emitted only when the underlying
+  `send()` returned true (pre-open silence convention). All map to
+  `debug-green` via `debugEventToToast`, shared aggregateKey per
+  kind. `recompile-request` is not on the list — the web client
+  never sends one; recompile is server-driven from a `doc-update`.
+  Lock: `apps/web/test/wsClientDebugEvents.test.mjs` case 9 + the
+  expanded toast-mapping matrix in case 7.
 - **M22.2** finish GT-F local Playwright cases.
 - **M22.3** toast UX polish: info TTL 4s→5s; stack order
   newest-on-top; user-dismissible × on info/success.

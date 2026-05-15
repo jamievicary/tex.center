@@ -61,7 +61,12 @@ export type WsDebugEvent =
   | { kind: "file-list"; count: number }
   | { kind: "hello"; protocol: number }
   | { kind: "file-op-error"; reason: string }
-  | { kind: "outgoing-doc-update"; bytes: number };
+  | { kind: "outgoing-doc-update"; bytes: number }
+  | { kind: "outgoing-viewing-page"; page: number }
+  | { kind: "outgoing-create-file"; name: string }
+  | { kind: "outgoing-upload-file"; name: string; bytes: number }
+  | { kind: "outgoing-delete-file"; name: string }
+  | { kind: "outgoing-rename-file"; oldName: string; newName: string };
 
 export interface WsClientOptions {
   url: string;
@@ -243,7 +248,8 @@ export class WsClient {
   }
 
   setViewingPage(page: number): void {
-    this.send(encodeControl({ type: "view", page }));
+    const sent = this.send(encodeControl({ type: "view", page }));
+    if (sent) this.onDebugEvent?.({ kind: "outgoing-viewing-page", page });
   }
 
   /**
@@ -253,7 +259,8 @@ export class WsClient {
    * change (a warning is logged server-side).
    */
   createFile(name: string): void {
-    this.send(encodeControl({ type: "create-file", name }));
+    const sent = this.send(encodeControl({ type: "create-file", name }));
+    if (sent) this.onDebugEvent?.({ kind: "outgoing-create-file", name });
   }
 
   /**
@@ -262,7 +269,14 @@ export class WsClient {
    * `file-list` and the populated `Y.Text` arrives via doc-update.
    */
   uploadFile(name: string, content: string): void {
-    this.send(encodeControl({ type: "upload-file", name, content }));
+    const sent = this.send(encodeControl({ type: "upload-file", name, content }));
+    if (sent) {
+      this.onDebugEvent?.({
+        kind: "outgoing-upload-file",
+        name,
+        bytes: new TextEncoder().encode(content).byteLength,
+      });
+    }
   }
 
   /**
@@ -271,7 +285,8 @@ export class WsClient {
    * refreshed `file-list`.
    */
   deleteFile(name: string): void {
-    this.send(encodeControl({ type: "delete-file", name }));
+    const sent = this.send(encodeControl({ type: "delete-file", name }));
+    if (sent) this.onDebugEvent?.({ kind: "outgoing-delete-file", name });
   }
 
   /**
@@ -281,7 +296,14 @@ export class WsClient {
    * `file-list`.
    */
   renameFile(oldName: string, newName: string): void {
-    this.send(encodeControl({ type: "rename-file", oldName, newName }));
+    const sent = this.send(encodeControl({ type: "rename-file", oldName, newName }));
+    if (sent) {
+      this.onDebugEvent?.({
+        kind: "outgoing-rename-file",
+        oldName,
+        newName,
+      });
+    }
   }
 
   /**

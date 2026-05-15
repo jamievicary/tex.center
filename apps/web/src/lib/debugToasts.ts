@@ -65,6 +65,36 @@ export function debugEventToToast(event: WsDebugEvent): ToastInput {
         text: `file-op-error: ${event.reason}`,
         aggregateKey: `debug:file-op-error:${event.reason}`,
       };
+    case "outgoing-viewing-page":
+      return {
+        category: "debug-green",
+        text: `viewing-page ${event.page}`,
+        aggregateKey: "debug:outgoing-viewing-page",
+      };
+    case "outgoing-create-file":
+      return {
+        category: "debug-green",
+        text: `create-file ${event.name}`,
+        aggregateKey: "debug:outgoing-create-file",
+      };
+    case "outgoing-upload-file":
+      return {
+        category: "debug-green",
+        text: `upload-file ${event.name} ${event.bytes}B`,
+        aggregateKey: "debug:outgoing-upload-file",
+      };
+    case "outgoing-delete-file":
+      return {
+        category: "debug-green",
+        text: `delete-file ${event.name}`,
+        aggregateKey: "debug:outgoing-delete-file",
+      };
+    case "outgoing-rename-file":
+      return {
+        category: "debug-green",
+        text: `rename-file ${event.oldName} → ${event.newName}`,
+        aggregateKey: "debug:outgoing-rename-file",
+      };
   }
 }
 
