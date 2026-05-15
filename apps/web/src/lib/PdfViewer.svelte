@@ -2,12 +2,9 @@
   import { onDestroy } from "svelte";
 
   import { PageTracker } from "./pageTracker";
-  import {
-    PdfFadeController,
-    type FadeAdapter,
-  } from "./pdfFadeController";
+  import { PdfFadeController } from "./pdfFadeController";
+  import { createFadeAdapter } from "./pdfFadeAdapter";
   import { pdfRenderScale } from "./pdfRenderScale";
-  import { CROSS_FADE_STRATEGY } from "./pdfCrossFade";
 
   let {
     src,
@@ -56,116 +53,6 @@
       { threshold: thresholds },
     );
     return observer;
-  }
-
-  function makeAdapter(target: HTMLDivElement): FadeAdapter {
-    const io = ensureObserver();
-    return {
-      createWrapper(pageIndex) {
-        const w = document.createElement("div");
-        w.className = "pdf-page";
-        w.dataset.page = String(pageIndex + 1);
-        target.appendChild(w);
-        io?.observe(w);
-        return w;
-      },
-      removeWrapper(wrapper) {
-        const w = wrapper as HTMLDivElement;
-        io?.unobserve(w);
-        w.remove();
-      },
-      appendCanvasToWrapper(wrapper, canvas) {
-        const w = wrapper as HTMLDivElement;
-        const c = canvas as HTMLCanvasElement;
-        w.appendChild(c);
-      },
-      removeCanvasFromWrapper(_wrapper, canvas) {
-        (canvas as HTMLCanvasElement).remove();
-      },
-      setWrapperGeometry(wrapper, width, height) {
-        // Set intrinsic width (in canvas px) but cap with max-width
-        // 100% in CSS; aspect-ratio keeps height proportional under
-        // that responsive scaling. Pages of different sizes still
-        // each get their own correct shape.
-        const w = wrapper as HTMLDivElement;
-        w.style.width = `${width}px`;
-        w.style.aspectRatio = `${width} / ${height}`;
-      },
-      startCrossFade({ wrapper, leaving, entering }) {
-        // M17.b layering: entering stays opacity 1 *under* the
-        // leaving canvas; leaving fades 1 → 0. See
-        // `pdfCrossFade.ts` for why this avoids mid-fade BG
-        // bleed-through.
-        const w = wrapper as HTMLDivElement;
-        const enter = entering as HTMLCanvasElement;
-        const leave = leaving as HTMLCanvasElement | null;
-        enter.style.zIndex = String(CROSS_FADE_STRATEGY.enteringZIndex);
-        enter.style.opacity = String(CROSS_FADE_STRATEGY.enteringOpacity);
-        if (leave) {
-          leave.style.zIndex = String(CROSS_FADE_STRATEGY.leavingZIndex);
-          leave.style.opacity = String(
-            CROSS_FADE_STRATEGY.leavingInitialOpacity,
-          );
-          // Force reflow so the upcoming opacity change transitions
-          // from the initial value rather than snapping.
-          void leave.offsetWidth;
-          leave.style.opacity = String(
-            CROSS_FADE_STRATEGY.leavingTargetOpacity,
-          );
-          const onEnd = (ev: TransitionEvent) => {
-            if (ev.propertyName !== "opacity") return;
-            leave.removeEventListener("transitionend", onEnd);
-            const idx = (Number(w.dataset.page) || 0) - 1;
-            if (idx >= 0) controller?.onFadeEnd(idx);
-          };
-          leave.addEventListener("transitionend", onEnd);
-        } else {
-          // No leaving canvas: the controller doesn't actually
-          // schedule a cross-fade in this case (initial mount uses
-          // `fadeInWrapper`). Defensive no-op for completeness.
-          const idx = (Number(w.dataset.page) || 0) - 1;
-          if (idx >= 0) controller?.onFadeEnd(idx);
-        }
-      },
-      commitFadeImmediately({ wrapper, leaving, entering }) {
-        const w = wrapper as HTMLDivElement;
-        const enter = entering as HTMLCanvasElement | null;
-        const leave = leaving as HTMLCanvasElement | null;
-        if (leave && leave !== enter) {
-          leave.remove();
-        }
-        if (enter) {
-          enter.style.zIndex = String(CROSS_FADE_STRATEGY.enteringZIndex);
-          enter.style.opacity = String(CROSS_FADE_STRATEGY.enteringOpacity);
-        }
-        void w.offsetWidth;
-      },
-      fadeInWrapper(wrapper) {
-        const w = wrapper as HTMLDivElement;
-        w.classList.add("pdf-page--enter");
-        w.style.opacity = "0";
-        void w.offsetWidth;
-        w.style.opacity = "1";
-        const onEnd = (ev: TransitionEvent) => {
-          if (ev.propertyName !== "opacity") return;
-          w.removeEventListener("transitionend", onEnd);
-          w.classList.remove("pdf-page--enter");
-        };
-        w.addEventListener("transitionend", onEnd);
-      },
-      fadeOutAndRemoveWrapper(wrapper) {
-        const w = wrapper as HTMLDivElement;
-        io?.unobserve(w);
-        w.classList.add("pdf-page--leave");
-        w.style.opacity = "0";
-        const onEnd = (ev: TransitionEvent) => {
-          if (ev.propertyName !== "opacity") return;
-          w.removeEventListener("transitionend", onEnd);
-          w.remove();
-        };
-        w.addEventListener("transitionend", onEnd);
-      },
-    };
   }
 
   async function render(
@@ -226,7 +113,13 @@
       });
     }
 
-    controller ??= new PdfFadeController(makeAdapter(target));
+    controller ??= new PdfFadeController(
+      createFadeAdapter({
+        target,
+        observer: ensureObserver(),
+        onFadeEnd: (idx) => controller?.onFadeEnd(idx),
+      }),
+    );
     controller.commit(descriptors);
   }
 
