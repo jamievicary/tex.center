@@ -67,3 +67,13 @@
   chevron. Deferred from iter 257 for scope. Worth folding into
   a future left-rail UX iteration alongside any project switcher
   / sidebar additions rather than as a stand-alone affordance.
+- **Delete the dead `preview > maxPreview` branch in
+  `clampPanelWidths`.** Worked through the algebra in iter 280:
+  whenever the tree-pin (`tree > maxTree`) fires, the recomputed
+  `maxPreview` equals the input preview exactly, so the
+  subsequent `preview > maxPreview` check is always false. If
+  tree wasn't pinned, the constraints needed for the branch are
+  inconsistent (`tree+preview ≤ total-408` vs `tree+preview >
+  total-208`). Either drop the branch or, if there's a scenario I
+  missed, add a regression test that proves it. See
+  `apps/web/src/lib/editorPanelLayout.ts`.

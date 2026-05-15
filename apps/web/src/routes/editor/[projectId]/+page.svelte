@@ -25,6 +25,14 @@
     EDITOR_YJS_HYDRATED,
     markOnce,
   } from "$lib/editorMarks";
+  import {
+    DEFAULT_TREE_PX,
+    DIVIDER_PX,
+    clampPanelWidths,
+    parseStoredWidths,
+    serializeWidths,
+    widthsStorageKey,
+  } from "$lib/editorPanelLayout";
 
   let { data } = $props();
 
@@ -140,48 +148,26 @@
   }
 
   // M12: draggable panel dividers. Three columns — tree, editor,
-  // preview — with two dividers between them. Tree and preview hold
-  // absolute px widths in CSS custom properties; editor takes the
-  // remaining `1fr`. Widths persist to localStorage keyed by
-  // projectId. Min widths defended on every drag so the editor pane
-  // can never collapse below MIN_EDITOR_PX.
-  const MIN_TREE_PX = 150;
-  const MIN_PREVIEW_PX = 200;
-  const MIN_EDITOR_PX = 200;
-  const DIVIDER_PX = 4;
-  const DEFAULT_TREE_PX = 220;
-
+  // preview. Pure layout math lives in `$lib/editorPanelLayout`;
+  // this component owns the $state, DOM wiring, and localStorage
+  // I/O. Widths persist per-project so reload restores the user's
+  // last drag position.
   let treePx = $state(DEFAULT_TREE_PX);
   let previewPx = $state<number | null>(null);
   let shellEl: HTMLDivElement | null = $state(null);
 
   function storageKey(): string | null {
     const id = data.project?.id;
-    return id ? `editor-widths:${id}` : null;
+    return id ? widthsStorageKey(id) : null;
   }
 
   function loadWidths(): void {
     const key = storageKey();
     if (!key) return;
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        tree?: number;
-        preview?: number;
-      };
-      if (typeof parsed.tree === "number" && Number.isFinite(parsed.tree)) {
-        treePx = Math.max(MIN_TREE_PX, Math.round(parsed.tree));
-      }
-      if (
-        typeof parsed.preview === "number" &&
-        Number.isFinite(parsed.preview)
-      ) {
-        previewPx = Math.max(MIN_PREVIEW_PX, Math.round(parsed.preview));
-      }
-    } catch {
-      // Ignore corrupt localStorage.
-    }
+    const raw = window.localStorage.getItem(key);
+    const parsed = parseStoredWidths(raw);
+    if (parsed.tree !== undefined) treePx = parsed.tree;
+    if (parsed.preview !== undefined) previewPx = parsed.preview;
   }
 
   function persistWidths(): void {
@@ -190,7 +176,7 @@
     try {
       window.localStorage.setItem(
         key,
-        JSON.stringify({ tree: treePx, preview: previewPx }),
+        serializeWidths({ tree: treePx, preview: previewPx }),
       );
     } catch {
       // Quota or disabled — silently drop.
@@ -202,30 +188,13 @@
   }
 
   function clampWidths(): void {
-    const total = shellWidth();
-    const dividers = DIVIDER_PX * 2;
-    // Initialise preview from layout if unset.
-    if (previewPx === null) {
-      previewPx = Math.max(
-        MIN_PREVIEW_PX,
-        Math.floor((total - treePx - dividers) / 2),
-      );
-    }
-    treePx = Math.max(MIN_TREE_PX, treePx);
-    previewPx = Math.max(MIN_PREVIEW_PX, previewPx);
-    // Defend editor min.
-    const maxTree = total - dividers - MIN_EDITOR_PX - previewPx;
-    if (maxTree < MIN_TREE_PX) {
-      // Window too narrow; give up on min-editor and just keep tree/preview minimal.
-      treePx = MIN_TREE_PX;
-      previewPx = MIN_PREVIEW_PX;
-    } else if (treePx > maxTree) {
-      treePx = maxTree;
-    }
-    const maxPreview = total - dividers - MIN_EDITOR_PX - treePx;
-    if (previewPx > maxPreview && maxPreview >= MIN_PREVIEW_PX) {
-      previewPx = maxPreview;
-    }
+    const clamped = clampPanelWidths({
+      tree: treePx,
+      preview: previewPx,
+      total: shellWidth(),
+    });
+    treePx = clamped.tree;
+    previewPx = clamped.preview;
   }
 
   type DragKind = "tree" | "preview";
