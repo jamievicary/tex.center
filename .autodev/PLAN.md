@@ -361,6 +361,54 @@ elements **or** a single canvas of height > viewport.height * 1.8.
   compile reached daemon and failed (detail tells us how);
   (c) running→idle but no segment → sidecar succeeded but didn't
   ship segment frames. Next gold run picks one.
+- **Diagnosis iter 276.** Iter-275 diagnostic came back with
+  `compileStatusEvents=running×11,idle×11 lastErrorDetail=null` —
+  failure mode (c). Iter 276 read live `tex-center-sidecar` logs
+  directly via `flyctl logs` and found the smoking gun on every
+  one of those 11 compile rounds:
+  ```
+  supertex: edit /tmp/…/main.tex@85 past last consumed byte 70 — no recompile
+  [supertex-daemon event] round-done
+  msg=compile ok segments=0 bytesShipped=0
+  ```
+  This is the iter-726 supertex short-circuit (see
+  `vendor/supertex/discussion/726_*`) firing inappropriately on a
+  document-body insertion. The 726 fix's predicate (`edit_byte >=
+  read_end_highwater` → no recompile) was designed for "edit in
+  trailing whitespace past `\end{document}`". Here the daemon's
+  recorded highwater pins at byte 70 (end of seeded
+  `\end{document}\n`) while the user inserts new content **before**
+  `\end{document}` — content that the engine needs to consume.
+  Each compile's first-byte-diff lands past 70 (the daemon's
+  *previous tracked state* is whatever the prior no-op-skipped
+  compile saw, not the original SEED), so the short-circuit fires
+  again; highwater never grows; vicious cycle.
+- **Local repro investigation iter 276.** Wrote
+  `tests_gold/lib/test/supertexIncrementalMultipageEmit.test.mjs`
+  + `tests_gold/cases/test_supertex_incremental_multipage_emit.py`
+  driving `SupertexDaemonCompiler` against an 11-step cumulative
+  growth of `MULTIPAGE_BODY` between `Hello, world!\n` and
+  `\end{document}\n`, with `targetPage=0` on every compile. PASS
+  locally: every step emits a segment carrying the full
+  incremental page count (final=5). So the daemon DOES handle the
+  controlled local shape correctly — meaning the live trigger
+  needs additional state we haven't replicated yet (cold-Machine
+  checkpoint restore, partial Yjs sync timing, or different
+  coalescer cadence). Pin retained as a regression lock and a
+  shape-baseline for the next investigation iteration.
+- **Next iter (M15 close-out path).** Two options:
+  (i) Extend the local pin to attempt to reproduce the live
+  short-circuit so the fix can be iterated inside
+  `vendor/supertex/`. Candidate variations: larger first-compile
+  source (mimicking ~20 chars buffered before first coalescer
+  flush), simulating `checkpoint restore` via consecutive
+  `compiler` instances, or feeding the SEED via baseline
+  `targetPage=1` first (mirroring an older sidecar path).
+  (ii) Escalate via a discussion question in
+  `vendor/supertex/discussion/<N>_question.md` with the live log
+  evidence and the iter-276 local-pin contrast, letting the
+  supertex agent identify why highwater fails to advance on the
+  insert-before-\end shape.
 - **Diagnosis + fix landed iter 269.** Root cause was the
   sidecar's `targetPage = maxViewingPage(p)` default in
   `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
