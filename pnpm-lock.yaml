@@ -84,6 +84,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.35.0
         version: 6.42.1
+      '@headless-tree/core':
+        specifier: 1.6.3
+        version: 1.6.3
       '@tex-center/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -513,6 +516,9 @@ packages:
 
   '@fastify/websocket@11.2.0':
     resolution: {integrity: sha512-3HrDPbAG1CzUCqnslgJxppvzaAZffieOVbLp1DAy1huCSynUWPifSvfdEDUR8HlJLp3sp1A36uOM2tJogADS8w==}
+
+  '@headless-tree/core@1.6.3':
+    resolution: {integrity: sha512-en0EOaZfiCRF2B8DEnhGhSaUf3hVr9Bauye8G8aswPbHOKSyhJiN4bsczz1GvqF4Xb7Ga3LP0vLA6Zih7YLoyw==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1678,6 +1684,8 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  '@headless-tree/core@1.6.3': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

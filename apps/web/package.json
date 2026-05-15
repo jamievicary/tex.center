@@ -11,12 +11,13 @@
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error"
   },
   "dependencies": {
-    "@tex-center/auth": "workspace:*",
-    "@tex-center/db": "workspace:*",
-    "@tex-center/protocol": "workspace:*",
     "@codemirror/commands": "^6.7.1",
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.35.0",
+    "@headless-tree/core": "1.6.3",
+    "@tex-center/auth": "workspace:*",
+    "@tex-center/db": "workspace:*",
+    "@tex-center/protocol": "workspace:*",
     "codemirror": "^6.0.1",
     "jose": "^5.9.6",
     "pdfjs-dist": "^4.10.38",

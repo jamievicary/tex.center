@@ -102,10 +102,26 @@ styles. Sub-slices:
   add → list → rehydrate → rename → delete via a real
   `LocalFsBlobStore`), `packages/protocol/test/codec.test.mjs`
   (validator accept/reject shapes).
-- **M11.1c (new)** adopt `@headless-tree/core` + its Svelte
-  adapter. Wire its state to `buildFileTree` output; replace
-  `FileTreeNode.svelte`'s markup with a headless-tree-driven
-  view; preserve behaviour. Component test on the wiring.
+- **M11.1c-prep. Landed iter 283.** `@headless-tree/svelte` does
+  not exist on npm (verified iter 283 — the 260_answer.md library
+  survey was wrong on this point; only `@headless-tree/core` and
+  `@headless-tree/react` are published). We write the Svelte 5
+  binding ourselves. Scaffolding landed:
+  `apps/web/src/lib/fileTreeHeadless.ts` exposes
+  `buildFileItemMap` + `createFileTreeInstance(forest, opts)`,
+  which converts a `buildFileTree` forest into the headless-tree
+  data-loader shape and returns a mounted `TreeInstance`. State
+  (expanded/selected/focused) is owned by the caller via an
+  optional `onStateChange` callback. Adapter is dark code: no UI
+  call sites yet. Lock:
+  `apps/web/test/fileTreeHeadless.test.mjs`.
+- **M11.1c (cutover)** adopt the adapter in `FileTree.svelte` —
+  replace `FileTreeNode.svelte`'s recursive markup with a flat
+  render driven by `tree.getItems()`, with per-row indent from
+  `item.getItemMeta().level`. Reactivity via Svelte 5 `$state`
+  fed by the adapter's `onStateChange`. Preserve behaviour
+  (collapse map, selection, rename/delete buttons). Component
+  test on the wiring.
 - **M11.2** create/delete/rename via context menu + keyboard
   (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
 - **M11.3** create folder via virtual-folder model. Unblocked

@@ -197,6 +197,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_file_tree(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "fileTree.test.mjs")
 
+    def test_web_file_tree_headless(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "fileTreeHeadless.test.mjs")
+
     def test_web_editor_panel_layout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "editorPanelLayout.test.mjs")
 
