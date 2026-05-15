@@ -1,4 +1,5 @@
 test_authed_cookie (test_authed_cookie.TestAuthedCookie.test_authed_cookie) ... ok
+test_cleanup_old_playwright_projects (test_cleanup_old_playwright_projects.TestCleanupOldPlaywrightProjects.test_cleanup_old_playwright_projects) ... ok
 test_cleanup_project_machine (test_cleanup_project_machine.TestCleanupProjectMachine.test_cleanup_project_machine) ... ok
 test_fly_proxy (test_fly_proxy.TestFlyProxy.test_fly_proxy) ... ok
 test_local_db (test_local_db.TestLocalDb.test_local_db) ... ok
@@ -9,65 +10,3 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-[globalSetup] DB ready (userId=6fd9809e-d32d-4df9-96a9-d1def113015b); spawning dev server on :3000
-Error: Failed query: insert into "projects" ("id", "owner_id", "name", "seed_doc", "created_at", "updated_at") values ($1, $2, $3, $4, default, default) returning "id", "owner_id", "name", "seed_doc", "created_at", "updated_at"
-params: f862b905-d8b9-4d88-b3c0-5fd68352d14c,7d7a970e-b420-46f2-b00e-e5234d8a4c70,pw-gt-shared-1778845369148,
-
-   at ../../packages/db/src/projects.ts:34
-
-  32 |   input: CreateProjectInput,
-  33 | ): Promise<ProjectRow> {
-> 34 |   const rows = await db
-     |                ^
-  35 |     .insert(projects)
-  36 |     .values({
-  37 |       id: randomUUID(),
-    at PostgresJsPreparedQuery.queryWithCache (/home/jamievicary/.cache/tex-center-nm/e7b568589fe4/node_modules/src/pg-core/session.ts:73:11)
-    at /home/jamievicary/.cache/tex-center-nm/e7b568589fe4/node_modules/src/postgres-js/session.ts:58:17
-    at createProject (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/packages/db/src/projects.ts:34:16)
-    at bootstrapLiveProject (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/fixtures/liveProjectBootstrap.ts:165:15)
-    at globalSetup (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/globalSetup.ts:88:18)
-[cause]: PostgresError: column "seed_doc" of relation "projects" does not exist
-    at ErrorResponse (/home/jamievicary/.cache/tex-center-nm/e7b568589fe4/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/home/jamievicary/.cache/tex-center-nm/e7b568589fe4/node_modules/postgres/cjs/src/connection.js:489:6)
-    at Socket.data (/home/jamievicary/.cache/tex-center-nm/e7b568589fe4/node_modules/postgres/cjs/src/connection.js:324:9)
-
-FAIL
-test_sidecar_cold_start_coalescer (test_sidecar_cold_start_coalescer.TestSidecarColdStartCoalescer.test_sidecar_cold_start_coalescer) ... ok
-test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... FAIL
-test_supertex_cold_newpage_crash (test_supertex_cold_newpage_crash.TestSupertexColdNewpageCrash.test_supertex_cold_newpage_crash) ... ok
-test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
-test_supertex_filewatcher_race (test_supertex_filewatcher_race.TestSupertexFilewatcherRace.test_supertex_filewatcher_race) ... ok
-test_supertex_incremental_multipage_emit (test_supertex_incremental_multipage_emit.TestSupertexIncrementalMultipageEmit.test_supertex_incremental_multipage_emit) ... ok
-test_supertex_multipage_emit (test_supertex_multipage_emit.TestSupertexMultipageEmit.test_supertex_multipage_emit) ... ok
-test_supertex_oversize_target (test_supertex_oversize_target.TestSupertexOversizeTarget.test_supertex_oversize_target) ... ok
-test_supertex_warm_doc_body_edit_noop (test_supertex_warm_doc_body_edit_noop.TestSupertexWarmDocBodyEditNoop.test_supertex_warm_doc_body_edit_noop) ... ok
-test_sweep_orphaned_sidecar_machines (test_sweep_orphaned_sidecar_machines.TestSweepOrphanedSidecarMachines.test_sweep_orphaned_sidecar_machines) ... ok
-
-======================================================================
-FAIL: test_playwright (test_playwright.TestPlaywright.test_playwright)
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 192, in test_playwright
-    raise AssertionError(
-AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
-
-======================================================================
-FAIL: test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold)
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_sidecar_machine_count.py", line 117, in test_machine_count_under_threshold
-    self.fail("\n".join(lines))
-AssertionError: tex-center-sidecar has 7 non-shared Machines (of 9 total), threshold is 5 (TEXCENTER_MAX_SIDECAR_MACHINES). Likely cause: a live spec failed to reap its per-project Machine. Triage / destroy:
-  - 48e635ec3ee468 name=holy-sound-7542 state=started created=2026-05-14T18:21:37Z texcenter_project=1ead1a1d-2392-4c8c-ba8e-dfebaa78792f
-  - 7844043be67258 name=wandering-dawn-1091 state=suspended created=2026-05-15T11:03:41Z texcenter_project=2bc1a126-7705-4a87-8f2e-6f69e9577dea
-  - e8201edb0d3d28 name=frosty-smoke-1581 state=suspended created=2026-05-14T17:56:09Z texcenter_project=00000000-0000-4000-8000-000000000001
-  - 7819d00c033138 name=dawn-breeze-1115 state=suspended created=2026-05-15T10:54:09Z texcenter_project=b4de1e54-2513-403f-9497-5d13417ab00b
-  - 78496e5fde4608 name=dark-sun-4506 state=started created=2026-05-14T19:28:29Z texcenter_project=2dda63f4-5e16-4955-b5ff-e329adcd7e5b
-  - 7844043bed6d38 name=quiet-resonance-1665 state=suspended created=2026-05-14T22:17:34Z texcenter_project=c04bf53e-e25e-474b-961d-4967136cb01d
-  - 48e0e36f7997d8 name=snowy-wave-2337 state=suspended created=2026-05-14T19:23:32Z texcenter_project=c6790016-eb36-4f6e-8e18-27fc50a8f602
-
-----------------------------------------------------------------------
-Ran 21 tests in 77.134s
-
-FAILED (failures=2)

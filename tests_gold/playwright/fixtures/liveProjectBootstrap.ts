@@ -45,8 +45,10 @@ import {
   createDb,
   closeDb,
   createProject,
+  deleteProject,
   deleteSession,
   listAllProjectIds,
+  listOldPlaywrightProjects,
   projects,
   type DbHandle,
   type ProjectRow,
@@ -57,6 +59,7 @@ import {
   buildSessionCookieSpec,
   resolveLiveDbConfig,
 } from "../../lib/src/authedCookie.js";
+import { cleanupOldPlaywrightProjects } from "../../lib/src/cleanupOldPlaywrightProjects.js";
 import { cleanupProjectMachine } from "../../lib/src/cleanupProjectMachine.js";
 import { sweepOrphanedSidecarMachines } from "../../lib/src/sweepOrphanedSidecarMachines.js";
 import { mintSession } from "../../lib/src/mintSession.js";
@@ -132,6 +135,47 @@ export async function bootstrapLiveProject(): Promise<LiveBootstrapResult | null
   const token = process.env.FLY_API_TOKEN ?? "";
   const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
   if (token !== "") {
+    // Stage 1 — stale-`pw-*`-project sweep. A spec that crashed
+    // before its `afterEach` ran leaves a `pw-*` project row whose
+    // tagged Machine is still alive (and a `machine_assignments`
+    // row pointing at it). The orphan-Machine sweep below cannot
+    // self-heal that shape because its definition of "orphan" is
+    // "no projects.id row" — and the row exists. Wipe those rows
+    // (and their Machines) first; only `pw-*` names are touched,
+    // so user-created projects of any age are immune.
+    try {
+      const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+      const stale = await listOldPlaywrightProjects(db.db, cutoff);
+      if (stale.length > 0) {
+        const report = await cleanupOldPlaywrightProjects({
+          projects: stale,
+          machines: makeMachineDestroyer({ token, appName }),
+          assignments: makeAssignmentStore(db.db),
+          rows: { deleteProject: (id) => deleteProject(db.db, id) },
+        });
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[globalSetup] stale-pw sweep: inspected=${report.inspected} ` +
+            `machinesDestroyed=${report.machinesDestroyed.length} ` +
+            `rowsDeleted=${report.rowsDeleted.length} ` +
+            `failed=${report.failed.length}`,
+        );
+        for (const f of report.failed) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[globalSetup] stale-pw sweep failed: project=${f.projectId} ` +
+              `stage=${f.stage} error=${f.error}`,
+          );
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[globalSetup] stale-pw sweep threw:", err);
+    }
+    // Stage 2 — orphan-Machine sweep. With Stage 1 done, any
+    // remaining tagged Machine whose project row is gone is a true
+    // orphan (its Machine survived a destroy failure, or its
+    // `machine_assignments` row was lost before the row insert).
     try {
       const knownIds = new Set(await listAllProjectIds(db.db));
       const report = await sweepOrphanedSidecarMachines({

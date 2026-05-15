@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, like, lt } from 'drizzle-orm';
 
 import { projects } from './drizzle.js';
 import type { ProjectRow } from './schema.js';
@@ -100,6 +100,29 @@ export async function listAllProjectIds(
 ): Promise<string[]> {
   const rows = await db.select({ id: projects.id }).from(projects);
   return rows.map((r) => r.id);
+}
+
+// Returns every project whose `name` matches `pw-%` and whose
+// `created_at` is older than `cutoff`. Used by the gold-side
+// `cleanupOldPlaywrightProjects` helper invoked at globalSetup
+// startup: a Playwright spec that crashed without running its
+// teardown leaves a `pw-*` project row whose Fly Machine is also
+// likely still alive. The age cutoff is set well above any single
+// live spec's runtime (longest GT-7 is ~60s) so an in-flight
+// project is never collateral.
+//
+// Sort by `created_at` ascending so the cleanup loop reaps the
+// oldest first; a partial completion still makes monotonic
+// progress.
+export async function listOldPlaywrightProjects(
+  db: DrizzleDb,
+  cutoff: Date,
+): Promise<ProjectRow[]> {
+  return db
+    .select()
+    .from(projects)
+    .where(and(like(projects.name, 'pw-%'), lt(projects.createdAt, cutoff)))
+    .orderBy(asc(projects.createdAt), asc(projects.id));
 }
 
 // Sorted by `created_at` ascending, then `id` ascending as a tie

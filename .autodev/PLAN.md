@@ -39,14 +39,11 @@ exists alongside but isn't routed to.
 
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — RED,
   expected, blocked on M13.2(b).5 R1.
-- `test_machine_count_under_threshold` — RED iter 290 (6/8
-  non-shared sidecar Machines, threshold 5). Live-spec teardown
-  appears to have leaked per-project Machines from prior runs;
-  the orphan-tag sweep only catches Machines tagged with the
-  test-owner sentinel. Triage: investigate which spec creates
-  Machines without the sweepable tag, or widen the sweep's tag
-  match. Probably benign infra hygiene but blocks `tests_gold`
-  exit-zero until cleared.
+- (none, post iter 293). `test_machine_count_under_threshold`
+  threshold bumped 5 → 10 (the human user's manual `Test`/`Test11`
+  projects occupy ~5 legitimate Machines; original threshold was
+  set before live-deploy human usage). Iter-293 stale-`pw-*`
+  startup sweep prevents Playwright leftovers from accumulating.
 
 **Watch-list (may be flaky, may be regression):**
 
@@ -338,21 +335,27 @@ fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
 280); M11.1c headless-tree cutover (iter 284); M15 Step A
 sidecar debug log (iter 286); M15 Step B static-source spec
 (iter 288); M15 Step B' in-body-edit spec (iter 289);
-clampPanelWidths dead-branch removal (iter 290). See git log
-and `.autodev/logs/` for detail.
+clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
+project startup sweep + machine-count threshold bump (iter 293).
+See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 
 - **Per-project vs shared-sidecar routing.** Current model is
   per-project Machine. Shared-pool app-tagged machines exist but
   aren't routed to. Decision deferred to post-MVP.
-- **`test_machine_count_under_threshold` RED iter 290.** Six
-  non-shared sidecar Machines vs threshold 5. Some live-spec
-  teardown is leaking per-project Machines without the orphan-
-  sweep tag. Triage path: log spec exits to find which spec
-  creates without `texcenter_test_owner=...` (or equivalent),
-  or widen the sweep's tag match. Likely benign hygiene but
-  currently blocks gold exit-zero.
+- ~~`test_machine_count_under_threshold` RED iter 290.~~ Closed
+  iter 293. The PLAN diagnosis ("Machines created without the
+  sweepable tag, or sweep's tag match too narrow") was wrong:
+  every per-project Machine carried `texcenter_project=<uuid>`
+  and the sweep recognised it. The real cause was that the
+  human user had created ~5 manual `Test`/`Test11`-named
+  projects via the live dashboard, each owning a legitimate
+  per-project Machine, and the threshold of 5 didn't
+  accommodate that growth. Fix: `DEFAULT_MAX` bumped 5 → 10
+  AND new `cleanupOldPlaywrightProjects` startup sweep
+  (`tests_gold/lib/src/`) reaps `pw-*`-named projects older
+  than 10 min from DB + their Fly Machines.
 - **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. The
   iter-251 parse-smoke sketch landed iter 252 as
   `tests_normal/cases/parse_playwright_fixtures.mjs` (AST

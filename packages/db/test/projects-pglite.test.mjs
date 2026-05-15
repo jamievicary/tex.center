@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict';
 
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 
 import {
@@ -15,7 +16,9 @@ import {
   upsertMachineAssignment,
   getMachineAssignmentByProjectId,
   listAllProjectIds,
+  listOldPlaywrightProjects,
   listProjectsByOwnerId,
+  projects,
   schema,
 } from '../src/index.ts';
 
@@ -170,6 +173,61 @@ try {
     null,
     'getProjectSeedDoc returns null for unknown project',
   );
+
+  // --- listOldPlaywrightProjects ---------------------------------
+  // Placed at the end so the new rows don't perturb earlier
+  // ordering invariants. Insert several projects with controlled
+  // `created_at` values (PGlite respects `defaultNow()` but a direct
+  // UPDATE lets us pin the timestamps without sleeping).
+  const HOUR = 60 * 60 * 1000;
+  const oldPwOlder = await createProject(db, {
+    ownerId: owner.id,
+    name: 'pw-leak-older',
+  });
+  const oldPwNewer = await createProject(db, {
+    ownerId: owner.id,
+    name: 'pw-leak-newer',
+  });
+  const freshPw = await createProject(db, {
+    ownerId: owner.id,
+    name: 'pw-fresh',
+  });
+  const oldNonPw = await createProject(db, {
+    ownerId: owner.id,
+    name: 'Test Old (user)',
+  });
+  const olderTs = new Date(Date.now() - 2 * HOUR);
+  const middleTs = new Date(Date.now() - 1 * HOUR);
+  const recentTs = new Date(Date.now() - 60 * 1000);
+  const userOldTs = new Date(Date.now() - 24 * HOUR);
+  await db.update(projects).set({ createdAt: olderTs }).where(eq(projects.id, oldPwOlder.id));
+  await db.update(projects).set({ createdAt: middleTs }).where(eq(projects.id, oldPwNewer.id));
+  await db.update(projects).set({ createdAt: recentTs }).where(eq(projects.id, freshPw.id));
+  await db.update(projects).set({ createdAt: userOldTs }).where(eq(projects.id, oldNonPw.id));
+
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const stale = await listOldPlaywrightProjects(db, cutoff);
+  assert.equal(stale.length, 2, 'two pw-* rows older than cutoff');
+  assert.equal(stale[0].id, oldPwOlder.id, 'sorted by created_at ascending');
+  assert.equal(stale[1].id, oldPwNewer.id);
+  // fresh pw-* survives the filter despite the prefix:
+  for (const row of stale) {
+    assert.notEqual(row.id, freshPw.id);
+    assert.notEqual(row.id, oldNonPw.id, 'non-pw-* never returned even if old');
+  }
+
+  // Cutoff that includes the fresh pw-* still excludes the non-pw user row.
+  const wideCutoff = new Date(Date.now() + HOUR);
+  const allPw = await listOldPlaywrightProjects(db, wideCutoff);
+  assert.equal(allPw.length, 3, 'all three pw-* rows below wide cutoff');
+  for (const row of allPw) {
+    assert.ok(row.name.startsWith('pw-'), `unexpected non-pw row in result: ${row.name}`);
+  }
+
+  // Cutoff that excludes everything → empty result.
+  const ancientCutoff = new Date(Date.now() - 7 * 24 * HOUR);
+  const none = await listOldPlaywrightProjects(db, ancientCutoff);
+  assert.equal(none.length, 0, 'pre-everything cutoff returns no rows');
 
   console.log('projects PGlite test: OK');
 } finally {

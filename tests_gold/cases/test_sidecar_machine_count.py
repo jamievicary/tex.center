@@ -1,9 +1,21 @@
 """Sidecar Machine-count guardrail (M9.resource-hygiene).
 
 Asserts that `tex-center-sidecar` has no more Machines than
-`TEXCENTER_MAX_SIDECAR_MACHINES` (default 5). Catches leaks from
+`TEXCENTER_MAX_SIDECAR_MACHINES` (default 10). Catches leaks from
 live specs that fail to call `cleanupLiveProjectMachine` in
 `afterEach` (see `173b_question.md` / `173b_answer.md`).
+
+Threshold history: 5 originally — the live deploy was used only
+by Playwright artifacts. By iter 290 the human user had created
+~5 manual `Test`/`Test11`/`Xxdsz`-named projects via the live
+dashboard, each owning a per-project Machine that the count
+includes. Iter 293 bumped to 10 to accommodate ongoing user
+growth while still catching runaway leaks (a leaking suite still
+hits 20+ Machines fast — pre-iter-243 incidents saw 30+
+overnight). The iter-293 globalSetup stale-`pw-*` sweep
+(`cleanupOldPlaywrightProjects.ts`) reaps Playwright leftovers
+older than 10 minutes, so this test's threshold doesn't need to
+account for accumulating test artifacts.
 
 M9.live-hygiene.leaked-machines (iter 243): Machines whose
 `config.metadata.fly_process_group == "app"` are the intentional
@@ -36,7 +48,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CREDS = ROOT / "creds"
 APP_NAME = os.environ.get("SIDECAR_APP_NAME", "tex-center-sidecar")
-DEFAULT_MAX = 5
+DEFAULT_MAX = 10
 
 
 def _load_token() -> str | None:
