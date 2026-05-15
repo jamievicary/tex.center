@@ -255,6 +255,8 @@
   // browser-only.
   let settings = $state<EditorSettings>({ ...DEFAULT_SETTINGS });
   let settingsOpen = $state(false);
+  let settingsCogEl: HTMLButtonElement | null = $state(null);
+  let settingsSliderEl: HTMLInputElement | null = $state(null);
 
   function updateFadeMs(ms: number): void {
     const clamped = clampFadeMs(ms);
@@ -284,11 +286,31 @@
     settingsOpen = false;
   }
 
+  function onSettingsKeydown(e: KeyboardEvent): void {
+    if (!settingsOpen) return;
+    if (e.key !== "Escape") return;
+    settingsOpen = false;
+    settingsCogEl?.focus();
+    e.preventDefault();
+  }
+
+  // M19.3: when the popover opens, move keyboard focus into it
+  // (first interactive control = the fade slider). Svelte 5 flushes
+  // the `{#if settingsOpen}` block before this effect re-runs, so
+  // `settingsSliderEl` is non-null on the same tick the open
+  // transitions to true.
+  $effect(() => {
+    if (settingsOpen) settingsSliderEl?.focus();
+  });
+
   onMount(() => {
     settings = parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
     window.addEventListener("pointerdown", onSettingsOutsidePointerDown);
-    return () =>
+    window.addEventListener("keydown", onSettingsKeydown);
+    return () => {
       window.removeEventListener("pointerdown", onSettingsOutsidePointerDown);
+      window.removeEventListener("keydown", onSettingsKeydown);
+    };
   });
 
   onDestroy(() => {
@@ -327,6 +349,7 @@
           aria-expanded={settingsOpen}
           aria-haspopup="dialog"
           data-testid="settings-cog"
+          bind:this={settingsCogEl}
           onclick={toggleSettings}
         >
           <!-- Inline cog glyph; 16px, currentColor stroke so it
@@ -348,7 +371,7 @@
             ></path>
           </svg>
         </button>
-        <span class="email">{data.user.displayName ?? data.user.email}</span>
+        <span class="email" data-testid="topbar-email">{data.user.email}</span>
         <form method="POST" action="/auth/logout">
           <button type="submit" class="signout">Sign out</button>
         </form>
@@ -371,6 +394,7 @@
           step={FADE_MS_STEP}
           value={settings.fadeMs}
           data-testid="settings-fade-ms"
+          bind:this={settingsSliderEl}
           oninput={(e) =>
             updateFadeMs(Number((e.currentTarget as HTMLInputElement).value))}
         />

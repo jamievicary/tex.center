@@ -83,6 +83,30 @@ test.describe("editor route", () => {
       performance.getEntriesByName("editor:route-mounted").length,
     );
     expect(routeMountedCount).toBe(1);
+
+    // M19.2: topbar shows the signed-in *email*, never a display
+    // name. Locks the iter-298 swap from `displayName ?? email` →
+    // `email`. The local seed user (localDb.ts) has no
+    // `display_name`, so before the swap the visible text was
+    // already the email; this assert prevents regressions if a
+    // future migration adds the column back and tries to render it.
+    const email = authedPage.getByTestId("topbar-email");
+    await expect(email).toBeVisible();
+    await expect(email).toHaveText(/@/);
+
+    // M19.3: cog opens popover, focus moves to the slider; Escape
+    // closes the popover and returns focus to the cog. Local-only
+    // a11y pin — no sidecar dependence.
+    const cog = authedPage.getByTestId("settings-cog");
+    const popover = authedPage.getByTestId("settings-popover");
+    const slider = authedPage.getByTestId("settings-fade-ms");
+    await expect(popover).toHaveCount(0);
+    await cog.click();
+    await expect(popover).toBeVisible();
+    await expect(slider).toBeFocused();
+    await authedPage.keyboard.press("Escape");
+    await expect(popover).toHaveCount(0);
+    await expect(cog).toBeFocused();
   });
 
 });

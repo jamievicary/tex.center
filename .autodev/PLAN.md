@@ -25,38 +25,38 @@ exists alongside but isn't routed to.
    source via a new discussion question. No further M15 work
    without that input — engineering against an unreproducible bug
    would only generate dark code.
-2. **M19 settings dialog: email-in-topbar + a11y.** M19.1+M19.2
-   slider closed iter 297 (settings store, cog popover, fade
-   slider, `--pdf-fade-ms` CSS var wired through PdfViewer).
-   Remaining: M19.2's email-in-topbar swap (`displayName ?? email`
-   → `email`) + M19.3 Esc/focus management. Both small.
-3. **M17 reopen — cross-fade blend math.** Switch to single-
+2. **M17 reopen — cross-fade blend math.** Switch to single-
    layer opacity (leaving canvas above, opacity 1→0; entering
    canvas below, opacity 1). Pin via center-pixel-flatness
    check.
-4. **M22 wire-message debug toasts.** Front→back coverage for
+3. **M22 wire-message debug toasts.** Front→back coverage for
    `outgoing-*` events; close M9.editor-ux GT-F.
-5. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
+4. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
    former M13.2(b).5 R1: shared `BLOB_STORE` widens from "seed
    main.tex" to "full project tree" so cold-stopped resume
    restores `.aux`/checkpoint as well as source.
-6. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+5. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection; M21.1 (logic + wire switch) closed iter 296.
    Low priority — failure mode today is extra-pages-compiled-late,
    not data loss.
-7. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
+6. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change (coalesced trailing
    100ms), and a gold visual-snapshot pin under forced DPR=2
    (Playwright `--device-scale-factor=2`). Both PLAN-tagged "wait
    for user feedback" — defer until reported.
-8. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
+7. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
    → `upload-file` (text path, already exists). Binary stays
    blocked.
-9. **M16.aesthetic.** Type pair + 4-colour palette retune for
+8. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual-snapshot diffs on `/` and `/projects`
    plus a topbar snapshot on the editor route.
-10. **M11.2.** Create/delete/rename via context menu + keyboard
+9. **M11.2.** Create/delete/rename via context menu + keyboard
     (`F2`, `Del`-with-confirm), reusing extant sidecar verbs.
+
+**M19 closed iter 298.** Settings dialog complete: slider
+(iter 297), email-in-topbar swap + Esc/focus a11y (iter 298).
+Local `editor.spec.ts` pins both the topbar email shape and the
+cog→focus-slider, Esc→focus-cog round-trip.
 
 **Open red specs (post iter 290):**
 
@@ -356,13 +356,20 @@ Slices:
   and the per-canvas opacity transition. The previously-unused
   `FADE_MS` const is gone. Lock:
   `apps/web/test/settingsStore.test.mjs`.
-- **M19.2 remainder.** Email-in-topbar — swap `displayName ??
-  email` → `email` so the topbar reflects the actual signed-in
-  identity (per `293_answer.md` item 3). Touches editor.spec.ts
-  topbar assertions; needs a refreshed visible-text expectation
-  if the seed user has both display name and email.
-- **M19.3** keyboard / a11y (Esc closes; focus moves to first
-  slider on open; focus returns to cog on close).
+- **M19.2 remainder + M19.3 (email + a11y). Closed iter 298.**
+  Topbar `displayName ?? email` → `email` (the seed user already
+  rendered email since `display_name` was null, so the visible
+  text was unchanged for local pins; live users with a Google
+  display name will now see their email). `bind:this` on the cog
+  button + slider; a window-level `keydown` listener (registered
+  alongside the iter-297 outside-click listener) closes the
+  popover on Escape and refocuses the cog. An `$effect(() => { \
+  if (settingsOpen) settingsSliderEl?.focus(); })` moves focus
+  into the popover on open. Lock: `editor.spec.ts` "renders
+  three-panel layout" extended to assert (i) `[data-testid=\
+  topbar-email]` is visible and contains `@`, (ii) cog click →
+  popover visible + slider focused, (iii) Escape → popover gone
+  + cog focused.
 
 ### M20.lifecycle — suspend → stop → cold-storage cascade
 
@@ -499,7 +506,8 @@ sidecar debug log (iter 286); M15 Step B static-source spec
 clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
 project startup sweep + machine-count threshold bump (iter 293);
 M18.1 DPR-aware PDF backing store (iter 295); M21.1 max-visible
-wire switch (iter 296); M19.1 + M19.2 fade slider (iter 297).
+wire switch (iter 296); M19.1 + M19.2 fade slider (iter 297);
+M19.2 email swap + M19.3 Esc/focus a11y (iter 298, closes M19).
 See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
