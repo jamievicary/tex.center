@@ -20,8 +20,10 @@ routed to (decision deferred post-MVP).
    created, uploaded, renamed, deleted, hydrated, OR edited
    in-place by the client — reaches the on-disk workspace before
    the supertex daemon needs it.
-2. **M22.2 remaining slice.** GT-F local Playwright cases
-   (closes M9.editor-ux GT-F). M22.4b closed iter 317.
+2. **M22.2 closed iter 318.** Locally-testable surface of GT-F
+   locked by `tests_gold/playwright/editorDebugToggle.spec.ts`
+   (4 cases, local-only). Wire-driven assertions deferred — see
+   M9.editor-ux GT-F note.
 3. **M20 lifecycle.** M20.2 shared `BLOB_STORE` (sidecar persists
    source + latex artefacts on every settle, rehydrates on cold
    boot) and M20.3 gold spec. Unblocks
@@ -67,10 +69,27 @@ Remaining slices:
 
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
-- **GT-F (local Playwright).** `?debug=1` flips localStorage;
-  single keystroke produces a green Yjs-op toast and (after
-  compile) a blue pdf-segment toast; rapid typing aggregates into
-  one green `×N`; without the flag, no debug toasts.
+- **GT-F (split, iter 318).**
+  - **Local part — closed iter 318.** `?debug=1/0` URL flag →
+    persisted `localStorage["editor-settings"].debugMode`,
+    settings popover checkbox is the same single source of truth,
+    Ctrl+Shift+D keyboard shortcut toggles. Lock:
+    `tests_gold/playwright/editorDebugToggle.spec.ts`.
+  - **Wire-driven part — deferred.** "single keystroke → green
+    Yjs-op toast", "after compile → blue pdf-segment toast",
+    "rapid typing aggregates `×N`", "without flag, no debug
+    toasts during typing". Not locally testable: local stack has
+    no sidecar, WS never opens, `+page.svelte` gates CodeMirror
+    mount on `snapshot.hydrated`, and
+    `WsClient.onDocUpdate:127` only emits the
+    `outgoing-doc-update` debug event when `send()` returns true.
+    Wire→toast unit-locked in
+    `apps/web/test/wsClientDebugEvents.test.mjs` and
+    `apps/web/test/debugToastsToggle.test.mjs`. Live variant
+    pending: extend an existing typing spec
+    (`verifyLiveGt3EditTriggersFreshPdf` /
+    `verifyLiveGt4SustainedTyping`) with a `?debug=1` visit and
+    a green/blue toast assertion.
 - **Save-feedback affordance.** `SyncStatus` indicator
   (idle/in-flight/error) sourced from Yjs provider sync state
   acked by a sidecar persistence signal. Blocked on a sidecar
@@ -407,7 +426,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/4b/5; M23.1/2/4/5;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/2-local/3/4a/4b/5; M23.1/2/4/5;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
