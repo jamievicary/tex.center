@@ -16,7 +16,9 @@ routed to (decision deferred post-MVP).
    outbound control sends now emit `outgoing-*` debug events).
    M22.3 closed iter 305 (info TTL 5 s, newest-on-top stack,
    user-dismissible × on info/success). Remaining: M22.2 GT-F
-   local Playwright cases (closes M9.editor-ux GT-F).
+   local Playwright cases (closes M9.editor-ux GT-F); **M22.4a
+   UI-only batch and M22.4b wire-shipoutPage batch** queued from
+   `306_answer.md` — pick up M22.4a next.
 2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
    idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
    binding (sidecar persists source + latex artefacts on every
@@ -289,7 +291,8 @@ the user can see.
 
 ### M22.debug-toasts.b — front→back wire coverage
 
-From `293_answer.md` (7,8). Closes M9.editor-ux GT-F.
+From `293_answer.md` (7,8). Closes M9.editor-ux GT-F. M22.4
+batch added iter 308 from `306_answer.md`.
 
 Slices:
 - **M22.1** Closed iter 304. `WsDebugEvent` extended with
@@ -316,6 +319,46 @@ Slices:
   Locks: `apps/web/test/toastStore.test.mjs` case 2 (info-at-5s,
   error-at-6s); case 5 also pins the store's oldest-first
   insertion order, which the renderer reverses.
+- **M22.4a (UI-only, no wire change).** From `306_answer.md`.
+  Items 1–6 plus item 9-as-`compile-status`-elapsed. Concretely:
+  - `settingsStore` gains `debugMode: boolean` (default `true`);
+    `FADE_MS_DEFAULT` 180 → 1000.
+  - `initDebugFlag` migrates one-shot from `localStorage["debug"]`
+    into `editor-settings.debugMode`, then deletes the old key.
+  - `Settings.svelte` adds a debug-mode checkbox above the slider;
+    URL `?debug=1/0` and Ctrl+Shift+D write the same setting.
+  - All `debug-*` TTLs bumped from 2 s (red: 4 s) → 10 s in
+    `toastStore.DEFAULT_TTL_MS`. Info/success/error unchanged.
+  - `Toasts.svelte` keyed each gains `animate:flip` with
+    `{ duration: 500, easing: cubicOut }` for vertical reflow.
+  - New `apps/web/src/lib/compileCycleTracker.ts` (pure, injectable
+    clock). Wraps `debugEventToToast` only for `compile-status`
+    events; `running` resets the timer, `idle`/`error` prefix the
+    toast text with `${elapsed}s — `.
+  - Locks: `apps/web/test/settingsStore.test.mjs`,
+    `apps/web/test/toastStore.test.mjs`,
+    `apps/web/test/compileCycleTracker.test.mjs` (new),
+    `apps/web/test/debugToasts.test.mjs`.
+- **M22.4b (wire change).** From `306_answer.md` items 7, 8.
+  - `packages/protocol/src/index.ts`: `PdfSegment.shipoutPage?:
+    number`; binary header 13 → 17 bytes, new `uint32` after
+    `bytesLength`. 0 sentinel = unknown.
+    `encodePdfSegment` / `decodeFrame` updated; codec tests updated.
+  - `apps/sidecar/src/compiler/supertexDaemon.ts:177` stamps the
+    assembled segment with `shipoutPage: events.maxShipout`.
+  - `apps/sidecar/src/server.ts:544` passes the segment through
+    unchanged (the encoder reads `seg.shipoutPage`).
+  - `WsDebugEvent.pdf-segment` carries `shipoutPage`;
+    `debugEventToToast` formats
+    `[${n}.out] ${bytes} bytes` when known, falls back to
+    `${bytes} bytes` when 0/missing.
+  - Compile-cycle tracker also prefixes the segment toast with
+    `${elapsedMs}s — ` (item 7 full coverage).
+  - Locks: `packages/protocol/test/codec.test.mjs` (header-width
+    case), `apps/sidecar/test/supertexDaemon.test.mjs` if it
+    asserts the segment shape, `apps/web/test/debugToasts.test.mjs`
+    page-name case, `apps/web/test/wsClientDebugEvents.test.mjs`
+    if it pins the WsDebugEvent shape.
 
 ### M17.preview-render — PDF preview cross-fade
 
