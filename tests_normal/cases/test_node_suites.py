@@ -113,6 +113,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_persistence_seed(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "persistenceSeed.test.mjs")
 
+    def test_sidecar_slashed_file_names(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "slashedFileNames.test.mjs")
+
     def test_sidecar_checkpoint_blob(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "checkpointBlob.test.mjs")
 

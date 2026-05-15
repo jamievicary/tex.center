@@ -77,17 +77,34 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
 
 // validateProjectFileName: shared client/server rule.
 {
-  // Accepted shapes — kept narrow so a future tightening doesn't
-  // require re-checking the client.
-  for (const ok of ["main.tex", "refs.bib", "appendix-A.tex", "Notes_1.tex", "a"]) {
+  // Accepted shapes — single-segment names plus `/`-separated
+  // multi-segment paths (M11.1b: virtual folder prerequisite).
+  for (const ok of [
+    "main.tex",
+    "refs.bib",
+    "appendix-A.tex",
+    "Notes_1.tex",
+    "a",
+    "chapters/intro.tex",
+    "chapters/sub/deep.tex",
+    "a/b/c/d/e.tex",
+  ]) {
     assert.equal(validateProjectFileName(ok), null, `expected accept: ${ok}`);
   }
   // Reject reasons (string, non-empty). Spot-check each branch.
   assert.equal(validateProjectFileName(""), "empty name");
-  assert.equal(validateProjectFileName("."), "reserved name");
-  assert.equal(validateProjectFileName(".."), "reserved name");
-  assert.equal(validateProjectFileName("a/b"), "name must not contain '/'");
+  assert.equal(validateProjectFileName("."), "reserved segment");
+  assert.equal(validateProjectFileName(".."), "reserved segment");
+  assert.equal(validateProjectFileName("a/."), "reserved segment");
+  assert.equal(validateProjectFileName("a/../b"), "reserved segment");
+  assert.equal(validateProjectFileName("/a"), "name must not start or end with '/'");
+  assert.equal(validateProjectFileName("a/"), "name must not start or end with '/'");
+  assert.equal(validateProjectFileName("a//b"), "empty segment");
   assert.equal(validateProjectFileName("with space.tex"), "name has disallowed characters");
+  assert.equal(
+    validateProjectFileName("ok/with space.tex"),
+    "name has disallowed characters",
+  );
   assert.equal(validateProjectFileName("emoji-🚀.tex"), "name has disallowed characters");
   assert.equal(validateProjectFileName("a".repeat(129)), "name too long");
 }

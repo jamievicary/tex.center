@@ -48,7 +48,7 @@ await seedFile(blobStore, projectId, "refs.bib", REFS_SOURCE);
   ws.send(encodeControl({ type: "rename-file", oldName: MAIN_DOC_NAME, newName: "x.tex" }));
   ws.send(encodeControl({ type: "rename-file", oldName: "refs.bib", newName: MAIN_DOC_NAME }));
   ws.send(encodeControl({ type: "rename-file", oldName: "ghost.tex", newName: "y.tex" }));
-  ws.send(encodeControl({ type: "rename-file", oldName: "refs.bib", newName: "bad/name" }));
+  ws.send(encodeControl({ type: "rename-file", oldName: "refs.bib", newName: "bad name" }));
   await waitFor(
     () => fileOpErrors(frames).length >= 4,
     "four file-op-error frames for the four rejected renames",

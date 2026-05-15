@@ -1,9 +1,9 @@
-// Pure tree-grouping over `/`-separated file paths. Today the
-// server's `validateProjectFileName` rejects names containing `/`,
-// so every input is a single segment and the resulting forest is a
-// flat list of file nodes; the parser is structured for the
-// upcoming M11.3 virtual-folder model, where files like
-// `chapters/intro.tex` materialise a `chapters/` folder node.
+// Pure tree-grouping over `/`-separated file paths. The server's
+// `validateProjectFileName` permits `/`-separated multi-segment
+// paths as of M11.1b (iter 282); a path like `chapters/intro.tex`
+// materialises a `chapters/` folder node carrying the file as a
+// child. Single-segment names still flow through as flat file
+// nodes at the forest root.
 
 export type FileTreeNode =
   | { kind: "file"; name: string; path: string }

@@ -88,18 +88,30 @@ styles. Sub-slices:
   `apps/web/src/lib/FileTreeNode.svelte`. Data layer survives the
   headless migration; `FileTreeNode.svelte`'s markup is replaced
   in M11.1c. Lock: `apps/web/test/fileTree.test.mjs`.
-- **M11.1b** relax `validateProjectFileName` to permit
-  `/`-separated segments, update sidecar persistence to
-  `mkdir -p` parent dirs on write/rename and reap empty parents
-  on delete. Required before M11.3 has any effect.
+- **M11.1b. Landed iter 282.** `validateProjectFileName` in
+  `packages/protocol/src/index.ts` now permits `/`-separated
+  multi-segment paths (each segment matches the existing single-
+  segment rule; no leading/trailing slash, no empty/`.`/`..`
+  segments). `LocalFsBlobStore.put` already did `mkdir -p` via
+  `mkdir(dirname, recursive: true)`; `LocalFsBlobStore.delete`
+  now also reaps empty parent directories up to the configured
+  root. `fileTree.buildFileTree` is unchanged — it has been
+  slash-aware since iter 261. Locks:
+  `packages/blobs/test/localFs.test.mjs` (parent-reap),
+  `apps/sidecar/test/slashedFileNames.test.mjs` (end-to-end
+  add → list → rehydrate → rename → delete via a real
+  `LocalFsBlobStore`), `packages/protocol/test/codec.test.mjs`
+  (validator accept/reject shapes).
 - **M11.1c (new)** adopt `@headless-tree/core` + its Svelte
   adapter. Wire its state to `buildFileTree` output; replace
   `FileTreeNode.svelte`'s markup with a headless-tree-driven
   view; preserve behaviour. Component test on the wiring.
 - **M11.2** create/delete/rename via context menu + keyboard
   (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
-- **M11.3** create folder via virtual-folder model. Gated on
-  M11.1b.
+- **M11.3** create folder via virtual-folder model. Unblocked
+  by M11.1b (iter 282). The UI affordance still needs design:
+  "create folder" probably wants a placeholder entry the user
+  can name, then the first file under it materialises the path.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5** OS drop-upload + drag-out download. Drop-upload
   blocked by FUTURE_IDEAS "binary asset upload"; drag-out

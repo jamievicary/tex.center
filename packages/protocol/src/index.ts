@@ -38,25 +38,37 @@ export const MAIN_DOC_HELLO_WORLD =
   "Hello, world!\n" +
   "\\end{document}\n";
 
-// Allowed characters for a project-relative file name. Single
-// segment (no `/`), reasonably URL-safe, no whitespace. The sidecar
-// is the authority here (defence-in-depth); the rule lives in the
-// shared protocol package so the web client can mirror it and
-// surface validation errors immediately on the create/rename
-// affordances rather than relying on a silent server-side reject.
-const FILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
+// Allowed characters for a single segment of a project-relative
+// file name. Each `/`-separated segment must match this rule:
+// reasonably URL-safe, no whitespace. The sidecar is the authority
+// here (defence-in-depth); the rule lives in the shared protocol
+// package so the web client can mirror it and surface validation
+// errors immediately on the create/rename affordances rather than
+// relying on a silent server-side reject.
+const FILE_NAME_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
 const FILE_NAME_MAX_LEN = 128;
 
 /**
- * Validate a project-relative filename. Returns a short
- * human-readable reason when invalid, otherwise `null`.
+ * Validate a project-relative filename. Multi-segment paths are
+ * permitted (`chapters/intro.tex`); each `/`-separated segment must
+ * satisfy the single-segment rule (non-empty, not `.`/`..`, and
+ * matching `FILE_NAME_SEGMENT_RE`). Leading and trailing slashes,
+ * empty segments, and overall length above `FILE_NAME_MAX_LEN` are
+ * rejected. Returns a short human-readable reason when invalid,
+ * otherwise `null`.
  */
 export function validateProjectFileName(name: string): string | null {
   if (typeof name !== "string" || name.length === 0) return "empty name";
   if (name.length > FILE_NAME_MAX_LEN) return "name too long";
-  if (name === "." || name === "..") return "reserved name";
-  if (name.includes("/")) return "name must not contain '/'";
-  if (!FILE_NAME_RE.test(name)) return "name has disallowed characters";
+  if (name.startsWith("/") || name.endsWith("/")) {
+    return "name must not start or end with '/'";
+  }
+  const segments = name.split("/");
+  for (const seg of segments) {
+    if (seg.length === 0) return "empty segment";
+    if (seg === "." || seg === "..") return "reserved segment";
+    if (!FILE_NAME_SEGMENT_RE.test(seg)) return "name has disallowed characters";
+  }
   return null;
 }
 

@@ -10,18 +10,18 @@ Progress: resolved 0, reused 81, downloaded 0, added 0, done
 Done in 1.2s
 Scope: 6 of 7 workspace projects
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
+packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/db typecheck$ tsc --noEmit -p tsconfig.json
-packages/blobs typecheck: Done
 packages/protocol typecheck: Done
+packages/blobs typecheck: Done
 packages/auth typecheck: Done
 packages/db typecheck: Done
-apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
+apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778808378895 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778808378901 COMPLETED 737 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778810059679 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778810059685 COMPLETED 737 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -140,6 +140,7 @@ test_sidecar_server_project_id_validation (test_node_suites.TestNodeSuites.test_
 test_sidecar_server_rename_file (test_node_suites.TestNodeSuites.test_sidecar_server_rename_file) ... ok
 test_sidecar_server_segment_replay (test_node_suites.TestNodeSuites.test_sidecar_server_segment_replay) ... ok
 test_sidecar_server_upload_file (test_node_suites.TestNodeSuites.test_sidecar_server_upload_file) ... ok
+test_sidecar_slashed_file_names (test_node_suites.TestNodeSuites.test_sidecar_slashed_file_names) ... ok
 test_sidecar_supertex_daemon_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_daemon_compiler) ... ok
 test_sidecar_supertex_once_compiler (test_node_suites.TestNodeSuites.test_sidecar_supertex_once_compiler) ... ok
 test_sidecar_workspace (test_node_suites.TestNodeSuites.test_sidecar_workspace) ... ok
@@ -219,7 +220,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 194 tests in 118.424s
+Ran 195 tests in 120.143s
 
 OK
 tests_normal/run_tests.sh: PASS

@@ -4,7 +4,16 @@
 // atomicity. `list(prefix)` walks the on-disk tree below the
 // prefix and returns full keys (not paths) in lex order.
 
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import type { BlobStore } from "./index.js";
@@ -115,5 +124,21 @@ export class LocalFsBlobStore implements BlobStore {
   async delete(key: string): Promise<void> {
     const target = this.pathFor(key);
     await rm(target, { force: true });
+    // Reap now-empty parent directories so the on-disk shape mirrors
+    // the key space and a future `list()` doesn't have to walk dead
+    // tree branches. Best-effort: stop at the first non-empty parent
+    // (ENOTEMPTY) or the configured root, and swallow ENOENT in case
+    // a concurrent delete reaped the dir from under us.
+    let dir = dirname(target);
+    while (dir.startsWith(this.root) && dir !== this.root) {
+      try {
+        await rmdir(dir);
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "ENOTEMPTY" || code === "EEXIST" || code === "ENOENT") break;
+        throw err;
+      }
+      dir = dirname(dir);
+    }
   }
 }

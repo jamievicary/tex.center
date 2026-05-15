@@ -71,6 +71,35 @@ try {
     assert.equal(got, null);
   }
 
+  // delete reaps empty parent directories but stops at the first
+  // non-empty parent (M11.1b virtual-folder prerequisite).
+  {
+    const subRoot = await mkdtemp(join(tmpdir(), "tex-blobs-reap-"));
+    const s = new LocalFsBlobStore({ rootDir: subRoot });
+    try {
+      await s.put("a/b/c/leaf.tex", new Uint8Array([1]));
+      await s.put("a/sibling.tex", new Uint8Array([2]));
+      // Deleting the deep leaf should reap b, c — but stop at `a`,
+      // which still has `sibling.tex`.
+      await s.delete("a/b/c/leaf.tex");
+      const aExists = await stat(join(subRoot, "a")).then(() => true, () => false);
+      const bExists = await stat(join(subRoot, "a/b")).then(() => true, () => false);
+      const cExists = await stat(join(subRoot, "a/b/c")).then(() => true, () => false);
+      assert.equal(aExists, true, "non-empty parent must survive");
+      assert.equal(bExists, false, "empty intermediate must be reaped");
+      assert.equal(cExists, false, "empty leaf dir must be reaped");
+      // Now delete the sibling; `a` itself should be reaped, but the
+      // configured root must not.
+      await s.delete("a/sibling.tex");
+      const aStillExists = await stat(join(subRoot, "a")).then(() => true, () => false);
+      const rootExists = await stat(subRoot).then(() => true, () => false);
+      assert.equal(aStillExists, false, "now-empty parent must be reaped");
+      assert.equal(rootExists, true, "store root must never be reaped");
+    } finally {
+      await rm(subRoot, { recursive: true, force: true });
+    }
+  }
+
   // key validation rejects traversal & weirdness.
   {
     const bad = ["", "/abs", "trailing/", "a//b", "a/../b", "a/./b", "a\\b", "a\0b"];
