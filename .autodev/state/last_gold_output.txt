@@ -10,3 +10,47 @@ test_migrations (test_pglite.TestPglite.test_migrations) ... ok
 test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 test_playwright (test_playwright.TestPlaywright.test_playwright) ... setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
+[globalSetup] DB ready (userId=ddabf785-541a-44a9-882b-f8583383dbca); spawning dev server on :3000
+Error: startFlyProxy: child exited before ready (code=1 signal=null)
+--- stderr ---
+Error: failed to run query ($appName: String!) { app(name: $appName) { network } }: Post "https://api.fly.io/graphql": read tcp 172.30.10.147:38794->77.83.143.220:443: read: connection reset by peer
+
+
+   at ../lib/src/flyProxy.ts:140
+
+  138 |     if (ex) {
+  139 |       const stderr = stderrSnapshot();
+> 140 |       throw new Error(
+      |             ^
+  141 |         `startFlyProxy: child exited before ready ` +
+  142 |           `(code=${ex.code} signal=${ex.signal})\n` +
+  143 |           `--- stderr ---\n${stderr}`,
+    at waitForReady (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/lib/src/flyProxy.ts:140:13)
+    at startFlyProxy (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/lib/src/flyProxy.ts:108:5)
+    at bootstrapLiveProject (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/fixtures/liveProjectBootstrap.ts:113:17)
+    at globalSetup (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/globalSetup.ts:88:18)
+
+FAIL
+test_sidecar_cold_start_coalescer (test_sidecar_cold_start_coalescer.TestSidecarColdStartCoalescer.test_sidecar_cold_start_coalescer) ... ok
+test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... ok
+test_supertex_cold_newpage_crash (test_supertex_cold_newpage_crash.TestSupertexColdNewpageCrash.test_supertex_cold_newpage_crash) ... ok
+test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
+test_supertex_filewatcher_race (test_supertex_filewatcher_race.TestSupertexFilewatcherRace.test_supertex_filewatcher_race) ... ok
+test_supertex_incremental_multipage_emit (test_supertex_incremental_multipage_emit.TestSupertexIncrementalMultipageEmit.test_supertex_incremental_multipage_emit) ... ok
+test_supertex_multipage_emit (test_supertex_multipage_emit.TestSupertexMultipageEmit.test_supertex_multipage_emit) ... ok
+test_supertex_oversize_target (test_supertex_oversize_target.TestSupertexOversizeTarget.test_supertex_oversize_target) ... ok
+test_supertex_warm_doc_body_edit_noop (test_supertex_warm_doc_body_edit_noop.TestSupertexWarmDocBodyEditNoop.test_supertex_warm_doc_body_edit_noop) ... ok
+test_sweep_orphaned_sidecar_machines (test_sweep_orphaned_sidecar_machines.TestSweepOrphanedSidecarMachines.test_sweep_orphaned_sidecar_machines) ... ok
+
+======================================================================
+FAIL: test_playwright (test_playwright.TestPlaywright.test_playwright)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_playwright.py", line 192, in test_playwright
+    raise AssertionError(
+AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
+
+----------------------------------------------------------------------
+Ran 22 tests in 76.248s
+
+FAILED (failures=1)

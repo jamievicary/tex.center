@@ -11,7 +11,8 @@ refresh persistence. Per-project sidecar runs on Fly Machines in
 (`tex-center-sidecar` app with `app`-tagged deployment machines)
 exists alongside but isn't routed to.
 
-**Active priority queue (post iter 292):**
+**Active priority queue (post iter 294, re-ordered per
+`293_answer.md`):**
 
 1. **M15 Step D awaiting first live run.** `seedMainDoc?: string`
    impl + `verifyLivePdfMultiPageSeeded.spec.ts` landed iter 292.
@@ -25,15 +26,29 @@ exists alongside but isn't routed to.
    test.mjs`, `apps/sidecar/test/persistenceSeed.test.mjs`,
    `apps/web/test/upstreamResolver.test.mjs`. Awaits a live gold
    run; outcomes branch (α)/(β) below.
-2. **M13.2(b).5 R1.** Widen SSR seed for non-fresh projects via
-   shared blob store. Unblocks `verifyLiveGt6LiveEditableState\
-   Stopped` (the only legitimately RED live spec). Requires
-   shared `BLOB_STORE` binding on the web tier.
-3. **M16.aesthetic.** Type pair + 4-colour palette retune for
+2. **M18 PDF preview quality.** DPR-aware canvas sizing in
+   `PdfViewer.svelte`. New.
+3. **M19 settings dialog + email-in-topbar.** Cog popover w/
+   fade-duration slider; swap displayName→email. New.
+4. **M21 max-visible page tracking.** New.
+5. **M17 reopen — cross-fade blend math.** Switch to single-
+   layer opacity (leaving canvas above, opacity 1→0; entering
+   canvas below, opacity 1). Pin via center-pixel-flatness
+   check.
+6. **M22 wire-message debug toasts.** Front→back coverage for
+   `outgoing-*` events; close M9.editor-ux GT-F.
+7. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
+   former priority #2 M13.2(b).5 R1: shared `BLOB_STORE` widens
+   from "seed main.tex" to "full project tree" so cold-stopped
+   resume restores `.aux`/checkpoint as well as source.
+8. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
+   → `upload-file` (text path, already exists). Binary stays
+   blocked.
+9. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual-snapshot diffs on `/` and `/projects`
    plus a topbar snapshot on the editor route.
-4. **M11.2.** Create/delete/rename via context menu + keyboard
-   (`F2`, `Del`-with-confirm), reusing extant sidecar verbs.
+10. **M11.2.** Create/delete/rename via context menu + keyboard
+    (`F2`, `Del`-with-confirm), reusing extant sidecar verbs.
 
 **Open red specs (post iter 290):**
 
@@ -124,9 +139,13 @@ Remaining sub-slices:
 - **M11.3** create folder via virtual-folder model. UI affordance
   needs design (probably a placeholder entry the user can name).
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
-- **M11.5** OS drop-upload + drag-out download. Drop-upload
-  blocked by FUTURE_IDEAS "binary asset upload"; drag-out
-  download unblocked.
+- **M11.5a** OS drop-upload — text files. Drop `.tex`/`.bib`/
+  any UTF-8 source onto the file tree → existing `upload-file`
+  text path. Unblocked; small. From `293_answer.md` (9).
+- **M11.5b** OS drop-upload — binary assets (images, fonts,
+  PDFs). Blocked by FUTURE_IDEAS "binary asset upload" wire
+  design.
+- **M11.5c** drag-out download from tree to OS. Unblocked.
 
 ### M12.panels — draggable dividers
 
@@ -279,6 +298,105 @@ Retained as fallback diagnostic procedure for (β):
 
 Local pin `test_supertex_incremental_multipage_emit.py`
 retained as regression / shape-baseline.
+
+### M18.preview-quality — DPR-aware PDF rendering
+
+From `293_answer.md` (1). `PdfViewer.svelte` today uses
+`getViewport({ scale: 1.5 })` and sets `canvas.width/height` to
+viewport pixels with no CSS-pixel/backing-store split. Result on
+HiDPI or stretched preview pane: visible pixelation.
+
+Plan:
+- Render at `scale_base * window.devicePixelRatio`; set
+  `canvas.style.width/height` in CSS px and
+  `canvas.width/height` in device px.
+- Add `CanvasDescriptor.cssWidth/cssHeight`; pass to
+  `pdfFadeController` for wrapper geometry.
+- ResizeObserver on `.preview` re-renders on width change
+  (coalesced trailing 100ms).
+- Pin: gold visual-snapshot under forced DPR=2.
+
+### M19.settings — settings dialog + email in topbar
+
+From `293_answer.md` (2,3). Cog button in editor topbar, left of
+email/sign-out. Popover (not modal). Slider: fade-duration
+0–3s step 0.05s, default 0.18s. Persist via
+`localStorage["editor-settings"]` (JSON object — single key for
+all future settings). Apply live via `--pdf-fade-ms` CSS var
++ `FADE_MS` const removed.
+
+Slices:
+- **M19.1** `apps/web/src/lib/settingsStore.ts` (Svelte 5
+  runes) + topbar cog affordance.
+- **M19.2** fade-duration slider; wire to PdfViewer +
+  controller. Email-in-topbar (swap `displayName ??
+  email` → `email`). Update affected tests.
+- **M19.3** keyboard / a11y (Esc closes; focus management).
+
+### M20.lifecycle — suspend → stop → cold-storage cascade
+
+From `293_answer.md` (4). Two-tier idle cascade with full
+cold-storage. Absorbs M13.2(b).5 R1.
+
+Slices:
+- **M20.1** two-stage idle timer in sidecar (env-configurable
+  `SIDECAR_SUSPEND_MS` default 5_000, `SIDECAR_STOP_MS` default
+  300_000). Tests assert both timers fire at the right
+  boundary.
+- **M20.2 (formerly M13.2(b).5 R1).** Shared `BLOB_STORE`
+  binding on the web tier *and* sidecar; sidecar persists
+  source + `.aux` + `.log` + supertex checkpoint blob to it on
+  every settle, and rehydrates from it on cold boot. Unblocks
+  `verifyLiveGt6LiveEditableStateStopped`.
+- **M20.3** gold spec exercising the full cycle: open project,
+  idle 6 s (suspended), edit → 300 ms ack; idle 6 min
+  (stopped), edit → cold-start budget; content preserved
+  across both.
+
+Tuning note: 5 s suspend is aggressive but suspend cost is
+~300 ms reconnect. Adjust via env vars if live use shows
+thrash.
+
+### M21.target-page — max-visible-page wire signal
+
+From `293_answer.md` (6). Today `pageTracker` returns the
+*most-visible* page. GOAL item 4 needs *max-visible* so the
+sidecar can compile every page the user can see.
+
+Plan:
+- Add `PageTracker.maxVisiblePage()` (and a callback) alongside
+  the existing most-visible behaviour.
+- Wire the editor page to send `max` over the existing
+  `viewing-page` message (semantic widened; name retained).
+- Gold spec: 3-page PDF, scroll so page 2 fully visible and
+  page 3's top edge intrudes → sidecar receives target=3.
+
+### M22.debug-toasts.b — front→back wire coverage
+
+From `293_answer.md` (7,8). Closes M9.editor-ux GT-F.
+
+Slices:
+- **M22.1** emit `outgoing-*` debug events in `wsClient.ts` for
+  every send (`viewing-page`, `recompile-request`,
+  `create-file`, `delete-file`, `rename-file`, `upload-file`),
+  map to toasts via `debugToasts.ts`. Per-event aggregateKey.
+  Gated on `?debug=1` only.
+- **M22.2** finish GT-F local Playwright cases.
+- **M22.3** toast UX polish: info TTL 4s→5s; stack order
+  newest-on-top; user-dismissible × on info/success.
+
+### M17.b reopen — cross-fade blend math
+
+From `293_answer.md` (5). Current stacked-opacities path
+exhibits a mid-fade background-bleed dip
+(`T·NEW + (1−T)²·OLD` instead of `T·NEW + (1−T)·OLD`).
+
+Fix A: single opacity layer — leaving canvas on top, opacity
+`1→0`; entering canvas underneath, opacity 1.
+
+Pin: extend `verifyLivePdfNoFlashBetweenSegments` (or new
+`verifyLivePdfCrossfadeFlatness`) to sample the centre pixel of
+a flat-grey region at T≈0.5 and assert |RGB − target| ≤ 1.
 
 ### M16.aesthetic — writerly chrome retune
 
