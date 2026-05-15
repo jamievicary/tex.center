@@ -9,151 +9,126 @@ login, project list, project open, edit → save → PDF render,
 refresh persistence. Per-project sidecar runs on Fly Machines in
 `fra`, 1024MB RAM. M7.0.2 shared-sidecar pool
 (`tex-center-sidecar` app with `app`-tagged deployment machines)
-exists alongside but isn't routed to. Iteration indicator wired
-through Dockerfile build-arg into the topbar (regression-locked).
+exists alongside but isn't routed to.
 
-All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
-240; delete-project pin (`verifyLiveDeleteProject`) GREEN iter 251;
-M17 no-flash pin (`verifyLivePdfNoFlashBetweenSegments`) GREEN
-iter 273.
+**Active priority queue (post iter 290):**
 
-**Open red gold cases (post iter 289):**
+1. **M15 second-surprise branch.** Both M15 live pins (static
+   atomic-replace + in-body manual edit) GREEN iter 289 and again
+   iter 290. The user's bug report ("preview NEVER >1 page even
+   on manually-typed multi-page docs", `284_answer.md` addendum)
+   is not reproducible by any Playwright editing flow we've
+   written. Next step per PLAN M15: pull `seedMainDoc?: string`
+   impl from `287_answer.md` option (1) — protocol +
+   `projects.seed_doc` migration + sidecar first-hydration read —
+   and add a literal "no editing at all" gold case (open a
+   project whose seeded `main.tex` is the 5-line static
+   two-page LaTeX, assert ≥2 pages render with zero keyboard
+   input). ~30 LoC impl + new spec. If green, we have decisive
+   evidence the bug is in some path neither Playwright nor any
+   shipped pin exercises, and the next move is to ask the user
+   for a screen recording or source dump.
+2. **M13.2(b).5 R1.** Widen SSR seed for non-fresh projects via
+   shared blob store. Unblocks `verifyLiveGt6LiveEditableState\
+   Stopped` (the only legitimately RED live spec). Requires
+   shared `BLOB_STORE` binding on the web tier.
+3. **M16.aesthetic.** Type pair + 4-colour palette retune for
+   chrome surfaces; visual-snapshot diffs on `/` and `/projects`
+   plus a topbar snapshot on the editor route.
+4. **M11.2.** Create/delete/rename via context menu + keyboard
+   (`F2`, `Del`-with-confirm), reusing extant sidecar verbs.
 
-- `verifyLivePdfMultiPage` "in-body manual edit inserting
-  `\newpage`" (M15 secondary case, iter 289) — **TOP PRIORITY**.
-  Pins the user's manually-typed-multi-page report
-  (`284_answer.md` addendum). Static atomic-replace case green
-  iter 288 (the surprise outcome predicted in iter 288's notes),
-  so the bug lives in some editing-path shape the atomic flow
-  doesn't trigger. New pin types `\newpage` + second-page body
-  between "Hello, world!" and `\end{document}` with shape-sanity
-  assert ruling out (β) cursor-past-`\end{document}` at source
-  level. Expected RED on first live run.
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — blocked
-  on M13.2(b).5 R1 (SSR seed widening, needs shared blob store).
-- `verifyLiveGt6LiveEditableState` (M13.2(b).3) — was green
-  (iter 256–279), red iter 280 once and may be flaky around the
-  suspended-resume boundary; rerun + investigate if it persists.
+**Open red specs (post iter 290):**
 
-**Active priority queue:** M15 (Step C': deploy iter-286 debug
-log + diagnose iter-289 in-body pin) → M13.2(b).5 R1 →
-M16.aesthetic → M11.2 (CRUD via context menu / keyboard).
-M11.1c headless-tree cutover landed iter 284. M15 Step A landed
-iter 286 (sidecar `compile-source` + `daemon-stdin` /
-`daemon-stderr` records via opt-in `compileDebugLog` sink). M15
-Step B (static atomic-replace spec) landed iter 288 and
-green-passed on first live run — the surprise outcome of iter
-288. Step C (deploy + diagnose against the static spec) is
-moot: the static spec is no longer a useful RED pin. Reframed
-as Step C': deploy + diagnose against the iter-289 secondary
-in-body edit pin (which targets the natural manual-edit shape
-the user reports failing). M11.5 still gated on shared-R2
-binary-asset work.
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — RED,
+  expected, blocked on M13.2(b).5 R1.
+- `test_machine_count_under_threshold` — RED iter 290 (6/8
+  non-shared sidecar Machines, threshold 5). Live-spec teardown
+  appears to have leaked per-project Machines from prior runs;
+  the orphan-tag sweep only catches Machines tagged with the
+  test-owner sentinel. Triage: investigate which spec creates
+  Machines without the sweepable tag, or widen the sweep's tag
+  match. Probably benign infra hygiene but blocks `tests_gold`
+  exit-zero until cleared.
+
+**Watch-list (may be flaky, may be regression):**
+
+- `verifyLivePdfMultiPage` static (60s `.cm-content` wait) and
+  `verifyLiveGt8ColdProjectNewpageDaemonCrash` (30s `.cm-content`
+  wait) both timed out iter 289 then GREEN iter 290. Treat as
+  known-flake under live cold-start race for now; revisit if
+  either flips RED twice in a row.
+- `verifyLiveGt6LiveEditableState` (M13.2(b).3) was GREEN
+  iter 256–279, RED iter 280 once, GREEN since. Watch for
+  recurrence around the suspended-resume boundary.
 
 ## 2. Milestones
 
 ### M9.editor-ux — live editor UX bugs
 
-Done and locked: clickable logo, no-flash editor load, compile
-coalescer (extracted iter 200 into
-`apps/sidecar/src/compileCoalescer.ts`), sustained-typing safety,
-toast store + component scaffold, toast consumers for
-`file-op-error` and compile errors, debug-mode toggle
-(URL/localStorage/Ctrl+Shift+D) with protocol fan-out via
-`WsDebugEvent`. Sidecar `assembleSegment` directory-scan fallback
-removed.
-
-Toast store API (frozen iter 179):
+Closed slices (live locks all retained, see git log + `.autodev/
+logs/` for narrative): clickable logo; no-flash editor load;
+compile coalescer (`apps/sidecar/src/compileCoalescer.ts`);
+sustained-typing safety; toast store + component scaffold; toast
+consumers for `file-op-error` and compile errors; debug-mode
+toggle (URL / localStorage / Ctrl+Shift+D) with protocol fan-out
+via `WsDebugEvent`. Toast store API (frozen iter 179):
 `{ category, text, ttlMs?, persistent?, aggregateKey? }`. Same
 `aggregateKey` within 500ms re-arms TTL and bumps `count`.
 
-Closed regression slices, all with live locks retained: gt6 slow
-`.cm-content` (closed iter 240 via M13.2(a) SSR seed gate; lock
-`verifyLiveGt6FastContentAppearance`); gt7 daemon crash under
-rapid typing (closed iter 227, upstream `2fb543e`; locks GT-7/8 +
-four local supertex tests); M7.4.x GT-5 (closed iter 231,
-upstream `8c3dec0`); M9.live-hygiene.leaked-machines (per-project
-Machine tagging + orphan-tag sweep landed iter 243/247);
-M9.live-hygiene.delete-project (landed iter 245; lock
-`verifyLiveDeleteProject`). Narratives:
-`.autodev/discussion/225_answer.md`, `226_*`, `230_answer.md`.
+Other closed regressions, all with live locks retained: gt6 slow
+`.cm-content` (M13.2(a) SSR seed gate); gt7 daemon crash under
+rapid typing (upstream `2fb543e`); M7.4.x GT-5 (upstream
+`8c3dec0`); M9.live-hygiene.leaked-machines (per-project Machine
+tagging + orphan-tag sweep); M9.live-hygiene.delete-project.
 
 Remaining slices:
 
 - **GT-E (local Playwright).** info/success/error spawn the right
   toast; repeated `file-op-error` produces a `×N` aggregated badge.
-- **GT-F (local Playwright).** `?debug=1` flips localStorage; a
+- **GT-F (local Playwright).** `?debug=1` flips localStorage;
   single keystroke produces a green Yjs-op toast and (after
   compile) a blue pdf-segment toast; rapid typing aggregates into
   one green `×N`; without the flag, no debug toasts.
 - **Save-feedback affordance.** `SyncStatus` indicator
   (idle/in-flight/error) sourced from Yjs provider sync state
-  acked by a sidecar persistence signal (NOT per-keystroke). The
-  success toast lives here and depends on the same ack — gated on
-  a sidecar persistence-ack wire signal that doesn't exist yet.
-  Local + live Playwright variants.
+  acked by a sidecar persistence signal (NOT per-keystroke).
+  Local + live Playwright variants. Blocked on a sidecar
+  persistence-ack wire signal that doesn't exist yet.
 
-### M11.file-tree — tree component + CRUD UX (post-MVP UX)
+### M11.file-tree — tree component + CRUD UX (post-MVP)
 
-**Constraint revisited iter 262 (see `260_answer.md`):** the
-"native Svelte 5, no third-party tree lib" rule is dropped.
-Adopting `@headless-tree/core` + its Svelte adapter — headless
-state-machine for expand/select/rename/DnD, our own markup and
-styles. Sub-slices:
+**Constraint (iter 262):** native-Svelte-5-no-third-party-tree-lib
+rule dropped. Using `@headless-tree/core` directly; Svelte 5
+binding written in-tree (no `@headless-tree/svelte` on npm).
 
-- **M11.1 rendering substrate. Landed iter 261.**
-  `apps/web/src/lib/fileTree.ts` (`buildFileTree`) +
-  `apps/web/src/lib/FileTreeNode.svelte`. Data layer survives the
-  headless migration; `FileTreeNode.svelte`'s markup is replaced
-  in M11.1c. Lock: `apps/web/test/fileTree.test.mjs`.
-- **M11.1b. Landed iter 282.** `validateProjectFileName` in
-  `packages/protocol/src/index.ts` now permits `/`-separated
-  multi-segment paths (each segment matches the existing single-
-  segment rule; no leading/trailing slash, no empty/`.`/`..`
-  segments). `LocalFsBlobStore.put` already did `mkdir -p` via
-  `mkdir(dirname, recursive: true)`; `LocalFsBlobStore.delete`
-  now also reaps empty parent directories up to the configured
-  root. `fileTree.buildFileTree` is unchanged — it has been
-  slash-aware since iter 261. Locks:
-  `packages/blobs/test/localFs.test.mjs` (parent-reap),
-  `apps/sidecar/test/slashedFileNames.test.mjs` (end-to-end
-  add → list → rehydrate → rename → delete via a real
-  `LocalFsBlobStore`), `packages/protocol/test/codec.test.mjs`
-  (validator accept/reject shapes).
-- **M11.1c-prep. Landed iter 283.** `@headless-tree/svelte` does
-  not exist on npm (verified iter 283 — the 260_answer.md library
-  survey was wrong on this point; only `@headless-tree/core` and
-  `@headless-tree/react` are published). We write the Svelte 5
-  binding ourselves. Scaffolding landed:
-  `apps/web/src/lib/fileTreeHeadless.ts` exposes
-  `buildFileItemMap` + `createFileTreeInstance(forest, opts)`,
-  which converts a `buildFileTree` forest into the headless-tree
-  data-loader shape and returns a mounted `TreeInstance`. State
-  (expanded/selected/focused) is owned by the caller via an
-  optional `onStateChange` callback. Adapter is dark code: no UI
-  call sites yet. Lock:
+Closed sub-slices, all locks retained:
+
+- **M11.1** rendering substrate. `apps/web/src/lib/fileTree.ts`
+  + per-row markup. Lock: `apps/web/test/fileTree.test.mjs`.
+- **M11.1b** slashed paths. `validateProjectFileName` permits
+  `/`-separated multi-segment paths; `LocalFsBlobStore.delete`
+  reaps empty parent directories up to root. Locks:
+  `packages/blobs/test/localFs.test.mjs`,
+  `apps/sidecar/test/slashedFileNames.test.mjs`,
+  `packages/protocol/test/codec.test.mjs`.
+- **M11.1c-prep** headless adapter scaffolding:
+  `apps/web/src/lib/fileTreeHeadless.ts` (`buildFileItemMap` +
+  `createFileTreeInstance`). Lock:
   `apps/web/test/fileTreeHeadless.test.mjs`.
-- **M11.1c (cutover). Landed iter 284.** `FileTree.svelte`
-  rewritten to drive a flat render from
-  `createFileTreeInstance(forest).getItems()`. Per-row indent
-  from `item.getItemMeta().level`. Tree instance is `$derived.by`
-  on `forest` (rebuilt only when `files` changes; user
-  expand/collapse mutates the instance in place). A `tick`
-  `$state` bumped inside the adapter's `onStateChange` forces
-  the flat-row derivation to re-evaluate. `collapsed: Set<string>`
-  tracks user-collapsed folders; default is all-expanded
-  (matches pre-cutover behaviour where a missing `collapsed`
-  map entry meant expanded). `FileTreeNode.svelte` deleted.
-  Lock: `tests_gold/playwright/editor.spec.ts` local case
-  asserts `.tree [role=treeitem] .label` exactly matches
-  `main.tex` once on the freshly-seeded route — proves the flat
-  template instantiated a row from the headless adapter.
+- **M11.1c** headless-tree cutover. `FileTree.svelte` rewritten
+  to drive flat render from `createFileTreeInstance(forest)\
+  .getItems()`. `collapsed: Set<string>` tracks user-collapsed
+  folders, default all-expanded. Lock:
+  `tests_gold/playwright/editor.spec.ts` local case asserts
+  `.tree [role=treeitem] .label` matches `main.tex`.
+
+Remaining sub-slices:
+
 - **M11.2** create/delete/rename via context menu + keyboard
-  (`F2`, `Del`-with-confirm). Reuses extant sidecar verbs.
-- **M11.3** create folder via virtual-folder model. Unblocked
-  by M11.1b (iter 282). The UI affordance still needs design:
-  "create folder" probably wants a placeholder entry the user
-  can name, then the first file under it materialises the path.
+  (`F2`, `Del`-with-confirm).
+- **M11.3** create folder via virtual-folder model. UI affordance
+  needs design (probably a placeholder entry the user can name).
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5** OS drop-upload + drag-out download. Drop-upload
   blocked by FUTURE_IDEAS "binary asset upload"; drag-out
@@ -161,208 +136,169 @@ styles. Sub-slices:
 
 ### M12.panels — draggable dividers
 
-**Landed iter 257.** Inline implementation in editor `+page.svelte`
-with `--col-tree` / `--col-preview` CSS custom properties; editor
-pane is `1fr`. Min widths 150/200/200. Per-project widths in
-`localStorage["editor-widths:${projectId}"]`. Iter 280 extracted
-the layout math into pure-TS `apps/web/src/lib/editorPanelLayout.ts`
-with unit test `apps/web/test/editorPanelLayout.test.mjs`. Gold
-locks: `tests_gold/playwright/editorPanelDividers.spec.ts`.
+**Closed iter 257.** Inline in editor `+page.svelte` with
+`--col-tree` / `--col-preview` CSS custom properties; editor pane
+`1fr`. Min widths 150/200/200. Per-project widths in
+`localStorage["editor-widths:${projectId}"]`. Layout math extracted
+iter 280 to `apps/web/src/lib/editorPanelLayout.ts` (dead
+`preview > maxPreview` branch deleted iter 290; invariant
+pinned). Locks: `apps/web/test/editorPanelLayout.test.mjs`,
+`tests_gold/playwright/editorPanelDividers.spec.ts`.
 
 ### M13.open-latency — instrument-then-fix
 
-- **M13.1 instrumentation. Closed iter 236.**
-  `apps/web/src/lib/editorMarks.ts`. Diagnostic conclusion:
-  route→ws-open ~11.5s dominates (cold per-project Machine).
-- **M13.2(a) SSR seed gate. Closed iter 238, GT-6 green iter 240.**
-  `+page.server.ts` returns a `seed` when no `machine_assignments`
-  row exists; editor renders `<pre class="editor-seed">` inside
-  `.editor` until `snapshot.hydrated`. Load-bearing: seed is
-  visual-only, never inserted into the local Y.Doc (CRDT can't
-  dedupe two independent `insert(0, …)` ops with different
-  `clientID`); placeholder is `<pre>`, not `.cm-content`, so
-  existing live specs typing into `.cm-content` still wait for
-  the real CodeMirror mount.
-- **M13.2(b) — fully-live within 1000 ms on cold access. PARTIAL.**
-
-  1. **M13.2(b).1 no-auto-destroy + self-suspend.** Landed iter
-     249/250; resume-bug fix iter 255. `auto_destroy:false` in
-     `upstreamFromEnv.ts`; sidecar idle handler in
-     `apps/sidecar/src/index.ts` calls
-     `POST /machines/{self}/suspend`. On `null` `suspendSelf` or
-     fetch-throws, fallback path closes app + `exit(0)`.
-     `server.ts` passes `{ rearm }` to `onIdle`. Tests:
-     `apps/sidecar/test/idleSuspend.test.mjs`.
-  2. **M13.2(b).2 optimistic project delete.** Landed iter 254.
-     `deleteProject` deletes DB row first, then fire-and-forget
-     `destroyMachine`. Result exposes `destroyComplete` for
-     tests; `?/delete` action ignores it. Orphan-tag sweep in
-     gold `globalSetup` teardown remains the safety net. Tests:
-     `apps/web/test/deleteProject.test.mjs`.
-  3. **M13.2(b).3 suspended-resume gold case.** Spec landed iter
-     256; green by iter 260 (cmContentReadyMs=857,
-     keystrokeAckMs=17). Suspended Machine resumes in ~300 ms;
-     no seed widening needed for this path.
-     `verifyLiveGt6LiveEditableState.spec.ts`. Red iter 280 once
-     — may need flake investigation.
-  4. **M13.2(b).4 stopped-state cold-editable pin. RED, expected.**
-     `verifyLiveGt6LiveEditableStateStopped.spec.ts` drives
-     `POST /machines/{id}/stop`, polls `state==="stopped"`, then
-     measures `cmContentReadyMs` / `keystrokeAckMs` vs 1000 ms.
-     Gives M13.2(b).5 a concrete target.
-  5. **M13.2(b).5 — fix for stopped-state cold load. PARTIAL.**
-     - **R1. OPEN.** Widen SSR seed for non-fresh projects:
-       fetch persisted source from shared blob store so
-       `.cm-content` shows real content during Machine cold-start.
-       Prerequisite for (b).4 flipping green. Requires shared
-       `BLOB_STORE` binding (web side currently has none).
-     - **R2. LANDED iter 267.** Sidecar `createIdleHandler` no
-       longer exits on `suspendSelf` failure; throw path logs and
-       re-arms instead of `app.close()` + `exit(0)`. Local-dev
-       path (`suspendSelf === null`) keeps the close-and-exit
-       behaviour. Stopped state still reachable externally (Fly
-       host eviction, manual `flyctl machine stop`, gold spec
-       `/stop`), so the pin remains RED until R1.
+- **M13.1 instrumentation.** Closed iter 236.
+  `apps/web/src/lib/editorMarks.ts`. Conclusion: route→ws-open
+  ~11.5s dominates (cold per-project Machine).
+- **M13.2(a) SSR seed gate.** Closed iter 238 (GT-6 GREEN iter
+  240). `+page.server.ts` returns a `seed` when no
+  `machine_assignments` row exists; editor renders
+  `<pre class="editor-seed">` inside `.editor` until
+  `snapshot.hydrated`. Load-bearing: seed is visual-only, never
+  inserted into the local Y.Doc (CRDT can't dedupe two
+  independent `insert(0, …)` ops with different `clientID`);
+  placeholder is `<pre>`, not `.cm-content`, so existing live
+  specs typing into `.cm-content` still wait for the real
+  CodeMirror mount.
+- **M13.2(b) fully-live within 1000 ms on cold access. PARTIAL.**
+  - **(b).1** no-auto-destroy + self-suspend. Closed iter
+    249/250 (resume-bug fix iter 255). `auto_destroy:false`;
+    sidecar idle handler calls `POST /machines/{self}/suspend`.
+    On `null` `suspendSelf` or fetch-throws, fallback path
+    closes app + `exit(0)`. Tests:
+    `apps/sidecar/test/idleSuspend.test.mjs`.
+  - **(b).2** optimistic project delete. Closed iter 254.
+    `deleteProject` deletes DB row first, then fire-and-forget
+    `destroyMachine`. Tests:
+    `apps/web/test/deleteProject.test.mjs`.
+  - **(b).3** suspended-resume gold case. GREEN by iter 260
+    (cmContentReadyMs=857, keystrokeAckMs=17). Resumes in
+    ~300ms; no seed widening needed.
+    `verifyLiveGt6LiveEditableState.spec.ts`.
+  - **(b).4** stopped-state cold-editable pin. RED, expected.
+    `verifyLiveGt6LiveEditableStateStopped.spec.ts`. Drives
+    `POST /machines/{id}/stop`, polls `state==="stopped"`,
+    measures `cmContentReadyMs` / `keystrokeAckMs` vs 1000ms.
+    Concrete target for (b).5.
+  - **(b).5 fix. PARTIAL.**
+    - **R1. OPEN.** Widen SSR seed for non-fresh projects:
+      fetch persisted source from shared blob store so
+      `.cm-content` shows real content during Machine cold-
+      start. Prerequisite for (b).4 GREEN. Requires shared
+      `BLOB_STORE` binding (web side currently has none).
+    - **R2. LANDED iter 267.** `createIdleHandler` no longer
+      exits on `suspendSelf` failure; throw path logs and
+      re-arms instead of `app.close()` + `exit(0)`. Local-dev
+      path (`suspendSelf === null`) keeps close-and-exit.
 
   **Known follow-ups for M13.2:**
-  - `machine_assignments`-row deletion via `cleanupProjectMachine`
-    re-arms the SSR seed gate even though the sidecar's blob store
-    may still hold the user's edits. Benign while the blob store
-    remains per-Machine; once shared, the gate must flip from
-    "no machine assignment" to "no persisted blob".
-  - GT-A passes because it polls `.cm-content` which only appears
-    post-hydrate; the seed placeholder is a separate DOM element.
-    If a future iteration consolidates seed and real editor under
-    one `.cm-content`, GT-A's invariant must be carried through.
+  - `cleanupProjectMachine` re-arms the SSR seed gate even
+    though sidecar blob store may still hold the user's edits.
+    Benign while blob store is per-Machine; once shared, the
+    gate must flip from "no machine assignment" to "no
+    persisted blob".
+  - GT-A passes because it polls `.cm-content` (only appears
+    post-hydrate); the seed placeholder is a separate DOM
+    element. If a future iteration consolidates seed and real
+    editor under one `.cm-content`, GT-A's invariant must
+    survive.
 
 ### M14.title-bar — centred project title in editor topbar
 
-**Landed iter 264.** `data.project.name` rendered as
+**Closed iter 264.** `data.project.name` rendered as
 `<h1 class="project-title" data-testid="project-title">`. Topbar
-layout: `grid grid-template-columns: 1fr auto 1fr`. Title
-truncates with `text-overflow: ellipsis`. Lock: third assertion
-block in `tests_gold/playwright/editor.spec.ts` —
+grid `1fr auto 1fr`. Lock: editor.spec.ts asserts
 |title-centre-x − topbar-centre-x| ≤ 2px.
 
-### M15.multipage-preview — page-1-only PDF bug (iter 262)
+### M15.multipage-preview — page-1-only PDF bug
 
-Promoted from `241_question.md` / `241_answer.md`.
+Promoted from `241_*`. Sidecar `targetPage=0` fix closed iter
+269 (`tests_gold/cases/test_supertex_multipage_emit.py` GREEN).
 
-**Sidecar `targetPage=0` fix landed iter 269.** Sidecar-level
-pin `tests_gold/cases/test_supertex_multipage_emit.py` green.
+**Live status (post iter 290).** Both `verifyLivePdfMultiPage`
+cases — static atomic-replace and in-body manual edit — are
+GREEN. The static case has been GREEN since iter 288 (its first
+live run, surprise outcome). The in-body case was added iter
+289 as the user-shaped pin (cursor on `.cm-line` index 2 →
+End → Enter → `\newpage` → Enter → "Page two body text.");
+GREEN on first live run (iter 289, "second surprise") and
+again iter 290.
 
-**Live status (post iter 289).** The static atomic-replace
-case (`verifyLivePdfMultiPage` primary test, landed iter 288)
-**went GREEN on first live run** — the surprise outcome flagged
-in iter 288's notes. The static framing isolates the
-editing-path variable: `Ctrl+A → keyboard.type(STATIC_TWO_PAGE)`
-typed char-by-char into the editor produces a known 2-page
-LaTeX shape and the preview renders ≥2 pages. Since the user
-reports the preview NEVER shows >1 page on manually-typed
-multi-page docs (`284_answer.md` addendum), the bug must live in
-some editing-path shape the atomic-replace flow happens to
-avoid. Iter 289 reintroduced the shape-honest editing pin as
-the secondary case (now the only RED M15 pin).
+**This means: no Playwright editing flow reproduces the bug
+the user reports.** The two pins together rule out (i) the
+atomic-replace path, (ii) the in-body cursor-positioned typing
+path, and (iii) the iter-284 (β) cursor-past-`\end{document}`
+hypothesis at source level (shape-sanity assert verifies typed
+bytes land between "Hello, world!" and `\end{document}`).
 
-**Resolution plan, post iter 289:**
+**Next step (Step D).** Implement `seedMainDoc?: string` per
+`287_answer.md` option (1): add field to `createProject`,
+`projects.seed_doc TEXT` drizzle migration, sidecar
+first-hydration reads it from the web tier or via Machine env
+var. ~30 LoC + new gold spec `verifyLivePdfMultiPageSeeded.\
+spec.ts`: create a project whose seed is the 5-line
+STATIC_TWO_PAGE, open it, assert ≥2 pages render with zero
+keyboard input. Two outcomes:
+- **(α) seeded case green-passes.** Decisive: bug is in some
+  path neither the editing pins nor the seeded path exercises.
+  Most likely candidate: the user's actual main.tex content
+  contains something (LaTeX package, math env, figure) the
+  shipped 2-page test sources don't. Next action is to ask
+  the user for the offending source via discussion mode.
+- **(β) seeded case red-fails.** Decisive: bug is reproducible
+  with zero editing. Then deploy iter-286's
+  `compile-source` / `daemon-stdin` / `daemon-stderr` debug log
+  (`apps/sidecar/src/server.ts` — env `DEBUG_COMPILE_LOG`,
+  ON by default) and `flyctl logs -a tex-center-sidecar
+  --no-tail` (NOT `-f`, per iter-150 hygiene) to classify per
+  Step C' (i)/(ii)/(iii) below.
 
-- **Step A. Sidecar source-content logging. Landed iter 286.**
-  `apps/sidecar/src/server.ts` `runCompile` emits a structured
-  `compile-source` record with `projectId`, `sourceLen`,
-  `sourceBytes`, `sourceSha256`, `sourceHead` (first 80 bytes
-  utf8), `sourceTail` (last 80 bytes utf8), and `endDocPos` (byte
-  offset of `\end{document}` or -1). The daemon
-  (`apps/sidecar/src/compiler/supertexDaemon.ts`) emits
-  `daemon-stdin` once per `recompile,<target>` write and a
-  `daemon-stderr` record per forwarded stderr line. Plumbed
-  via a new `compileDebugLog?: CompileDebugLog` `SidecarOptions`
-  field; production wiring is `app.log.info`-shaped, env
-  `DEBUG_COMPILE_LOG` defaults the sink to ON unless the value is
-  `0`/`false`. Lock:
-  `apps/sidecar/test/serverCompileSourceLog.test.mjs` (5 cases
-  covering shape, head/tail-on-large, missing-`\end{document}`,
-  env-off silences, daemon stdin+stderr records). **Not yet
-  deployed to live** — Step C' depends on this deploy.
-- **Step B. Static-source gold spec. Landed iter 288. GREEN
-  iter 288 (surprise).** Atomic `Ctrl+A` →
-  `keyboard.type(STATIC_TWO_PAGE)` content replacement. Retained
-  as a regression pin — would catch a future regression of the
-  one-page-only bug under the atomic flow.
-- **Step B'. Shape-honest in-body edit gold spec. Landed iter
-  289.** Secondary test in `verifyLivePdfMultiPage.spec.ts`:
-  opens a fresh project, waits for the hello-world 1-page
-  compile + paint, clicks the `.cm-line` carrying
-  "Hello, world!" → End → Enter → types `\newpage` → Enter →
-  types "Page two body text.". Shape-sanity assert verifies the
-  typed bytes land between "Hello, world!" and `\end{document}`
-  (rules out the iter-284 (β) cursor-past-`\end{document}`
-  failure mode at source level). Same viewer-agnostic assertion
-  as Step B with per-frame byte diagnostics for failure
-  classification. **Expected RED on first live run** — pins
-  the user's manually-typed-multi-page report.
-- **Step C'. Deploy + diagnose against the iter-289 in-body
-  pin.** Bundle Step A (iter 286 debug log) into a sidecar
-  deploy. Re-run the secondary live spec. Read `flyctl logs -a
-  tex-center-sidecar --no-tail`. Classify by:
+Step C' (deploy + diagnose against the existing iter-289
+in-body pin) is moot now that the in-body pin is GREEN.
+Retained as fallback diagnostic procedure for (β):
   - **(i)** One post-edit pdf-segment frame, small payload →
     supertex emitted only page 1 OR sidecar broadcast dropped
-    page 2. Cross-check against local pin
-    `test_supertex_incremental_multipage_emit.py`. If the bug
-    is supertex incremental-compile sensitivity to in-body
-    edits, the local pin should be made to mirror the live edit
-    shape and reproduce.
+    page 2. Cross-check against
+    `test_supertex_incremental_multipage_emit.py`.
   - **(ii)** Multiple pdf-segment frames OR one large frame →
-    wire carried >1 page. Viewer-side bug — `PdfViewer.svelte` /
-    `pdfFadeController.ts`. Note: Step B (static atomic) green
-    means the viewer can render >1 page in *some* path; the bug
-    would be a code path the viewer enters only for the
-    incremental in-body edit shape.
+    wire carried >1 page. Viewer-side bug — `PdfViewer.svelte`
+    / `pdfFadeController.ts`.
   - **(iii)** `compile-status` `error` → daemon failed on the
-    edited source. Read `lastErrorDetail`; if a real upstream
+    edited source. Read `lastErrorDetail`; if real upstream
     failure, file `vendor/supertex/discussion/<N>_question.md`
-    *committed to the submodule* (the iter-279 attempt was
-    fabricated — see `284_answer.md`).
-  - **Second surprise: in-body pin green-passes.** Means the
-    `keyboard.type` flow doesn't reproduce the user's manual
-    edit either. Pull seed-override impl (`seedMainDoc?: string`)
-    from `287_answer.md` option (1) and write a literal
-    "no editing at all" case — open project with the seeded
-    multi-page main.tex, assert ≥2 pages render without any
-    keyboard input.
+    *committed to the submodule*.
 
-Local pin `test_supertex_incremental_multipage_emit.py` retained
-as regression / shape-baseline.
+Local pin `test_supertex_incremental_multipage_emit.py`
+retained as regression / shape-baseline.
 
-### M16.aesthetic — writerly chrome retune (iter 262)
+### M16.aesthetic — writerly chrome retune
 
 Retune site CSS for chrome surfaces (landing, dashboard, editor
-topbar/tree/status). Editor and PDF preview content surfaces stay
-strictly functional.
+topbar/tree/status). Editor and PDF preview content surfaces
+stay strictly functional.
 
-Type pair: **Source Serif 4** (body / project names / hero prose;
-OFL, variable) + **Inter** (UI affordances, buttons, table
-headers; OFL, variable). Self-host both. Monospace in CodeMirror
-pane unchanged.
-
-Palette (4 colours): **Paper** `#FAF7F0` + **Ink** `#1F1B16` +
-**Quill** `#2E4C6D` (accent / links / primary buttons) +
-**Margin** `#D9CFBF` (rules, dividers, chevron tints). Editor
-pane background and PDF canvas stay neutral.
-
-Pin: Playwright visual-snapshot diff on `/` and `/projects`, plus
-a tight topbar-element snapshot on the editor route.
+- **Type pair:** Source Serif 4 (body / project names / hero
+  prose; OFL, variable) + Inter (UI affordances; OFL, variable).
+  Self-host both. Monospace in CodeMirror pane unchanged.
+- **Palette (4 colours):** Paper `#FAF7F0` + Ink `#1F1B16` +
+  Quill `#2E4C6D` (accent / links / primary buttons) + Margin
+  `#D9CFBF` (rules, dividers, chevron tints). Editor pane
+  background and PDF canvas stay neutral.
+- **Pin:** Playwright visual-snapshot diff on `/` and
+  `/projects`, plus a tight topbar-element snapshot on the
+  editor route.
 
 ### M17.preview-render — PDF preview cross-fade
 
-**Landed iter 271 (impl) + iter 273 (pin).**
+**Closed iter 271 (impl) + iter 273 (pin).**
 `apps/web/src/lib/pdfFadeController.ts` owns the per-page fade
 state machine (mid-fade interrupt → snapshot, cross-fade,
 add/remove wrapper transitions). `PdfViewer.svelte` renders all
 pages off-DOM then hands the controller per-page canvas
 descriptors; wrappers carry `data-page` so the
 IntersectionObserver target is stable across renders. Tests:
-`apps/web/test/pdfFadeController.test.mjs` (recording adapter, no
-DOM) + live Playwright `verifyLivePdfNoFlashBetweenSegments`.
+`apps/web/test/pdfFadeController.test.mjs` +
+`verifyLivePdfNoFlashBetweenSegments`.
 
 ### M8.pw.3.3 — real-OAuth-callback live activation
 
@@ -387,27 +323,35 @@ M13.2(b).2 (iter 254); M13.2(b).3 spec (iter 256); boot-time
 session sweep (iter 258/259); M14.title-bar (iter 264);
 M13.2(b).4 pin (iter 266); M13.2(b).5 R2 (iter 267); M15 sidecar
 fix (iter 269); M17 (iter 271/273); M12 layout extraction (iter
-280); M11.1c headless-tree cutover (iter 284). See git log and
-`.autodev/logs/` for detail.
+280); M11.1c headless-tree cutover (iter 284); M15 Step A
+sidecar debug log (iter 286); M15 Step B static-source spec
+(iter 288); M15 Step B' in-body-edit spec (iter 289);
+clampPanelWidths dead-branch removal (iter 290). See git log
+and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps
 
 - **Per-project vs shared-sidecar routing.** Current model is
   per-project Machine. Shared-pool app-tagged machines exist but
   aren't routed to. Decision deferred to post-MVP.
+- **`test_machine_count_under_threshold` RED iter 290.** Six
+  non-shared sidecar Machines vs threshold 5. Some live-spec
+  teardown is leaking per-project Machines without the orphan-
+  sweep tag. Triage path: log spec exits to find which spec
+  creates without `texcenter_test_owner=...` (or equivalent),
+  or widen the sweep's tag match. Likely benign hygiene but
+  currently blocks gold exit-zero.
 - **FUTURE_IDEAS items** — see `.autodev/FUTURE_IDEAS.md`. The
   iter-251 parse-smoke sketch landed iter 252 as
-  `tests_normal/cases/parse_playwright_fixtures.mjs` (AST walker
-  for block-scoped redeclaration).
-- ~~Dead branch in `clampPanelWidths`~~. Deleted iter 290; the
-  invariant the branch was defending is now pinned by a parameter-
-  sweep case in `editorPanelLayout.test.mjs`.
+  `tests_normal/cases/parse_playwright_fixtures.mjs` (AST
+  walker for block-scoped redeclaration).
 
 ## Leaked-subprocess hygiene (per `150_answer.md`)
 
 Do NOT invoke `flyctl proxy`, `flyctl logs -f`, `tail -f`,
 `watch`, or any daemon-style command via Bash without
-`timeout --kill-after=2 Ns …` wrapping, or `run_in_background:true`
-paired with an explicit kill before iteration end. Never pipe
-such a command into a downstream that waits for EOF (`… | tail
--N`, `… | head`) — that pipeline shape wedged iter 148.
+`timeout --kill-after=2 Ns …` wrapping, or `run_in_background:
+true` paired with an explicit kill before iteration end. Never
+pipe such a command into a downstream that waits for EOF
+(`… | tail -N`, `… | head`) — that pipeline shape wedged
+iter 148.
