@@ -11,9 +11,10 @@
 // time a matching push extends the toast; a non-matching push
 // or window expiry ends the aggregation.
 //
-// TTL: defaults per category (errors: 6s, success: 3s, info: 5s,
-// debug-*: 10s — M22.4a). `persistent: true` disables auto-dismiss;
-// the consumer must call `dismiss(id)`.
+// TTL: 10 s default for every category (M22.5, 309_answer.md —
+// supersedes the per-category split from 306_answer.md).
+// `persistent: true` disables auto-dismiss; the consumer must call
+// `dismiss(id)`.
 //
 // Subscription: Svelte-store contract — `subscribe(fn)` is
 // called immediately with the current array and again on every
@@ -51,9 +52,9 @@ export interface Toast {
 export const AGGREGATE_WINDOW_MS = 500;
 
 export const DEFAULT_TTL_MS: Record<ToastCategory, number> = {
-  info: 5_000,
-  success: 3_000,
-  error: 6_000,
+  info: 10_000,
+  success: 10_000,
+  error: 10_000,
   "debug-blue": 10_000,
   "debug-green": 10_000,
   "debug-orange": 10_000,

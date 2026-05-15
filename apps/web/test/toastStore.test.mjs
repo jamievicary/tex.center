@@ -80,8 +80,8 @@ function snapshotFromSub(store) {
   unsub();
 }
 
-// Case 2: default TTL by category auto-dismisses; persistent
-// stays put across arbitrary advance.
+// Case 2: default TTL (uniform 10s, M22.5) auto-dismisses;
+// persistent stays put across arbitrary advance.
 {
   const clk = makeFakeClock();
   const s = createToastStore({
@@ -93,18 +93,16 @@ function snapshotFromSub(store) {
   s.push({ category: "error", text: "e" });
   s.push({ category: "success", text: "ok", persistent: true });
   assert.equal(snapshotFromSub(s).length, 3);
-  // Advance past info default (5000ms) but not error (6000ms).
-  clk.advance(5000);
+  // Just before the 10s boundary, both non-persistent toasts are still live.
+  clk.advance(9999);
   let snap = snapshotFromSub(s);
-  assert.equal(snap.length, 2, "info toast should auto-dismiss at 5s");
-  assert.ok(snap.some((t) => t.category === "error"));
-  assert.ok(snap.some((t) => t.category === "success"));
-  // Advance past error TTL.
-  clk.advance(1000);
+  assert.equal(snap.length, 3, "non-persistent toasts live until 10s");
+  // Cross the boundary — both info and error dismiss together.
+  clk.advance(1);
   snap = snapshotFromSub(s);
-  assert.equal(snap.length, 1, "error toast should auto-dismiss at 6s");
+  assert.equal(snap.length, 1, "info and error auto-dismiss at 10s");
   assert.equal(snap[0].category, "success");
-  // Persistent stays.
+  // Persistent stays indefinitely.
   clk.advance(60_000);
   assert.equal(snapshotFromSub(s).length, 1);
 }
@@ -259,7 +257,7 @@ function snapshotFromSub(store) {
   assert.equal(snapshotFromSub(s).length, 0);
 }
 
-// Case 8 (M22.4a): debug-* default TTLs bumped to 10s.
+// Case 8 (M22.5): every category default TTL is 10s.
 {
   const { DEFAULT_TTL_MS } = await import("../src/lib/toastStore.ts");
   assert.equal(DEFAULT_TTL_MS["debug-blue"], 10_000);
@@ -267,10 +265,9 @@ function snapshotFromSub(store) {
   assert.equal(DEFAULT_TTL_MS["debug-orange"], 10_000);
   assert.equal(DEFAULT_TTL_MS["debug-grey"], 10_000);
   assert.equal(DEFAULT_TTL_MS["debug-red"], 10_000);
-  // User-facing TTLs unchanged from M22.3.
-  assert.equal(DEFAULT_TTL_MS.info, 5_000);
-  assert.equal(DEFAULT_TTL_MS.success, 3_000);
-  assert.equal(DEFAULT_TTL_MS.error, 6_000);
+  assert.equal(DEFAULT_TTL_MS.info, 10_000);
+  assert.equal(DEFAULT_TTL_MS.success, 10_000);
+  assert.equal(DEFAULT_TTL_MS.error, 10_000);
 }
 
 console.log("toastStore: OK");

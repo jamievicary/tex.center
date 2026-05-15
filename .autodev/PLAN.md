@@ -12,30 +12,50 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue:**
 
-1. **M22 wire-message debug toasts.** M22.1 closed iter 304 (all
+1. **M23 workspace file mirroring** (queued iter 310 from
+   `309_answer.md` item 2). `\input{sec1}` regression: today
+   `apps/sidecar/src/workspace.ts` only writes `main.tex`; auxiliary
+   files (`addFile`/`upload-file`) live only in Yjs/blob storage and
+   never reach the on-disk workspace dir the supertex daemon spawns
+   in, so `\input{sec1}` cannot resolve. Categorical product
+   regression — ranks above M20.2 / M21.2 / M22.x perf work. See M23
+   section below.
+2. **M22 wire-message debug toasts.** M22.1 closed iter 304 (all
    outbound control sends now emit `outgoing-*` debug events).
-   M22.3 closed iter 305 (info TTL 5 s, newest-on-top stack,
-   user-dismissible × on info/success). **M22.4a closed iter 309**
-   (settings `debugMode` default true, `FADE_MS_DEFAULT` 1000,
-   debug-\* TTLs 10 s, `Toasts.svelte` `animate:flip`, new
-   `compileCycleTracker.ts` prefixing `compile-status idle/error`
-   toasts with elapsed seconds, legacy `localStorage["debug"]`
-   migration). Remaining: M22.2 GT-F local Playwright cases (closes
-   M9.editor-ux GT-F); **M22.4b wire-shipoutPage batch** —
-   pick up next.
-2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
+   M22.3 closed iter 305 (newest-on-top stack, user-dismissible × on
+   info/success). M22.4a closed iter 309 (settings `debugMode`
+   default true, `FADE_MS_DEFAULT` 1000, debug-\* TTLs 10 s,
+   `Toasts.svelte` `animate:flip`, new `compileCycleTracker.ts`
+   prefixing `compile-status idle/error` toasts with elapsed
+   seconds, legacy `localStorage["debug"]` migration). **M22.5
+   closed iter 310** (uniform 10 s TTL across every category;
+   supersedes M22.3's per-category split per `309_answer.md` item 1).
+   Remaining: M22.2 GT-F local Playwright cases (closes M9.editor-ux
+   GT-F); **M22.4b wire-shipoutPage batch**.
+3. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
    idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
    binding (sidecar persists source + latex artefacts on every
    settle, rehydrates on cold boot) and M20.3 gold spec. Unblocks
    `verifyLiveGt6LiveEditableStateStopped`.
-3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+4. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection. This is an important feature of tex.center,
    to allow fast incremental compilation when we scroll to
    view additional pages.
-4. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
+5. **M21.3 page-prefetch off-by-one investigation** (queued iter
+   310 from `309_answer.md` item 3). User reports "edit on page
+   N+1 still ships a segment". Today there is no target-page
+   gate (`server.ts:528` hard-codes `targetPage: 0` →
+   `recompile,end`), so the user's "off-by-one in max-visible"
+   diagnosis cannot be the mechanism; the emit decision is in
+   supertex's own checkpoint/incremental engine. M21.3a tightens
+   `pickMaxVisible` (a stricter visibility threshold); M21.3b
+   extends the `daemon-stdin` debug log with `maxShipout` /
+   `errorReason` so the empty-segment case is observable; M21.3c
+   files an upstream supertex repro if needed.
+6. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change + forced-DPR=2 visual
    snapshot. Both deferred until reported.
-5. **M11.5a text drop-upload.** Closed iter 306. Wrapping
+8. **M11.5a text drop-upload.** Closed iter 306. Wrapping
    `<div class="ft-host">` around the tree's contents accepts
    `dragover` + `drop` for `Files` payloads;
    `classifyDroppedNames(names, files)` mirrors the picker-flow
@@ -43,15 +63,15 @@ routed to (decision deferred post-MVP).
    `MAIN_DOC_NAME`, dedup against existing + within-drop), accepted
    names flow through the existing `onUploadFile(name, content)`
    wire path. Locks: `apps/web/test/fileDropUpload.test.mjs`.
-6. **M16.aesthetic.** Type pair + 4-colour palette retune for
+9. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar.
-7. **M11.2.** Create/delete/rename via context menu + keyboard.
-   **M11.2a closed iter 307** — `F2` rename / `Del`-with-confirm on
-   the focused file row. Pure helper `fileTreeKeyboard.ts`. Locks:
-   `apps/web/test/fileTreeKeyboard.test.mjs`. Remaining: M11.2b —
-   right-click context menu (Create / Rename / Delete entries,
-   click-outside + Esc dismissal, keyboard nav within the menu).
+10. **M11.2.** Create/delete/rename via context menu + keyboard.
+    **M11.2a closed iter 307** — `F2` rename / `Del`-with-confirm on
+    the focused file row. Pure helper `fileTreeKeyboard.ts`. Locks:
+    `apps/web/test/fileTreeKeyboard.test.mjs`. Remaining: M11.2b —
+    right-click context menu (Create / Rename / Delete entries,
+    click-outside + Esc dismissal, keyboard nav within the menu).
 
 **M15 settled (α).** Seeded multi-page case GREEN since iter 295;
 no Playwright-reproducible path exhibits the user's page-1-only
@@ -292,6 +312,50 @@ the user can see.
   fully visible and page 3's top edge intrudes → sidecar
   receives target=3. Needs real 3-page Playwright source plus a
   sidecar introspection hook.
+- **M21.3 (open).** Page-prefetch emit-decision investigation.
+  Queued iter 310 from `309_answer.md` item 3. Critical context:
+  `apps/sidecar/src/server.ts:528` hard-codes `targetPage: 0` →
+  `recompile,end` on every compile. There is no active target-page
+  gate; `maxViewingPage` only feeds `coalescer.kickForView`'s
+  scrolled-past-emitted-page trigger. M21.3a tightens
+  `pickMaxVisible` to require ratio > some threshold (today: ratio
+  > 0). M21.3b extends the existing `daemon-stdin` debug log (iter
+  282) with `maxShipout` and `errorReason` from `collectRound`, so
+  empty-segment rounds are observable in production. M21.3c, if
+  evidence points there, files a minimal upstream supertex repro.
+
+### M23.workspace-mirror — write every project file to the sidecar workspace dir
+
+Queued iter 310 from `309_answer.md` item 2.
+`apps/sidecar/src/workspace.ts` exposes only `writeMain(source)` —
+auxiliary files added via `addFile` / `upload-file` live in Yjs +
+blob storage but never reach the on-disk workspace directory the
+supertex daemon spawns in (`cwd: workDir`). `\input{sec1}` resolves
+via lualatex kpathsea which includes the cwd; with `sec1.tex` absent
+from disk the input fails, the round emits no `[N.out]` events,
+`maxShipout` stays -1 and the server returns `{ ok: true, segments:
+[] }`. Categorical product regression for any multi-file project.
+
+Slices:
+
+- **M23.1** Extend `ProjectWorkspace` with `writeFile(name,
+  content)`, `deleteFile(name)`, `renameFile(oldName, newName)`.
+  Atomic write-to-tmp-then-rename pattern (matches `writeMain`).
+  Slashed paths need parent `mkdir -p` plus empty-parent reap on
+  delete (mirror `LocalFsBlobStore.delete`).
+  `validateProjectFileName` for sanitisation.
+- **M23.2** Wire `apps/sidecar/src/persistence.ts` to call through
+  on every Yjs-acked file mutation (`addFile` / `deleteFile` /
+  `renameFile`). Subscribe to each non-main `Y.Text.observe` to
+  mirror text edits to disk; debounce via the same coalescer that
+  gates `writeMain`.
+- **M23.3** Cold-boot rehydration. On project open, after
+  persistence rehydrates from the blob store, mirror every
+  non-main file to disk *before* the first compile call.
+- **M23.4** Gold spec: 2-file project (`main.tex` with
+  `\input{sec1}` + `sec1.tex` body); assert a `pdf-segment` ships
+  and the rendered page contains the body. Local Playwright if
+  feasible; otherwise a sidecar-level integration test.
 
 ### M22.debug-toasts.b — front→back wire coverage
 
