@@ -11,42 +11,41 @@ refresh persistence. Per-project sidecar runs on Fly Machines in
 (`tex-center-sidecar` app with `app`-tagged deployment machines)
 exists alongside but isn't routed to.
 
-**Active priority queue (post iter 294, re-ordered per
-`293_answer.md`):**
+**Active priority queue (post iter 296):**
 
-1. **M15 Step D awaiting first live run.** `seedMainDoc?: string`
-   impl + `verifyLivePdfMultiPageSeeded.spec.ts` landed iter 292.
-   Plumbing: `createProject` → `projects.seed_doc` (0003
-   migration) → upstream resolver bakes base64-encoded seed into
-   per-project Machine env (`SEED_MAIN_DOC_B64`) on first
-   `createMachine` → sidecar decodes on boot, passes through to
-   `createProjectPersistence({ seedMainDoc })` → first hydration
-   uses override bytes in place of `MAIN_DOC_HELLO_WORLD`. Locks:
-   `migrations.test.mjs`, `schema.test.mjs`, `projects-pglite.\
-   test.mjs`, `apps/sidecar/test/persistenceSeed.test.mjs`,
-   `apps/web/test/upstreamResolver.test.mjs`. Awaits a live gold
-   run; outcomes branch (α)/(β) below.
-2. **M18 PDF preview quality. PARTIAL (iter 295).** DPR-aware
-   canvas sizing landed: new `pdfRenderScale(baseScale, dpr)` helper,
-   `PdfViewer.svelte` renders at `1.5 × devicePixelRatio` backing
-   pixels and hands CSS-px dimensions to the fade controller. Lock:
-   `apps/web/test/pdfRenderScale.test.mjs`. Open follow-ups:
-   ResizeObserver-driven re-render on `.preview` width change
-   (coalesced trailing 100ms), and a gold visual-snapshot pin under
-   forced DPR=2 (Playwright `--device-scale-factor=2`).
-3. **M19 settings dialog + email-in-topbar.** Cog popover w/
+1. **M15 Step D outcome (α): seeded case GREEN.** The
+   `verifyLivePdfMultiPageSeeded.spec.ts` first live run (iter 295)
+   passed alongside the in-body and static editing pins. Per the
+   PLAN's M15 decision table, this means no Playwright-reproducible
+   path exhibits the user-reported page-1-only bug; the most likely
+   remaining shape is content-specific (a package, math env, figure
+   in the user's actual main.tex that the shipped sources don't
+   contain). Decision: settled at the project level until the user
+   either confirms the bug is gone or supplies the offending
+   source via a new discussion question. No further M15 work
+   without that input — engineering against an unreproducible bug
+   would only generate dark code.
+2. **M19 settings dialog + email-in-topbar.** Cog popover w/
    fade-duration slider; swap displayName→email. New.
-4. **M21 max-visible page tracking.** New.
-5. **M17 reopen — cross-fade blend math.** Switch to single-
+3. **M17 reopen — cross-fade blend math.** Switch to single-
    layer opacity (leaving canvas above, opacity 1→0; entering
    canvas below, opacity 1). Pin via center-pixel-flatness
    check.
-6. **M22 wire-message debug toasts.** Front→back coverage for
+4. **M22 wire-message debug toasts.** Front→back coverage for
    `outgoing-*` events; close M9.editor-ux GT-F.
-7. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
-   former priority #2 M13.2(b).5 R1: shared `BLOB_STORE` widens
-   from "seed main.tex" to "full project tree" so cold-stopped
-   resume restores `.aux`/checkpoint as well as source.
+5. **M20 lifecycle (suspend/stop/cold-storage).** Absorbs the
+   former M13.2(b).5 R1: shared `BLOB_STORE` widens from "seed
+   main.tex" to "full project tree" so cold-stopped resume
+   restores `.aux`/checkpoint as well as source.
+6. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+   introspection; M21.1 (logic + wire switch) closed iter 296.
+   Low priority — failure mode today is extra-pages-compiled-late,
+   not data loss.
+7. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
+   re-render on `.preview` width change (coalesced trailing
+   100ms), and a gold visual-snapshot pin under forced DPR=2
+   (Playwright `--device-scale-factor=2`). Both PLAN-tagged "wait
+   for user feedback" — defer until reported.
 8. **M11.5a text drop-upload.** Drop `.tex` files onto file tree
    → `upload-file` (text path, already exists). Binary stays
    blocked.
@@ -374,17 +373,29 @@ thrash.
 
 ### M21.target-page — max-visible-page wire signal
 
-From `293_answer.md` (6). Today `pageTracker` returns the
-*most-visible* page. GOAL item 4 needs *max-visible* so the
+From `293_answer.md` (6). GOAL item 4 needs *max-visible* so the
 sidecar can compile every page the user can see.
 
-Plan:
-- Add `PageTracker.maxVisiblePage()` (and a callback) alongside
-  the existing most-visible behaviour.
-- Wire the editor page to send `max` over the existing
-  `viewing-page` message (semantic widened; name retained).
-- Gold spec: 3-page PDF, scroll so page 2 fully visible and
-  page 3's top edge intrudes → sidecar receives target=3.
+**M21.1 max-visible logic + wire switch. Closed iter 296.**
+`pickMaxVisible(items)` added alongside `pickMostVisible`; same
+`ratio > 0` predicate, picks highest page index. `PageTracker.update()`
+return shape widened to
+`{ mostVisible: number | null; maxVisible: number | null }` — each
+member non-null iff that value transitioned. `PdfViewer.svelte` IO
+callback now consumes `maxVisible`, so `client.setViewingPage(...)`
+sends max-visible. The sidecar's `maxViewingPage(p)` reducer is
+unchanged (it max'd across clients; the single value per client just
+got semantically widened). Back-compat `tracker.visible`/`mostVisible`
+getters retained for diagnostics. Lock:
+`apps/web/test/pageTracker.test.mjs`.
+
+**M21.2 (open).** Gold spec: 3-page PDF, scroll so page 2 fully
+visible and page 3's top edge intrudes → sidecar receives target=3.
+Needs a real 3-page Playwright source plus a sidecar introspection
+hook (the existing `verifyLive*` specs assert via the editor, not via
+sidecar internals). Defer until paired with another sidecar-visibility
+slice; not on the live critical path because the worst case today is
+extra-pages-compiled-late, not data loss.
 
 ### M22.debug-toasts.b — front→back wire coverage
 
@@ -470,7 +481,8 @@ sidecar debug log (iter 286); M15 Step B static-source spec
 (iter 288); M15 Step B' in-body-edit spec (iter 289);
 clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
 project startup sweep + machine-count threshold bump (iter 293);
-M18.1 DPR-aware PDF backing store (iter 295).
+M18.1 DPR-aware PDF backing store (iter 295); M21.1 max-visible
+wire switch (iter 296).
 See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps

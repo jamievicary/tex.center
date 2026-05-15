@@ -1,10 +1,17 @@
-// Pure logic for picking the "most visible" page in a multi-page
-// PDF preview. Fed by IntersectionObserver entries (or any other
-// source of per-page visibility ratios). Kept DOM-free so it can
-// be unit-tested under tsx.
+// Pure logic for picking the page indices the PDF preview pane uses
+// to drive the `viewing-page` wire signal. Fed by IntersectionObserver
+// entries (or any other source of per-page visibility ratios). Kept
+// DOM-free so it can be unit-tested under tsx.
 //
-// Tie-break: highest ratio wins; if equal, the lower page number
-// wins. A page with ratio <= 0 is treated as not visible.
+// Two picks are exposed:
+// - `pickMostVisible`: page with highest visibility ratio (lower
+//   page wins on tie). Diagnostic; not used on the wire post-M21.
+// - `pickMaxVisible`: highest page index with any non-zero ratio.
+//   This is what the editor sends to the sidecar so every page the
+//   user can see — including one whose top edge intrudes from below
+//   the fold — is in scope for compilation.
+//
+// Pages with ratio <= 0 are treated as not visible by both picks.
 
 export interface PageVisibility {
   page: number;
@@ -26,31 +33,64 @@ export function pickMostVisible(items: Iterable<PageVisibility>): number | null 
   return best ? best.page : null;
 }
 
-// Maintains a page→ratio map and reports a new "most visible"
-// page only when it actually changes. Construct one per
-// PdfViewer instance; feed it IO entries via `update`.
+export function pickMaxVisible(items: Iterable<PageVisibility>): number | null {
+  let max: number | null = null;
+  for (const it of items) {
+    if (it.ratio <= 0) continue;
+    if (max === null || it.page > max) max = it.page;
+  }
+  return max;
+}
+
+// Maintains a page→ratio map and reports per-call transitions in
+// both the most-visible and max-visible picks. Construct one per
+// PdfViewer instance; feed it IO entries via `update`. A `null`
+// member of the return value means "no transition this call"; the
+// last-known value is preserved when an update would otherwise drop
+// it to null (matches the M17/M21 pre-rename behaviour and keeps the
+// IO-driven callback path stable across momentary empty frames).
 export class PageTracker {
   private readonly ratios = new Map<number, number>();
-  private current: number | null = null;
+  private currentMost: number | null = null;
+  private currentMax: number | null = null;
 
   reset(): void {
     this.ratios.clear();
-    this.current = null;
+    this.currentMost = null;
+    this.currentMax = null;
   }
 
-  update(page: number, ratio: number): number | null {
+  update(
+    page: number,
+    ratio: number,
+  ): { mostVisible: number | null; maxVisible: number | null } {
     this.ratios.set(page, ratio);
     const items: PageVisibility[] = [];
     for (const [p, r] of this.ratios) items.push({ page: p, ratio: r });
-    const next = pickMostVisible(items);
-    if (next !== null && next !== this.current) {
-      this.current = next;
-      return next;
+    const nextMost = pickMostVisible(items);
+    const nextMax = pickMaxVisible(items);
+    let mostVisible: number | null = null;
+    let maxVisible: number | null = null;
+    if (nextMost !== null && nextMost !== this.currentMost) {
+      this.currentMost = nextMost;
+      mostVisible = nextMost;
     }
-    return null;
+    if (nextMax !== null && nextMax !== this.currentMax) {
+      this.currentMax = nextMax;
+      maxVisible = nextMax;
+    }
+    return { mostVisible, maxVisible };
   }
 
   get visible(): number | null {
-    return this.current;
+    return this.currentMost;
+  }
+
+  get mostVisible(): number | null {
+    return this.currentMost;
+  }
+
+  get maxVisible(): number | null {
+    return this.currentMax;
   }
 }

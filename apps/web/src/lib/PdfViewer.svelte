@@ -46,8 +46,8 @@
           if (!pageAttr) continue;
           const page = Number(pageAttr);
           if (!Number.isFinite(page)) continue;
-          const next = tracker.update(page, e.intersectionRatio);
-          if (next !== null) onPageChange?.(next);
+          const { maxVisible } = tracker.update(page, e.intersectionRatio);
+          if (maxVisible !== null) onPageChange?.(maxVisible);
         }
       },
       { threshold: thresholds },
