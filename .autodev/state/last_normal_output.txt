@@ -7,15 +7,15 @@ Packages: -81
 --------------------------------------------------------------------------------
 Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
-Done in 1.4s
+Done in 1.1s
 Scope: 6 of 7 workspace projects
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck: Done
-packages/protocol typecheck: Done
 packages/auth typecheck: Done
+packages/protocol typecheck: Done
 packages/db typecheck: Done
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
@@ -224,7 +224,7 @@ test_runtime_entrypoint (test_web_dockerfile.TestWebDockerfile.test_runtime_entr
 test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.test_runtime_listens_on_all_interfaces) ... ok
 
 ----------------------------------------------------------------------
-Ran 197 tests in 123.709s
+Ran 197 tests in 124.364s
 
 OK
 tests_normal/run_tests.sh: PASS

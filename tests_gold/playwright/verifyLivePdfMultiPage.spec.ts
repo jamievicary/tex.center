@@ -270,4 +270,226 @@ test.describe("live multi-page PDF preview (M15)", () => {
       });
     }
   });
+
+  // Secondary M15 pin reintroduced iter 289 after the static
+  // atomic-replacement case (above) green-passed iter 288. Per
+  // iter 288's notes: "If the static spec green-passes, that's
+  // the surprise outcome: the bug *is* in the editing path. In
+  // which case re-introduce the iter-287 shape-honest editing
+  // spec as a secondary case."
+  //
+  // The user signal that motivated M15 stays load-bearing
+  // (`284_answer.md` addendum: preview never shows >1 page even
+  // on manually-typed multi-page docs). The static case
+  // green-passing means the bug lives in some editing-path shape
+  // that the atomic Ctrl+A → type flow doesn't trigger. This
+  // case exercises the natural manual flow: open the seeded
+  // hello-world project, position the cursor between
+  // "Hello, world!" and `\end{document}`, type `\newpage` + a
+  // second-page body, await the post-edit compile, assert >1
+  // page rendered.
+  //
+  // Cursor placement is deliberately *inside* the document body:
+  // click on the `.cm-line` carrying "Hello, world!", press End,
+  // press Enter — this lands the cursor on a fresh line between
+  // "Hello, world!" and `\end{document}`, guaranteed inside
+  // `\begin{document}...\end{document}`. A shape-sanity assert
+  // verifies the typed bytes land between "Hello, world!" and
+  // `\end{document}` (catching the iter-284 (β) cursor-past-
+  // `\end{document}` failure mode at source level rather than
+  // after the compile). If the cursor placement is right and the
+  // pin is still RED, (β) is disproved and the bug must be
+  // (i) supertex incremental-compile sensitivity to in-body
+  // edits, (ii) sidecar broadcast (page 2 not in wire payload),
+  // or (iii) PdfViewer (page 2 in wire but not on screen). The
+  // failure-path diagnostics here mirror the static case so the
+  // same classification tree applies.
+  test("in-body manual edit inserting `\\newpage` renders >1 page of canvas", async ({
+    authedPage,
+    db,
+  }, testInfo) => {
+    testInfo.setTimeout(360_000);
+
+    const project = await createProject(db.db.db, {
+      ownerId: db.userId,
+      name: `pw-probe-multipage-edit-${Date.now()}`,
+    });
+
+    const { pdfSegmentFrames, docUpdateSent, compileStatusEvents } =
+      captureFrames(authedPage, project.id);
+
+    try {
+      await authedPage.goto(`/editor/${project.id}`);
+
+      const cmContent = authedPage.locator(".cm-content");
+      await cmContent.waitFor({ state: "visible", timeout: 60_000 });
+
+      // Wait for the initial pdf-segment + first painted canvas
+      // (one-page hello-world compile) so we know the daemon is
+      // warm before we edit.
+      await expect
+        .poll(() => pdfSegmentFrames.length, {
+          timeout: COMPILE_BUDGET_MS,
+          message:
+            "no initial pdf-segment for seeded hello-world template",
+        })
+        .toBeGreaterThan(0);
+      await expectPreviewCanvasPainted(authedPage);
+
+      const segmentsBefore = pdfSegmentFrames.length;
+
+      // `MAIN_DOC_HELLO_WORLD` lines (indexed from 0):
+      //   0  \documentclass{article}
+      //   1  \begin{document}
+      //   2  Hello, world!
+      //   3  \end{document}
+      // Click line 2 → End → Enter places the cursor on a fresh
+      // line between "Hello, world!" and `\end{document}`. No
+      // virtual-line trap; the insert is strictly inside the
+      // document body. `readCmSource()` below shape-asserts this.
+      const helloLine = authedPage.locator(".cm-content .cm-line").nth(2);
+      await helloLine.waitFor({ state: "visible", timeout: 10_000 });
+      await helloLine.click();
+      await authedPage.keyboard.press("End");
+      await authedPage.keyboard.press("Enter");
+      await authedPage.keyboard.type("\\newpage");
+      await authedPage.keyboard.press("Enter");
+      await authedPage.keyboard.type("Page two body text.");
+
+      const readCmSource = (): Promise<string> =>
+        authedPage.evaluate(() => {
+          const lines = Array.from(
+            document.querySelectorAll<HTMLElement>(".cm-content .cm-line"),
+          );
+          return lines.map((l) => l.textContent ?? "").join("\n");
+        });
+
+      // Bounded poll for the source DOM to reflect the typed edits.
+      let typedSource = await readCmSource();
+      const typingDeadline = Date.now() + 5_000;
+      while (
+        Date.now() < typingDeadline &&
+        (!typedSource.includes("\\newpage") ||
+          !typedSource.includes("Page two body text."))
+      ) {
+        await authedPage.waitForTimeout(100);
+        typedSource = await readCmSource();
+      }
+
+      // Shape sanity: the in-body insert lands between
+      // "Hello, world!" and `\end{document}`. Fails fast and
+      // surfaces a cursor-placement bug before we wait on the
+      // compile — rules out the iter-284 (β) failure mode at
+      // source level.
+      const idxHello = typedSource.indexOf("Hello, world!");
+      const idxNewpage = typedSource.indexOf("\\newpage");
+      const idxPageTwo = typedSource.indexOf("Page two body text.");
+      const idxEndDoc = typedSource.indexOf("\\end{document}");
+      expect(
+        idxHello >= 0 &&
+          idxNewpage > idxHello &&
+          idxPageTwo > idxNewpage &&
+          idxEndDoc > idxPageTwo,
+        `in-body edit did not land between "Hello, world!" and ` +
+          `"\\end{document}". idxHello=${idxHello} ` +
+          `idxNewpage=${idxNewpage} idxPageTwo=${idxPageTwo} ` +
+          `idxEndDoc=${idxEndDoc} ` +
+          `source=${JSON.stringify(typedSource)}`,
+      ).toBe(true);
+
+      // Wait for at least one post-edit pdf-segment carrying the
+      // multi-page source.
+      const deadline = Date.now() + COMPILE_BUDGET_MS;
+      while (
+        Date.now() < deadline &&
+        pdfSegmentFrames.length <= segmentsBefore
+      ) {
+        await authedPage.waitForTimeout(500);
+      }
+      if (pdfSegmentFrames.length <= segmentsBefore) {
+        const finalSource = await readCmSource();
+        const csCounts = compileStatusEvents.reduce<Record<string, number>>(
+          (acc, e) => {
+            acc[e.state] = (acc[e.state] ?? 0) + 1;
+            return acc;
+          },
+          {},
+        );
+        const csSummary =
+          Object.entries(csCounts)
+            .map(([s, n]) => `${s}×${n}`)
+            .join(",") || "none";
+        const lastErrorDetail =
+          [...compileStatusEvents]
+            .reverse()
+            .find((e) => e.state === "error")?.detail ?? null;
+        expect(
+          pdfSegmentFrames.length,
+          `no post-edit pdf-segment carrying the in-body \\newpage ` +
+            `arrived within ${COMPILE_BUDGET_MS}ms. ` +
+            `segmentsBefore=${segmentsBefore} ` +
+            `pdfSegmentsAtFail=${pdfSegmentFrames.length} ` +
+            `docUpdateSent=${docUpdateSent.value} ` +
+            `finalSourceLen=${finalSource.length} ` +
+            `finalSource=${JSON.stringify(finalSource)} ` +
+            `compileStatusEvents=${csSummary} ` +
+            `lastErrorDetail=${JSON.stringify(lastErrorDetail)}`,
+        ).toBeGreaterThan(segmentsBefore);
+      }
+
+      // Drain — the viewer renders pages serially after the
+      // segment lands, and a late page may still be appending
+      // when the wire first goes quiet.
+      await authedPage.waitForTimeout(5_000);
+
+      const postEditFrames = pdfSegmentFrames.slice(segmentsBefore);
+      const frameBytes = postEditFrames.map((f) => f.length);
+      const totalPostEditBytes = frameBytes.reduce((a, b) => a + b, 0);
+
+      const measurement = await authedPage.evaluate(() => {
+        const host = document.querySelector(".preview .host");
+        const canvases = Array.from(
+          document.querySelectorAll<HTMLCanvasElement>(".preview canvas"),
+        );
+        const pageWrappers = document.querySelectorAll(".preview .pdf-page");
+        const heights = canvases.map((c) => c.getBoundingClientRect().height);
+        const tallestPx = heights.reduce((m, h) => (h > m ? h : m), 0);
+        return {
+          canvasCount: canvases.length,
+          pageWrapperCount: pageWrappers.length,
+          tallestPx,
+          viewportH: window.innerHeight,
+          hostScrollH: (host as HTMLElement | null)?.scrollHeight ?? null,
+        };
+      });
+
+      const viewerAgnosticOk =
+        measurement.pageWrapperCount >= 2 ||
+        measurement.tallestPx > measurement.viewportH * 1.8;
+
+      expect(
+        viewerAgnosticOk,
+        `preview pane shows only one page of rendered PDF for an ` +
+          `in-body \\newpage edit. ` +
+          `canvasCount=${measurement.canvasCount} ` +
+          `pageWrapperCount=${measurement.pageWrapperCount} ` +
+          `tallestPx=${measurement.tallestPx.toFixed(1)} ` +
+          `viewportH=${measurement.viewportH} ` +
+          `hostScrollH=${measurement.hostScrollH ?? "null"} ` +
+          `postEditFrameCount=${postEditFrames.length} ` +
+          `postEditBytes=${totalPostEditBytes} ` +
+          `frameBytes=${JSON.stringify(frameBytes)}. ` +
+          `Reproduces the user's manually-typed-multi-page report ` +
+          `(284_answer.md addendum). Classify per static-case ` +
+          `comment block: 1 frame + small bytes → supertex or ` +
+          `sidecar broadcast suspect; many/large frames → viewer ` +
+          `suspect.`,
+      ).toBe(true);
+    } finally {
+      await cleanupLiveProjectMachine({
+        projectId: project.id,
+        drizzle: db.db.db,
+      });
+    }
+  });
 });

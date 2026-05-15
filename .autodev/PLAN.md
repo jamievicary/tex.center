@@ -17,32 +17,38 @@ All eight live gold cases (GT-A/B/C/D/5/6/7/8) GREEN as of iter
 M17 no-flash pin (`verifyLivePdfNoFlashBetweenSegments`) GREEN
 iter 273.
 
-**Open red gold cases (post iter 284):**
+**Open red gold cases (post iter 289):**
 
-- `verifyLivePdfMultiPage` (M15) — **TOP PRIORITY** (per
-  `284_answer.md`). Diagnosis from iters 275–279 was unsound;
-  reset and reapproach by sidecar instrumentation. See M15
-  section.
+- `verifyLivePdfMultiPage` "in-body manual edit inserting
+  `\newpage`" (M15 secondary case, iter 289) — **TOP PRIORITY**.
+  Pins the user's manually-typed-multi-page report
+  (`284_answer.md` addendum). Static atomic-replace case green
+  iter 288 (the surprise outcome predicted in iter 288's notes),
+  so the bug lives in some editing-path shape the atomic flow
+  doesn't trigger. New pin types `\newpage` + second-page body
+  between "Hello, world!" and `\end{document}` with shape-sanity
+  assert ruling out (β) cursor-past-`\end{document}` at source
+  level. Expected RED on first live run.
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — blocked
   on M13.2(b).5 R1 (SSR seed widening, needs shared blob store).
 - `verifyLiveGt6LiveEditableState` (M13.2(b).3) — was green
   (iter 256–279), red iter 280 once and may be flaky around the
   suspended-resume boundary; rerun + investigate if it persists.
 
-**Active priority queue:** M15 (Step C: deploy + live diagnose
-against static spec) → M13.2(b).5 R1 → M16.aesthetic → M11.2
-(CRUD via context menu / keyboard). M11.1c headless-tree cutover
-landed iter 284. M15 Step A landed iter 286 (sidecar
-`compile-source` + `daemon-stdin` / `daemon-stderr` records via
-opt-in `compileDebugLog` sink). M15 Step B reframed iter 288 (per
-`287_answer.md`) — `verifyLivePdfMultiPage` now uses an atomic
-content replacement (`Ctrl+A` → `type(STATIC_TWO_PAGE)`) so the
-source under test is a known static two-page LaTeX shape rather
-than an edit-built shape; cursor-positioning hypothesis demoted
-from lead to candidate (γ). Iter 287's `\newpage`-before-
-`\end{document}` pre-assert is no longer load-bearing under the
-static framing and has been dropped. M11.5 still gated on
-shared-R2 binary-asset work.
+**Active priority queue:** M15 (Step C': deploy iter-286 debug
+log + diagnose iter-289 in-body pin) → M13.2(b).5 R1 →
+M16.aesthetic → M11.2 (CRUD via context menu / keyboard).
+M11.1c headless-tree cutover landed iter 284. M15 Step A landed
+iter 286 (sidecar `compile-source` + `daemon-stdin` /
+`daemon-stderr` records via opt-in `compileDebugLog` sink). M15
+Step B (static atomic-replace spec) landed iter 288 and
+green-passed on first live run — the surprise outcome of iter
+288. Step C (deploy + diagnose against the static spec) is
+moot: the static spec is no longer a useful RED pin. Reframed
+as Step C': deploy + diagnose against the iter-289 secondary
+in-body edit pin (which targets the natural manual-edit shape
+the user reports failing). M11.5 still gated on shared-R2
+binary-asset work.
 
 ## 2. Milestones
 
@@ -245,35 +251,20 @@ Promoted from `241_question.md` / `241_answer.md`.
 **Sidecar `targetPage=0` fix landed iter 269.** Sidecar-level
 pin `tests_gold/cases/test_supertex_multipage_emit.py` green.
 
-**Live `verifyLivePdfMultiPage` still RED. Diagnosis reset iter
-284 (see `284_answer.md`).** Prior iter-275/276/279 diagnosis
-("iter-726 supertex short-circuit misfiring on body insertions")
-was unsound: it rested on a daemon stderr line without ever
-logging what the sidecar actually wrote to disk before each
-compile. Iter 279's PLAN claim of having filed a
-`vendor/supertex/discussion/764_question.md` was *fabricated*:
-`git diff 6919b5e 93dd32b --stat` shows that commit didn't touch
-`vendor/supertex/` at all; the file is not in the submodule and
-the submodule pointer didn't move. No upstream wait — nothing
-was asked.
+**Live status (post iter 289).** The static atomic-replace
+case (`verifyLivePdfMultiPage` primary test, landed iter 288)
+**went GREEN on first live run** — the surprise outcome flagged
+in iter 288's notes. The static framing isolates the
+editing-path variable: `Ctrl+A → keyboard.type(STATIC_TWO_PAGE)`
+typed char-by-char into the editor produces a known 2-page
+LaTeX shape and the preview renders ≥2 pages. Since the user
+reports the preview NEVER shows >1 page on manually-typed
+multi-page docs (`284_answer.md` addendum), the bug must live in
+some editing-path shape the atomic-replace flow happens to
+avoid. Iter 289 reintroduced the shape-honest editing pin as
+the secondary case (now the only RED M15 pin).
 
-**Human signal that demoted the cursor hypothesis to candidate
-(γ) (iter 288, per `287_answer.md`):** the user's addendum to
-`284_answer.md` states the preview has NEVER shown >1 page —
-including on manually-typed multi-page documents. If user-typed
-manual docs never render past page 1 either, the editing path
-isn't the variable. The iter-284 cursor-past-`\end{document}`
-hypothesis is retained as candidate (γ) but no longer leads the
-diagnosis. Step B was reframed to test a *static* multi-page
-source (atomic Ctrl+A→type content replacement, no cursor
-sequence, no per-keystroke timing). If the static spec is RED,
-the bug is in one of: (i) supertex compile output, (ii) sidecar
-broadcast, (iii) PdfViewer rendering — failure-path diagnostics
-report per-frame byte sizes and the compile-status timeline to
-classify between them.
-
-**Resolution plan, three ordered iteration steps (per
-`284_answer.md`):**
+**Resolution plan, post iter 289:**
 
 - **Step A. Sidecar source-content logging. Landed iter 286.**
   `apps/sidecar/src/server.ts` `runCompile` emits a structured
@@ -290,53 +281,57 @@ classify between them.
   `0`/`false`. Lock:
   `apps/sidecar/test/serverCompileSourceLog.test.mjs` (5 cases
   covering shape, head/tail-on-large, missing-`\end{document}`,
-  env-off silences, daemon stdin+stderr records).
-- **Step B. Static-source gold spec — atomic content
-  replacement. Reframed iter 288 (per `287_answer.md`).**
-  `verifyLivePdfMultiPage.spec.ts` now: opens a fresh project,
-  waits for the hello-world 1-page initial compile to render,
-  then `Ctrl+A` → `keyboard.type(STATIC_TWO_PAGE)` to atomically
-  replace the source with a known-shape 5-line two-page LaTeX
-  document (`287_question.md`). No cursor-positioning sequence,
-  no per-keystroke timing artefacts, no virtual-line trap.
-  Practical impasse driving this design: `MAIN_DOC_HELLO_WORLD`
-  is hard-coded in `packages/protocol/src/index.ts` and there's
-  no per-project seed override (would require ~30 lines of impl
-  across protocol/db/sidecar, forbidden this iteration). The
-  Ctrl+A→type approach controls for every editing-path variable
-  the three candidate failure locations care about. Failure-path
-  diagnostics report `postReplaceFrameCount`, `postReplaceBytes`,
-  `frameBytes`, and `compileStatusEvents` so the failure message
-  itself classifies between (i) supertex emit, (ii) sidecar
-  broadcast, (iii) viewer rendering.
-- **Step C. Deploy + diagnose against the static spec.** Bundle
-  Step A (iter 286) + Step B (iter 288) into a sidecar deploy.
-  Re-run live spec. Read `flyctl logs -a tex-center-sidecar
-  --no-tail`. Classify by:
-  - **(i)** One pdf-segment frame, small payload → supertex
-    emitted only page 1 OR sidecar broadcast dropped page 2.
-    Cross-check against local pin
-    `test_supertex_multipage_emit.py` (green on this exact
-    shape). If local stays green but live fails, sidecar
-    broadcast is the suspect — inspect `assembleSegment` /
-    `segment-build` log lines.
+  env-off silences, daemon stdin+stderr records). **Not yet
+  deployed to live** — Step C' depends on this deploy.
+- **Step B. Static-source gold spec. Landed iter 288. GREEN
+  iter 288 (surprise).** Atomic `Ctrl+A` →
+  `keyboard.type(STATIC_TWO_PAGE)` content replacement. Retained
+  as a regression pin — would catch a future regression of the
+  one-page-only bug under the atomic flow.
+- **Step B'. Shape-honest in-body edit gold spec. Landed iter
+  289.** Secondary test in `verifyLivePdfMultiPage.spec.ts`:
+  opens a fresh project, waits for the hello-world 1-page
+  compile + paint, clicks the `.cm-line` carrying
+  "Hello, world!" → End → Enter → types `\newpage` → Enter →
+  types "Page two body text.". Shape-sanity assert verifies the
+  typed bytes land between "Hello, world!" and `\end{document}`
+  (rules out the iter-284 (β) cursor-past-`\end{document}`
+  failure mode at source level). Same viewer-agnostic assertion
+  as Step B with per-frame byte diagnostics for failure
+  classification. **Expected RED on first live run** — pins
+  the user's manually-typed-multi-page report.
+- **Step C'. Deploy + diagnose against the iter-289 in-body
+  pin.** Bundle Step A (iter 286 debug log) into a sidecar
+  deploy. Re-run the secondary live spec. Read `flyctl logs -a
+  tex-center-sidecar --no-tail`. Classify by:
+  - **(i)** One post-edit pdf-segment frame, small payload →
+    supertex emitted only page 1 OR sidecar broadcast dropped
+    page 2. Cross-check against local pin
+    `test_supertex_incremental_multipage_emit.py`. If the bug
+    is supertex incremental-compile sensitivity to in-body
+    edits, the local pin should be made to mirror the live edit
+    shape and reproduce.
   - **(ii)** Multiple pdf-segment frames OR one large frame →
-    wire carried >1 page. Viewer-side bug —
-    `PdfViewer.svelte` / `pdfFadeController.ts`.
+    wire carried >1 page. Viewer-side bug — `PdfViewer.svelte` /
+    `pdfFadeController.ts`. Note: Step B (static atomic) green
+    means the viewer can render >1 page in *some* path; the bug
+    would be a code path the viewer enters only for the
+    incremental in-body edit shape.
   - **(iii)** `compile-status` `error` → daemon failed on the
-    static source. Read `lastErrorDetail`; if a real upstream
+    edited source. Read `lastErrorDetail`; if a real upstream
     failure, file `vendor/supertex/discussion/<N>_question.md`
     *committed to the submodule* (the iter-279 attempt was
     fabricated — see `284_answer.md`).
-  - **Surprise outcome.** If the static spec green-passes, the
-    bug IS in the editing path. Re-introduce the iter-287
-    shape-honest editing spec as a secondary case and resume the
-    iter-284 (β) cursor-past-`\end{document}` investigation.
-    Don't anticipate this — wait for the data.
+  - **Second surprise: in-body pin green-passes.** Means the
+    `keyboard.type` flow doesn't reproduce the user's manual
+    edit either. Pull seed-override impl (`seedMainDoc?: string`)
+    from `287_answer.md` option (1) and write a literal
+    "no editing at all" case — open project with the seeded
+    multi-page main.tex, assert ≥2 pages render without any
+    keyboard input.
 
 Local pin `test_supertex_incremental_multipage_emit.py` retained
-as regression / shape-baseline; not load-bearing for the
-diagnosis (it tests a different shape from the live test).
+as regression / shape-baseline.
 
 ### M16.aesthetic — writerly chrome retune (iter 262)
 
