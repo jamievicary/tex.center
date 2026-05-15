@@ -43,6 +43,27 @@
 // the runCompile loop in `server.ts` re-writes every file before
 // the next compile, so a transient disk error self-heals on the
 // next compile cycle.
+//
+// **In-place edit mirror (M23.5).** Structural ops cover create /
+// delete / rename, but a client's keystroke on `sec1.tex` arrives
+// as a `Y.Doc` update applied via `Y.applyUpdate(doc, update,
+// origin)` — no persistence op fires, so the disk file would stay
+// stale until the next time the file was uploaded or renamed.
+// For every non-main file we subscribe a `Y.Text.observe` handler
+// that schedules a coalesced workspace `writeFile` on remote edits
+// (`event.transaction.local === false`). Local-origin transactions
+// (this module's own `doc.transact` calls inside `addFile` /
+// `renameFile` / hydration) are skipped — the structural mirror
+// path already handles those. Rapid edits collapse: at most one
+// in-flight write and one queued write per file, with the queued
+// write reading the latest `Y.Text` contents at run time.
+//
+// The race that bit the M23.2 "(A)" candidate (compile-time
+// `for (file of files()) writeFile` resurrecting a concurrently
+// deleted file) does not apply here: `deleteFile` /
+// `renameFile(old)` unsubscribe the observer and `await` the
+// in-flight write chain before invoking the workspace's structural
+// op, so the disk-level write→delete order is strict.
 
 import * as Y from "yjs";
 
@@ -287,6 +308,69 @@ export function createProjectPersistence(args: {
     }
   }
 
+  // M23.5 in-place edit mirror. `observers[name]` is the
+  // `text.unobserve(handler)` thunk for the per-file Y.Text
+  // observer. `writeInFlight[name]` is the currently-running
+  // observe-write chain. `pendingObserveWrite` flags names whose
+  // Y.Text has changed since the last drain; the chain's loop
+  // re-reads `doc.getText(name).toString()` on each iteration so a
+  // burst of edits coalesces into at most one in-flight write +
+  // one queued write per file.
+  const observers = new Map<string, () => void>();
+  const writeInFlight = new Map<string, Promise<void>>();
+  const pendingObserveWrite = new Set<string>();
+
+  function scheduleObserveWrite(name: string): void {
+    if (!workspace) return;
+    pendingObserveWrite.add(name);
+    if (writeInFlight.has(name)) return;
+    const run = async (): Promise<void> => {
+      try {
+        while (pendingObserveWrite.has(name)) {
+          pendingObserveWrite.delete(name);
+          const body = doc.getText(name).toString();
+          await mirror(
+            `observe writeFile(${name})`,
+            () => workspace!.writeFile(name, body),
+          );
+        }
+      } finally {
+        writeInFlight.delete(name);
+      }
+    };
+    writeInFlight.set(name, run());
+  }
+
+  function subscribeObserve(name: string): void {
+    if (!workspace) return;
+    if (name === MAIN_DOC_NAME) return; // main.tex is mirrored by runCompile
+    if (observers.has(name)) return;
+    const text = doc.getText(name);
+    const handler = (event: Y.YTextEvent): void => {
+      // Skip local-origin transactions: our own doc.transact calls
+      // (addFile body insert, renameFile copy, deleteFile clear,
+      // hydration insert) already drive the disk via the structural
+      // mirror path. Only remote (client-applied) updates need to
+      // schedule a write here.
+      if (event.transaction.local) return;
+      scheduleObserveWrite(name);
+    };
+    text.observe(handler);
+    observers.set(name, () => text.unobserve(handler));
+  }
+
+  function unsubscribeObserve(name: string): void {
+    const unsub = observers.get(name);
+    if (!unsub) return;
+    unsub();
+    observers.delete(name);
+  }
+
+  async function flushObserveWrites(name: string): Promise<void> {
+    const inFlight = writeInFlight.get(name);
+    if (inFlight) await inFlight;
+  }
+
   // Files we are willing to track. Pre-seeded with `MAIN_DOC_NAME`
   // so `files()` exposes a sensible list even if hydration fails;
   // hydration adds every listed blob key.
@@ -369,6 +453,7 @@ export function createProjectPersistence(args: {
             `hydrate writeFile(${name})`,
             () => workspace!.writeFile(name, dec.decode(bytes)),
           );
+          subscribeObserve(name);
         }
       }
       if (!hasMainBlob) {
@@ -431,6 +516,7 @@ export function createProjectPersistence(args: {
       }
       knownFiles.add(name);
       await mirror(`writeFile(${name})`, () => workspace!.writeFile(name, body));
+      subscribeObserve(name);
       return { ok: true };
     },
     async deleteFile(name): Promise<FileOpResult> {
@@ -447,6 +533,13 @@ export function createProjectPersistence(args: {
           return { ok: false, reason: "blob delete failed" };
         }
       }
+      // Stop observing BEFORE the Y.Text clear / workspace delete so a
+      // concurrent client edit can't schedule a fresh write that
+      // races the workspace.deleteFile and resurrects the file on
+      // disk. Drain any already-scheduled write so the disk-level
+      // ordering is strict write→delete.
+      unsubscribeObserve(name);
+      await flushObserveWrites(name);
       const t = doc.getText(name);
       if (t.length > 0) t.delete(0, t.length);
       knownFiles.delete(name);
@@ -491,6 +584,14 @@ export function createProjectPersistence(args: {
         persistedByName.set(newName, contents);
         persistedByName.delete(oldName);
       }
+      // Stop observing the old name and drain its in-flight write
+      // chain before the workspace rename: an observe-write that
+      // landed after the rename would resurrect the old path. The
+      // new-name subscription is registered after the structural
+      // mirror completes so future remote edits to the renamed file
+      // hit disk via observe.
+      unsubscribeObserve(oldName);
+      await flushObserveWrites(oldName);
       doc.transact(() => {
         const newText = doc.getText(newName);
         if (newText.length === 0 && contents.length > 0) newText.insert(0, contents);
@@ -502,6 +603,7 @@ export function createProjectPersistence(args: {
         `renameFile(${oldName}→${newName})`,
         () => workspace!.renameFile(oldName, newName),
       );
+      subscribeObserve(newName);
       return { ok: true };
     },
     async maybePersist(): Promise<void> {

@@ -113,6 +113,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_workspace_mirror(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverWorkspaceMirror.test.mjs")
 
+    def test_sidecar_server_observe_mirror(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverObserveMirror.test.mjs")
+
     def test_sidecar_list_project_files(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "listProjectFiles.test.mjs")
 

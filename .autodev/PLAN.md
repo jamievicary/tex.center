@@ -12,17 +12,14 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue:**
 
-1. **M23 workspace file mirroring** (queued iter 310 from
-   `309_answer.md` item 2). M23.1 primitive landed iter 313; M23.2
-   structural mirror + cold-boot rehydration landed iter 314 (every
-   `addFile` / `deleteFile` / `renameFile` now reaches disk, and the
-   hydration block writes every rehydrated non-main file to disk
-   before `awaitHydrated()` resolves); **M23.4** sidecar-level gold
-   spec landed iter 315 (cold-boot 2-file project with `\input{sec1}`
-   produces a valid `pdf-segment` via the real `SupertexDaemonCompiler`).
-   **M23.5** (open) handles in-place `Y.Text` edits to non-main files
-   via per-file `Y.Text.observe` subscriptions — needed for the
-   "user edits sec1.tex in the editor" path.
+1. **M23 workspace file mirroring** closed iter 316. M23.1 primitive
+   (iter 313); M23.2 structural mirror + cold-boot rehydration (iter
+   314); M23.4 sidecar-level gold spec (iter 315); **M23.5** in-place
+   `Y.Text.observe` mirror with coalesced writes + flush-on-rename /
+   flush-on-delete (iter 316). End-to-end every project file —
+   created, uploaded, renamed, deleted, hydrated, OR edited
+   in-place by the client — reaches the on-disk workspace before
+   the supertex daemon needs it.
 2. **M22 remaining slices.** M22.2 GT-F local Playwright cases
    (closes M9.editor-ux GT-F); M22.4b wire-shipoutPage batch
    (header 13 → 17 bytes, `PdfSegment.shipoutPage?`).
@@ -354,13 +351,20 @@ Slices:
   Pre-M23.2, lualatex would error and no segment would ship. Lock:
   `tests_gold/lib/test/sidecarWorkspaceMirrorCompile.test.mjs` via
   `tests_gold/cases/test_sidecar_workspace_mirror_compile.py`.
-- **M23.5 (open).** In-place `Y.Text` edit mirror for non-main
-  files. Subscribe per-file `Y.Text.observe` during hydration and
-  `addFile`; on observe, debounce-write to disk. Unsubscribe on
-  `deleteFile` / `renameFile` (old name). Required for the
-  "edit `sec1.tex` in the editor" path — without this, edits made
-  to aux files via the editor stay in Yjs but the next compile
-  sees the stale on-disk copy.
+- **M23.5** (iter 316). In-place `Y.Text` edit mirror for non-main
+  files. `persistence.ts` subscribes a per-file `Y.Text.observe`
+  during hydration / `addFile` / post-`renameFile`; the handler
+  filters `event.transaction.local` so our own
+  `doc.transact` calls (clear / copy / hydration insert) don't
+  redundantly schedule writes. Coalescer: at most one in-flight +
+  one queued write per file, with the queued write re-reading
+  `doc.getText(name).toString()` at run time. `deleteFile` /
+  `renameFile` unsubscribe then `await` the in-flight write before
+  the structural workspace op so a late observer-write cannot
+  resurrect the old path. Lock:
+  `apps/sidecar/test/serverObserveMirror.test.mjs` (4 sub-cases:
+  hydrate-then-edit, add-then-edit, rename-resubscribe,
+  delete-no-resurrect).
 
 ### M16.aesthetic — writerly chrome retune
 
@@ -396,7 +400,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2/4;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2/4/5;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold

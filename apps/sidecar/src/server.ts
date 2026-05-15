@@ -501,15 +501,12 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // compiling. M3.1 lays down the file; the FixtureCompiler
     // ignores it. M3.2+ compilers will read from this path.
     //
-    // Non-main files are mirrored from `persistence.ts` itself
-    // (M23.2): every `addFile`/`deleteFile`/`renameFile` calls
-    // through to the workspace, and the hydration block writes
-    // each rehydrated file to disk before `awaitHydrated()`
-    // resolves. In-place `Y.Text` edits on non-main files do NOT
-    // yet reach disk — a known follow-up (M23.5 observe-based
-    // mirror); for the typical \input{sec1} pattern the aux file
-    // is uploaded once and read-only thereafter, so this slice
-    // closes the categorical compile-failure regression.
+    // Non-main files are mirrored from `persistence.ts` itself:
+    // structural ops (`addFile`/`deleteFile`/`renameFile`, M23.2)
+    // and the hydration block (M23.2) cover create / delete / rename
+    // / cold-boot rehydrate; in-place client `Y.Text` edits flow via
+    // per-file `Y.Text.observe` subscriptions (M23.5) that schedule
+    // a coalesced workspace `writeFile` on every remote update.
     try {
       await p.workspace.writeMain(source);
     } catch (e) {
