@@ -60,9 +60,10 @@ export function buildUpstreamFromEnv(
     // Machines suspend on idle (kernel snapshot, ~300 ms resume)
     // and remain in the Fly app as `suspended`/`stopped`; the
     // next viewer connect resumes the existing VM rather than
-    // pulling the ~5 GB image again. The sidecar's idle handler
+    // pulling the ~5 GB image again. The sidecar's suspend stage
     // calls the Machines API `/suspend` endpoint itself (see
-    // `apps/sidecar/src/index.ts::createIdleHandler`). Leak
+    // `apps/sidecar/src/index.ts::createSuspendHandler`); the
+    // longer stop stage exits cleanly (M20.1). Leak
     // accumulation is bounded by the orphan-sweep (filters by
     // known project IDs, not by state).
     auto_destroy: false,

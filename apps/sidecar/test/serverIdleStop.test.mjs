@@ -1,6 +1,10 @@
-// Idle-stop wiring (M7.1.4): sidecar invokes onIdle after the
-// last viewer disconnects and the configured timeout elapses;
-// re-connection cancels the pending timer.
+// M7.1.4 / M20.1 two-stage idle cascade. The sidecar arms two
+// independent timers when `viewerCount` is zero:
+//   - `suspendTimeoutMs` (short) invokes `onSuspend` then re-arms.
+//   - `stopTimeoutMs`    (long)  invokes `onStop` (cold-storage).
+// First viewer re-connection clears both. Either timer is
+// independently disabled by setting its `*-TimeoutMs` unset or 0,
+// or its `on*` handler missing.
 
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -24,16 +28,16 @@ async function closeAndWait(ws) {
   await new Promise((r) => ws.once("close", r));
 }
 
-// Case 1: timer fires after last viewer disconnects.
+// Case 1: suspend timer fires after last viewer disconnects.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-1-"));
-  let idleCalls = 0;
+  let suspendCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 300,
-    onIdle: () => {
-      idleCalls += 1;
+    suspendTimeoutMs: 300,
+    onSuspend: () => {
+      suspendCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -45,21 +49,21 @@ async function closeAndWait(ws) {
   const ws = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   await closeAndWait(ws);
   await new Promise((r) => setTimeout(r, 600));
-  assert.equal(idleCalls, 1, "onIdle should fire once after timeout");
+  assert.equal(suspendCalls, 1, "onSuspend should fire once after timeout");
 
   await app.close();
 }
 
-// Case 2: re-connection before timeout cancels the timer.
+// Case 2: re-connection before suspend-timeout cancels the timer.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-2-"));
-  let idleCalls = 0;
+  let suspendCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 400,
-    onIdle: () => {
-      idleCalls += 1;
+    suspendTimeoutMs: 400,
+    onSuspend: () => {
+      suspendCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -72,26 +76,30 @@ async function closeAndWait(ws) {
   const ws2 = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   // Wait past the original timeout — timer should have been cleared.
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(idleCalls, 0, "re-connection should cancel idle timer");
+  assert.equal(suspendCalls, 0, "re-connection should cancel suspend timer");
 
   await closeAndWait(ws2);
   // After this disconnect the timer arms again; verify it fires.
   await new Promise((r) => setTimeout(r, 700));
-  assert.equal(idleCalls, 1, "onIdle should fire after final disconnect");
+  assert.equal(suspendCalls, 1, "onSuspend should fire after final disconnect");
 
   await app.close();
 }
 
-// Case 3: feature off when idleTimeoutMs unset — no firing even
+// Case 3: feature off when neither timeout is set — no firing even
 // after viewers come and go.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-3-"));
-  let idleCalls = 0;
+  let suspendCalls = 0;
+  let stopCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    onIdle: () => {
-      idleCalls += 1;
+    onSuspend: () => {
+      suspendCalls += 1;
+    },
+    onStop: () => {
+      stopCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -100,21 +108,22 @@ async function closeAndWait(ws) {
   const ws = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   await closeAndWait(ws);
   await new Promise((r) => setTimeout(r, 100));
-  assert.equal(idleCalls, 0, "no idle when idleTimeoutMs unset");
+  assert.equal(suspendCalls, 0, "no suspend when timeout unset");
+  assert.equal(stopCalls, 0, "no stop when timeout unset");
 
   await app.close();
 }
 
-// Case 4: multi-viewer — timer arms only when the *last* viewer leaves.
+// Case 4: multi-viewer — suspend arms only when the *last* viewer leaves.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-4-"));
-  let idleCalls = 0;
+  let suspendCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 300,
-    onIdle: () => {
-      idleCalls += 1;
+    suspendTimeoutMs: 300,
+    onSuspend: () => {
+      suspendCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -125,36 +134,135 @@ async function closeAndWait(ws) {
   await closeAndWait(a);
   // One viewer remains → timer must not fire.
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(idleCalls, 0, "timer should not fire while viewers remain");
+  assert.equal(suspendCalls, 0, "timer should not fire while viewers remain");
   await closeAndWait(b);
   await new Promise((r) => setTimeout(r, 600));
-  assert.equal(idleCalls, 1, "timer should fire after the last viewer leaves");
+  assert.equal(suspendCalls, 1, "timer should fire after the last viewer leaves");
 
   await app.close();
 }
 
 // Case 5 (regression for live-prod bug seen iter 176): if the
-// server boots but no viewer ever connects, the idle timer must
+// server boots but no viewer ever connects, the suspend timer must
 // still arm and fire. Without this, Fly Machines whose
 // control-plane wake-probe lands but whose WS handshake never
 // completes would run forever, billed indefinitely.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-5-"));
-  let idleCalls = 0;
+  let suspendCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    idleTimeoutMs: 50,
-    onIdle: () => {
-      idleCalls += 1;
+    suspendTimeoutMs: 50,
+    onSuspend: () => {
+      suspendCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
   // Never open a WebSocket. Wait past the timeout.
   await new Promise((r) => setTimeout(r, 200));
-  assert.equal(idleCalls, 1, "onIdle should fire when no viewer ever connects");
+  assert.equal(suspendCalls, 1, "onSuspend should fire when no viewer ever connects");
 
+  await app.close();
+}
+
+// Case 6 (M20.1): the stop timer fires independently of the suspend
+// timer. With a short stop timer and no suspend timer wired, the
+// stop handler fires after viewers leave.
+{
+  const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-6-"));
+  let stopCalls = 0;
+  const app = await buildServer({
+    logger: false,
+    scratchRoot,
+    stopTimeoutMs: 200,
+    onStop: () => {
+      stopCalls += 1;
+    },
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const port = app.server.address().port;
+
+  const ws = await open(`ws://127.0.0.1:${port}/ws/project/p6`);
+  await closeAndWait(ws);
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(stopCalls, 1, "onStop should fire at its own boundary");
+
+  await app.close();
+}
+
+// Case 7 (M20.1): with BOTH timers wired and the suspend handler
+// re-arming itself but never closing the listener, the stop timer
+// still fires at its (longer) boundary while the suspend timer can
+// fire repeatedly in the same idle window via rearm.
+{
+  const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-7-"));
+  let suspendCalls = 0;
+  let stopCalls = 0;
+  const app = await buildServer({
+    logger: false,
+    scratchRoot,
+    suspendTimeoutMs: 100,
+    onSuspend: (ctx) => {
+      suspendCalls += 1;
+      // Production semantics: suspend handler re-arms itself
+      // (post-resume or post-failure) but never closes the app.
+      ctx.rearm();
+    },
+    stopTimeoutMs: 500,
+    onStop: () => {
+      stopCalls += 1;
+    },
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const port = app.server.address().port;
+
+  const ws = await open(`ws://127.0.0.1:${port}/ws/project/p7`);
+  await closeAndWait(ws);
+  // Wait long enough that the suspend timer can fire ~3 times and
+  // the single stop timer fires exactly once.
+  await new Promise((r) => setTimeout(r, 800));
+  assert.ok(
+    suspendCalls >= 2,
+    `suspend should re-fire multiple times via rearm (got ${suspendCalls})`,
+  );
+  assert.equal(stopCalls, 1, "stop fires exactly once at its boundary");
+
+  await app.close();
+}
+
+// Case 8 (M20.1): viewer re-connection during the suspend window
+// clears BOTH timers, so neither suspend nor stop fires until the
+// next disconnect.
+{
+  const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-8-"));
+  let suspendCalls = 0;
+  let stopCalls = 0;
+  const app = await buildServer({
+    logger: false,
+    scratchRoot,
+    suspendTimeoutMs: 100,
+    onSuspend: () => {
+      suspendCalls += 1;
+    },
+    stopTimeoutMs: 300,
+    onStop: () => {
+      stopCalls += 1;
+    },
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const port = app.server.address().port;
+
+  // Connect inside the startup-armed suspend window so both timers
+  // are cleared before either fires.
+  const ws = await open(`ws://127.0.0.1:${port}/ws/project/p8`);
+  // Hold open well past both timeouts.
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(suspendCalls, 0, "active viewer cancels suspend timer");
+  assert.equal(stopCalls, 0, "active viewer cancels stop timer");
+
+  await closeAndWait(ws);
   await app.close();
 }
 

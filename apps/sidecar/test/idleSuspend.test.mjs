@@ -1,26 +1,32 @@
-// M13.2(b) idle handler — iter 255 rewrite.
+// M13.2(b) / M20.1 idle handlers — two-stage cascade.
 //
 // Production sequence on Fly:
-//   1. Idle timer fires → handler awaits POST /machines/{self}/suspend.
+//   1. Suspend timer fires (default 5 s) → handler awaits
+//      POST /machines/{self}/suspend.
 //   2. Fly responds, then freezes the VM. The fetch promise is
 //      pending across the freeze.
 //   3. Some time later a WS upgrade hits the Machine, the control
 //      plane calls /start, the VM resumes. The pending fetch
 //      resolves — we are now *post-resume*, with the same listener
 //      still bound to the same port.
-//   4. The handler must NOT exit and must NOT close the app; it
-//      must re-arm the idle gate so a future inactive window can
-//      suspend us again.
+//   4. The suspend handler must NOT exit and must NOT close the
+//      app; it must call ctx.rearm() so a future inactive window
+//      can suspend us again. Iter 249 got step 3 wrong (it
+//      `exit(0)`'d after the await, killing the resumed sidecar
+//      ~1 s after every wake).
 //
-// Iter 249 got step 3 wrong (it `exit(0)`'d after the await, killing
-// the resumed sidecar ~1 s after every wake). This test pins the
-// correct post-resume contract.
+//   5. If no resume happens *and* the longer stop timer (default
+//      300 s) elapses, the stop handler closes the app and exits 0.
+//      That parks the Machine in `stopped` for the next cold-load
+//      cycle. R2 (iter 267) removed eager exits from the suspend
+//      handler; the stop handler is the only path to `stopped`.
 
 import assert from "node:assert/strict";
 
 import {
   buildSuspendSelfFromEnv,
-  createIdleHandler,
+  createSuspendHandler,
+  createStopHandler,
 } from "../src/index.ts";
 
 // ---- buildSuspendSelfFromEnv: env gating ----
@@ -67,7 +73,7 @@ assert.equal(
   }
 }
 
-// non-2xx response: throws so the idle handler can log + fall back.
+// non-2xx response: throws so the suspend handler can log + fall back.
 {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -87,7 +93,7 @@ assert.equal(
   }
 }
 
-// ---- createIdleHandler: wiring ----
+// ---- createSuspendHandler: wiring ----
 
 function fakeApp() {
   const closes = [];
@@ -107,113 +113,76 @@ function fakeCtx() {
   };
 }
 
-// No suspender wired (local dev): close + exit(0). Rearm is NOT
-// called because the process is going away.
+// Suspender wired, succeeds (production post-resume path): handler
+// must NOT close any app (the suspend handler can't see the app at
+// all), must NOT exit, must call ctx.rearm().
 {
-  const app = fakeApp();
-  const exits = [];
-  const logs = [];
-  const { ctx, rearms } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => app,
-    suspendSelf: null,
-    exit: (code) => {
-      exits.push(code);
-    },
-    log: (msg, err) => logs.push([msg, err]),
-  });
-  handler(ctx);
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(app.closes.length, 1);
-  assert.deepEqual(exits, [0]);
-  assert.equal(rearms.length, 0);
-  assert.equal(logs.length, 0);
-}
-
-// Suspender succeeds (production post-resume path): handler must
-// NOT close the app, must NOT exit, must call ctx.rearm().
-{
-  const app = fakeApp();
-  const exits = [];
   const suspendCalls = [];
   const { ctx, rearms } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => app,
+  const handler = createSuspendHandler({
     suspendSelf: async () => {
       suspendCalls.push(1);
-    },
-    exit: (code) => {
-      exits.push(code);
     },
     log: () => {},
   });
   handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
-  assert.equal(
-    app.closes.length,
-    0,
-    "post-resume must not close the listener",
-  );
   assert.equal(suspendCalls.length, 1);
-  assert.deepEqual(exits, [], "post-resume must not exit");
   assert.equal(rearms.length, 1, "post-resume must re-arm idle gate");
 }
 
 // Suspender throws (Fly 5xx / bad token / network blip). M13.2(b).5
-// R2: the handler must NOT close the app and must NOT exit, because
-// exit(0) would park the Machine in `stopped` (the 20 s+ cold-load
-// path). Log the failure and re-arm so the next idle window
-// retries.
+// R2: the suspend handler must NOT close any app and must NOT exit,
+// because exit(0) would park the Machine in `stopped` (which is the
+// stop handler's job, on the longer timer). Log the failure and
+// re-arm so the next short window retries.
 {
-  const app = fakeApp();
-  const exits = [];
   const logs = [];
   const { ctx, rearms } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => app,
+  const handler = createSuspendHandler({
     suspendSelf: async () => {
       throw new Error("nope");
-    },
-    exit: (code) => {
-      exits.push(code);
     },
     log: (msg, err) => logs.push([msg, err]),
   });
   handler(ctx);
   await new Promise((r) => setTimeout(r, 10));
-  assert.equal(
-    app.closes.length,
-    0,
-    "suspend failure must not close the listener (R2: never reach `stopped`)",
-  );
-  assert.deepEqual(
-    exits,
-    [],
-    "suspend failure must not exit (R2: never reach `stopped`)",
-  );
   assert.equal(
     rearms.length,
     1,
     "suspend failure must re-arm the idle gate for retry",
   );
   assert.equal(logs.length, 1);
-  assert.match(logs[0][0], /suspend failed/);
+  assert.match(logs[0][0], /suspend.*failed/);
+}
+
+// Suspender null (local dev, missing creds). M20.1: no exit from
+// the suspend handler — the stop handler on the longer timer
+// performs the eventual exit. Suspend just logs and re-arms.
+{
+  const logs = [];
+  const { ctx, rearms } = fakeCtx();
+  const handler = createSuspendHandler({
+    suspendSelf: null,
+    log: (msg, err) => logs.push([msg, err]),
+  });
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(rearms.length, 1, "no-creds path still re-arms");
+  assert.equal(logs.length, 1);
+  assert.match(logs[0][0], /no suspendSelf/);
 }
 
 // After a suspend-failure path, the handler is no longer in-flight
-// and the next idle window retries — exercising the
-// stay-alive-and-retry contract.
+// and the next idle window retries.
 {
-  const exits = [];
   const suspendCalls = [];
   const { ctx, rearms } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => fakeApp(),
+  const handler = createSuspendHandler({
     suspendSelf: async () => {
       suspendCalls.push(1);
       throw new Error("flaky fly");
     },
-    exit: (code) => exits.push(code),
     log: () => {},
   });
   handler(ctx);
@@ -226,13 +195,11 @@ function fakeCtx() {
     "suspend failure must clear inFlight so the next idle window retries",
   );
   assert.equal(rearms.length, 2);
-  assert.deepEqual(exits, []);
 }
 
 // While a suspend is in flight, a second call is a no-op
 // (re-entrancy guard).
 {
-  const exits = [];
   const suspendCalls = [];
   let releaseSuspend;
   const suspend = () =>
@@ -240,13 +207,11 @@ function fakeCtx() {
       releaseSuspend = r;
     });
   const { ctx } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => fakeApp(),
+  const handler = createSuspendHandler({
     suspendSelf: async () => {
       suspendCalls.push(1);
       await suspend();
     },
-    exit: (code) => exits.push(code),
     log: () => {},
   });
   handler(ctx);
@@ -256,21 +221,17 @@ function fakeCtx() {
   assert.equal(suspendCalls.length, 1, "in-flight guard");
   releaseSuspend();
   await new Promise((r) => setTimeout(r, 5));
-  assert.deepEqual(exits, []);
 }
 
 // After a successful suspend/resume, the handler can fire again
 // for a *second* idle window (`inFlight` must be cleared).
 {
-  const exits = [];
   const suspendCalls = [];
   const { ctx, rearms } = fakeCtx();
-  const handler = createIdleHandler({
-    getApp: () => fakeApp(),
+  const handler = createSuspendHandler({
     suspendSelf: async () => {
       suspendCalls.push(1);
     },
-    exit: (code) => exits.push(code),
     log: () => {},
   });
   handler(ctx);
@@ -279,7 +240,68 @@ function fakeCtx() {
   await new Promise((r) => setTimeout(r, 5));
   assert.equal(suspendCalls.length, 2, "second idle window must re-fire");
   assert.equal(rearms.length, 2);
-  assert.deepEqual(exits, []);
+}
+
+// ---- createStopHandler: wiring ----
+
+// Stop handler closes the app and exits 0 — the path to `stopped`.
+{
+  const app = fakeApp();
+  const exits = [];
+  const logs = [];
+  const { ctx, rearms } = fakeCtx();
+  const handler = createStopHandler({
+    getApp: () => app,
+    exit: (code) => {
+      exits.push(code);
+    },
+    log: (msg, err) => logs.push([msg, err]),
+  });
+  handler(ctx);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(app.closes.length, 1, "stop must close the app");
+  assert.deepEqual(exits, [0], "stop must exit 0");
+  // ctx.rearm is intentionally unused by stop (process is exiting).
+  assert.equal(rearms.length, 0);
+  assert.equal(logs.length, 0);
+}
+
+// Stop handler with app.close() failure still exits 0 — the Machine
+// must reach `stopped` even if the listener teardown errored.
+{
+  const exits = [];
+  const logs = [];
+  const handler = createStopHandler({
+    getApp: () => ({
+      close: async () => {
+        throw new Error("close failed");
+      },
+    }),
+    exit: (code) => exits.push(code),
+    log: (msg, err) => logs.push([msg, err]),
+  });
+  handler({ rearm: () => {} });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(exits, [0]);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0][0], /close\(\) failed/);
+}
+
+// Stop handler is single-shot — second call is a no-op.
+{
+  const app = fakeApp();
+  const exits = [];
+  const handler = createStopHandler({
+    getApp: () => app,
+    exit: (code) => exits.push(code),
+    log: () => {},
+  });
+  handler({ rearm: () => {} });
+  handler({ rearm: () => {} });
+  handler({ rearm: () => {} });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(app.closes.length, 1, "stop must close exactly once");
+  assert.deepEqual(exits, [0]);
 }
 
 console.log("idleSuspend ok");

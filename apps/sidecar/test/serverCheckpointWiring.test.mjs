@@ -71,7 +71,7 @@ async function closeAndWait(ws) {
 
   const snapshotBytes = new Uint8Array([9, 9, 9, 9, 9]);
   const compiler = new RecordingCompiler(snapshotBytes);
-  let onIdleObservedSnapshotBytes = null;
+  let onSuspendObservedSnapshotBytes = null;
   let idleResolve;
   const idleDone = new Promise((r) => {
     idleResolve = r;
@@ -82,11 +82,11 @@ async function closeAndWait(ws) {
     scratchRoot,
     blobStore,
     compilerFactory: () => compiler,
-    idleTimeoutMs: 40,
-    onIdle: () => {
+    suspendTimeoutMs: 40,
+    onSuspend: () => {
       // Inspect the blob the wrapper persisted before handing off.
       void loadCheckpoint(blobStore, "p1").then((bytes) => {
-        onIdleObservedSnapshotBytes = bytes ? Array.from(bytes) : null;
+        onSuspendObservedSnapshotBytes = bytes ? Array.from(bytes) : null;
         idleResolve();
       });
     },
@@ -116,9 +116,9 @@ async function closeAndWait(ws) {
 
   assert.equal(compiler.snapshotCalls, 1, "snapshot should be called once on idle");
   assert.deepEqual(
-    onIdleObservedSnapshotBytes,
+    onSuspendObservedSnapshotBytes,
     Array.from(snapshotBytes),
-    "blob at checkpoint key should hold the snapshot bytes BEFORE onIdle is invoked",
+    "blob at checkpoint key should hold the snapshot bytes BEFORE onSuspend is invoked",
   );
 
   await app.close();
@@ -172,8 +172,8 @@ async function closeAndWait(ws) {
     scratchRoot,
     blobStore,
     compilerFactory: () => compiler,
-    idleTimeoutMs: 30,
-    onIdle: () => idleResolve(),
+    suspendTimeoutMs: 30,
+    onSuspend: () => idleResolve(),
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;

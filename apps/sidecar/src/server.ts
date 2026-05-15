@@ -150,16 +150,31 @@ export interface SidecarOptions {
    */
   compileDebugLog?: CompileDebugLog;
   /**
-   * Milliseconds the sidecar should sit with **zero viewers**
-   * before invoking `onIdle`. Both must be set for idle-stop to
-   * arm; either unset disables the feature (the default for
-   * tests). On a per-project Fly Machine the entry point wires
-   * `onIdle` to `app.close().then(() => process.exit(0))`; with
-   * `restart: on-failure` on the Machine config, a clean exit
-   * leaves the Machine in `stopped` state for the next wake.
+   * M20.1 two-stage idle cascade. Two independent timers arm when
+   * `viewerCount` transitions to zero (and on cold boot, until the
+   * first viewer arrives); first re-connection clears both.
+   *
+   * `suspendTimeoutMs` (default wiring `SIDECAR_SUSPEND_MS=5_000`)
+   * is the short stage: production wires it to a Fly machines-API
+   * suspend, which freezes RAM and resumes in ~300 ms. Failure on
+   * this stage is non-fatal — the handler logs and re-arms; the
+   * later `stopTimeoutMs` stage is the failsafe.
+   *
+   * `stopTimeoutMs` (default wiring `SIDECAR_STOP_MS=300_000`) is
+   * the long stage: production wires it to
+   * `app.close().then(() => process.exit(0))`, which parks the
+   * Machine in `stopped` for cold-load on the next wake. With
+   * `restart: on-failure` on the Machine config, a clean exit is
+   * required.
+   *
+   * Each timer is independently enabled (its `*-TimeoutMs` > 0 and
+   * its `on*` handler set). Persisting checkpoints happens before
+   * either handler runs.
    */
-  idleTimeoutMs?: number;
-  onIdle?: (ctx: { rearm: () => void }) => void;
+  suspendTimeoutMs?: number;
+  onSuspend?: (ctx: { rearm: () => void }) => void;
+  stopTimeoutMs?: number;
+  onStop?: (ctx: { rearm: () => void }) => void;
 }
 
 export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyInstance> {
@@ -234,69 +249,122 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   const projects = new Map<string, ProjectState>();
 
-  // Idle-stop bookkeeping. `viewerCount` aggregates across every
-  // project; the timer is armed only when it transitions to zero
-  // and cancelled on the first re-connection.
+  // M20.1 two-stage idle bookkeeping. `viewerCount` aggregates
+  // across every project; both timers arm only when it transitions
+  // to zero (or on cold boot until the first viewer arrives) and
+  // are cancelled on the first re-connection.
   let viewerCount = 0;
-  let idleTimer: NodeJS.Timeout | null = null;
-  const idleTimeoutMs = opts.idleTimeoutMs;
-  const onIdle = opts.onIdle;
-  const idleEnabled =
-    typeof idleTimeoutMs === "number" && idleTimeoutMs > 0 && typeof onIdle === "function";
+  let suspendTimer: NodeJS.Timeout | null = null;
+  let stopTimer: NodeJS.Timeout | null = null;
+  const suspendTimeoutMs = opts.suspendTimeoutMs;
+  const onSuspend = opts.onSuspend;
+  const suspendEnabled =
+    typeof suspendTimeoutMs === "number"
+    && suspendTimeoutMs > 0
+    && typeof onSuspend === "function";
+  const stopTimeoutMs = opts.stopTimeoutMs;
+  const onStop = opts.onStop;
+  const stopEnabled =
+    typeof stopTimeoutMs === "number"
+    && stopTimeoutMs > 0
+    && typeof onStop === "function";
 
-  function clearIdleTimer(): void {
-    if (idleTimer) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
+  function clearSuspendTimer(): void {
+    if (suspendTimer) {
+      clearTimeout(suspendTimer);
+      suspendTimer = null;
     }
   }
 
-  function armIdleTimer(): void {
-    if (!idleEnabled) return;
-    clearIdleTimer();
-    idleTimer = setTimeout(() => {
-      idleTimer = null;
-      // Persist checkpoints before handing off to the user's
-      // onIdle callback. The entry point's onIdle calls
-      // `app.close()` which destroys per-project state, so any
-      // snapshot/persist has to happen first.
+  function clearStopTimer(): void {
+    if (stopTimer) {
+      clearTimeout(stopTimer);
+      stopTimer = null;
+    }
+  }
+
+  function clearIdleTimers(): void {
+    clearSuspendTimer();
+    clearStopTimer();
+  }
+
+  function armSuspendTimer(): void {
+    if (!suspendEnabled) return;
+    clearSuspendTimer();
+    suspendTimer = setTimeout(() => {
+      suspendTimer = null;
+      // Persist checkpoints before invoking onSuspend. Production
+      // suspend freezes RAM mid-response; the snapshot must be
+      // durable in the blob store before the freeze.
       void (async () => {
         await persistAllCheckpoints();
         try {
-          onIdle!({
+          onSuspend!({
             rearm: () => {
-              if (viewerCount === 0) armIdleTimer();
+              if (viewerCount === 0) armSuspendTimer();
             },
           });
         } catch (e) {
           app.log.error(
             { err: errorMessage(e) },
-            "onIdle threw",
+            "onSuspend threw",
           );
         }
       })();
-    }, idleTimeoutMs!);
-    // Don't pin the event loop just to fire idle-stop.
-    idleTimer.unref?.();
+    }, suspendTimeoutMs!);
+    // Don't pin the event loop just to fire idle-suspend.
+    suspendTimer.unref?.();
+  }
+
+  function armStopTimer(): void {
+    if (!stopEnabled) return;
+    clearStopTimer();
+    stopTimer = setTimeout(() => {
+      stopTimer = null;
+      // Persist checkpoints before onStop closes the app. State
+      // may have drifted since the last suspend (if any) — the
+      // user may have edited, then walked away without re-suspend.
+      void (async () => {
+        await persistAllCheckpoints();
+        try {
+          onStop!({
+            rearm: () => {
+              if (viewerCount === 0) armStopTimer();
+            },
+          });
+        } catch (e) {
+          app.log.error(
+            { err: errorMessage(e) },
+            "onStop threw",
+          );
+        }
+      })();
+    }, stopTimeoutMs!);
+    stopTimer.unref?.();
+  }
+
+  function armIdleTimers(): void {
+    armSuspendTimer();
+    armStopTimer();
   }
 
   // Arm at startup: a Fly Machine that boots without ever
   // receiving a viewer connection (control-plane wake-probe
   // followed by no WS handshake, or user navigates away
   // mid-cold-start) would otherwise never transition 1→0 and
-  // never idle-stop. First viewer-add clears this.
-  armIdleTimer();
+  // never idle-stop. First viewer-add clears these.
+  armIdleTimers();
 
   function noteViewerAdded(): void {
     viewerCount += 1;
-    clearIdleTimer();
+    clearIdleTimers();
   }
 
   function noteViewerRemoved(): void {
     viewerCount -= 1;
     if (viewerCount < 0) viewerCount = 0;
     if (viewerCount === 0) {
-      armIdleTimer();
+      armIdleTimers();
     }
   }
 
@@ -698,7 +766,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   });
 
   app.addHook("onClose", async () => {
-    clearIdleTimer();
+    clearIdleTimers();
     for (const p of projects.values()) {
       p.coalescer.cancel();
       await p.compiler.close();

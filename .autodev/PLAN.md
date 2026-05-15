@@ -14,12 +14,15 @@ routed to (decision deferred post-MVP).
 
 1. **M22 wire-message debug toasts.** Front→back coverage for
    `outgoing-*` events; closes M9.editor-ux GT-F.
-2. **M20 lifecycle (suspend/stop/cold-storage).** Two-tier idle
-   cascade + shared `BLOB_STORE`. Absorbs the former M13.2(b).5 R1.
-   Unblocks `verifyLiveGt6LiveEditableStateStopped`.
+2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
+   idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
+   binding (sidecar persists source + latex artefacts on every
+   settle, rehydrates on cold boot) and M20.3 gold spec. Unblocks
+   `verifyLiveGt6LiveEditableStateStopped`.
 3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
-   introspection. Low priority — worst-case failure today is
-   extra-pages-compiled-late, not data loss.
+   introspection. This is an important feature of tex.center,
+   to allow fast incremental compilation when we scroll to
+   view additional pages.
 4. **M18.2/M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change + forced-DPR=2 visual
    snapshot. Both deferred until reported.
@@ -213,17 +216,27 @@ From `293_answer.md` (4). Two-tier idle cascade with full
 cold-storage. Absorbs the former M13.2(b).5 R1.
 
 Slices:
-- **M20.1** two-stage idle timer in sidecar
-  (`SIDECAR_SUSPEND_MS` default 5_000, `SIDECAR_STOP_MS` default
-  300_000). Tests assert both timers fire at the right boundary.
+- **M20.1** two-stage idle timer in sidecar. **Closed iter 302.**
+  `SidecarOptions` exposes independent `suspendTimeoutMs`+`onSuspend`
+  and `stopTimeoutMs`+`onStop`; both arm on `viewerCount→0` (and on
+  cold boot until first viewer), both clear on first re-connect.
+  `index.ts::createSuspendHandler` calls the Fly machines-API
+  `/suspend` and re-arms whether the POST succeeds (post-resume) or
+  fails (R2 stays soft); `index.ts::createStopHandler` closes the app
+  and exits 0 (the only path to `stopped` from idle). Checkpoint
+  persist runs before both handlers. Env wiring:
+  `SIDECAR_SUSPEND_MS` (default 5_000), `SIDECAR_STOP_MS` (default
+  300_000) — both overridable for M20.3 gold-spec timing. Locks:
+  `apps/sidecar/test/idleSuspend.test.mjs`,
+  `apps/sidecar/test/serverIdleStop.test.mjs`,
+  `apps/sidecar/test/serverCheckpointWiring.test.mjs`.
 - **M20.2** shared `BLOB_STORE` binding on web tier *and*
-  sidecar. Sidecar persists source + `.aux` + `.log` + supertex
-  checkpoint to it on every settle, rehydrates on cold boot.
+  sidecar. Sidecar persists source + latex compilation artefacts (but NOT supertex outputs)to blob store on every settle. Rehydrate on cold boot.
   Unblocks `verifyLiveGt6LiveEditableStateStopped`.
 - **M20.3** gold spec exercising the full cycle: open project,
   idle 6 s (suspended), edit → 300 ms ack; idle 6 min
   (stopped), edit → cold-start budget; content preserved across
-  both.
+  both. However this gold test would take too long, so can we overrule the 6 min long-stop timer for test purpose please.
 
 Tuning note: 5 s suspend is aggressive but suspend cost is
 ~300 ms reconnect. Adjust via env vars if live use shows thrash.
@@ -242,7 +255,7 @@ the user can see.
 - **M21.2 (open).** Gold spec: 3-page PDF, scroll so page 2
   fully visible and page 3's top edge intrudes → sidecar
   receives target=3. Needs real 3-page Playwright source plus a
-  sidecar introspection hook. Low priority.
+  sidecar introspection hook.
 
 ### M22.debug-toasts.b — front→back wire coverage
 
