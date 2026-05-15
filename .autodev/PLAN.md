@@ -29,15 +29,20 @@ iter 273.
   (iter 256–279), red iter 280 once and may be flaky around the
   suspended-resume boundary; rerun + investigate if it persists.
 
-**Active priority queue:** M15 (Step C: deploy + live diagnose) →
-M13.2(b).5 R1 → M16.aesthetic → M11.2 (CRUD via context menu /
-keyboard). M11.1c headless-tree cutover landed iter 284. M15
-Step A landed iter 286 (sidecar `compile-source` + `daemon-stdin`
-/ `daemon-stderr` records via opt-in `compileDebugLog` sink).
-M15 Step B landed iter 287 (`verifyLivePdfMultiPage` now asserts
-`\newpage` before `\end{document}` immediately after the keyboard
-sequence, and emits the full `.cm-content` source on either
-failure path). M11.5 still gated on shared-R2 binary-asset work.
+**Active priority queue:** M15 (Step C: deploy + live diagnose
+against static spec) → M13.2(b).5 R1 → M16.aesthetic → M11.2
+(CRUD via context menu / keyboard). M11.1c headless-tree cutover
+landed iter 284. M15 Step A landed iter 286 (sidecar
+`compile-source` + `daemon-stdin` / `daemon-stderr` records via
+opt-in `compileDebugLog` sink). M15 Step B reframed iter 288 (per
+`287_answer.md`) — `verifyLivePdfMultiPage` now uses an atomic
+content replacement (`Ctrl+A` → `type(STATIC_TWO_PAGE)`) so the
+source under test is a known static two-page LaTeX shape rather
+than an edit-built shape; cursor-positioning hypothesis demoted
+from lead to candidate (γ). Iter 287's `\newpage`-before-
+`\end{document}` pre-assert is no longer load-bearing under the
+static framing and has been dropped. M11.5 still gated on
+shared-R2 binary-asset work.
 
 ## 2. Milestones
 
@@ -252,16 +257,20 @@ compile. Iter 279's PLAN claim of having filed a
 the submodule pointer didn't move. No upstream wait — nothing
 was asked.
 
-**Strong alternative hypothesis to verify first.** The live
-test's keyboard sequence (`Ctrl+End` → `ArrowUp` → `End` →
-`Enter` → type) almost certainly lands the cursor on the
-virtual line *after* `\end{document}` (SEED ends in `\n`),
-so the typed body lands past `\end{document}` and supertex
-correctly short-circuits. Local sidecar pin
-`supertexIncrementalMultipageEmit` constructs the file
-explicitly with body inserted *before* `\end{document}` —
-different shape from the live test, not a meaningful
-comparison.
+**Human signal that demoted the cursor hypothesis to candidate
+(γ) (iter 288, per `287_answer.md`):** the user's addendum to
+`284_answer.md` states the preview has NEVER shown >1 page —
+including on manually-typed multi-page documents. If user-typed
+manual docs never render past page 1 either, the editing path
+isn't the variable. The iter-284 cursor-past-`\end{document}`
+hypothesis is retained as candidate (γ) but no longer leads the
+diagnosis. Step B was reframed to test a *static* multi-page
+source (atomic Ctrl+A→type content replacement, no cursor
+sequence, no per-keystroke timing). If the static spec is RED,
+the bug is in one of: (i) supertex compile output, (ii) sidecar
+broadcast, (iii) PdfViewer rendering — failure-path diagnostics
+report per-frame byte sizes and the compile-status timeline to
+classify between them.
 
 **Resolution plan, three ordered iteration steps (per
 `284_answer.md`):**
@@ -282,34 +291,48 @@ comparison.
   `apps/sidecar/test/serverCompileSourceLog.test.mjs` (5 cases
   covering shape, head/tail-on-large, missing-`\end{document}`,
   env-off silences, daemon stdin+stderr records).
-- **Step B. Shape-honest gold spec. Landed iter 287.**
-  `verifyLivePdfMultiPage.spec.ts` now, immediately after the
-  keyboard sequence (and a bounded 3 s poll for `\newpage` to
-  appear in the DOM), reads the `.cm-content` source by joining
-  `.cm-line` text content with `\n`, and asserts
-  `source.indexOf("\\newpage") < source.indexOf("\\end{document}")`.
-  Failure diagnostic on this assert names the cursor-past-
-  `\end{document}` failure mode in plain text and emits the full
-  source. The downstream no-segment-arrived failure path was also
-  rewritten to emit the full final source (was: 40-byte tail). The
-  optional CodeMirror-API positional-anchor parallel spec is
-  deferred — it's only worth writing once Step C names outcome (β),
-  in which case it becomes a useful "control" spec proving the
-  daemon is fine when the cursor is positioned explicitly.
-- **Step C. Deploy + diagnose.** Bundle Steps A+B into a
-  sidecar deploy. Re-run live spec. Read `flyctl logs -a
-  tex-center-sidecar --no-tail`. Three outcomes:
-  - **(α)** Final source has body before `\end{document}` →
-    supertex IS misbehaving → file an *actually-committed*
-    `vendor/supertex/discussion/<N>_question.md` with the
-    per-round SHA chain, stdin record, stderr record.
-  - **(β)** Final source has body past `\end{document}` →
-    client-side bug (cursor placement, SEED trailing newline,
-    or test keyboard sequence). Likely fixes: drop SEED's
-    trailing `\n`, or clamp cursor to before-`\end{document}`
-    on first focus.
-  - **(γ)** Mixed — investigate divergence point; likely Yjs /
-    coalescer sequencing issue.
+- **Step B. Static-source gold spec — atomic content
+  replacement. Reframed iter 288 (per `287_answer.md`).**
+  `verifyLivePdfMultiPage.spec.ts` now: opens a fresh project,
+  waits for the hello-world 1-page initial compile to render,
+  then `Ctrl+A` → `keyboard.type(STATIC_TWO_PAGE)` to atomically
+  replace the source with a known-shape 5-line two-page LaTeX
+  document (`287_question.md`). No cursor-positioning sequence,
+  no per-keystroke timing artefacts, no virtual-line trap.
+  Practical impasse driving this design: `MAIN_DOC_HELLO_WORLD`
+  is hard-coded in `packages/protocol/src/index.ts` and there's
+  no per-project seed override (would require ~30 lines of impl
+  across protocol/db/sidecar, forbidden this iteration). The
+  Ctrl+A→type approach controls for every editing-path variable
+  the three candidate failure locations care about. Failure-path
+  diagnostics report `postReplaceFrameCount`, `postReplaceBytes`,
+  `frameBytes`, and `compileStatusEvents` so the failure message
+  itself classifies between (i) supertex emit, (ii) sidecar
+  broadcast, (iii) viewer rendering.
+- **Step C. Deploy + diagnose against the static spec.** Bundle
+  Step A (iter 286) + Step B (iter 288) into a sidecar deploy.
+  Re-run live spec. Read `flyctl logs -a tex-center-sidecar
+  --no-tail`. Classify by:
+  - **(i)** One pdf-segment frame, small payload → supertex
+    emitted only page 1 OR sidecar broadcast dropped page 2.
+    Cross-check against local pin
+    `test_supertex_multipage_emit.py` (green on this exact
+    shape). If local stays green but live fails, sidecar
+    broadcast is the suspect — inspect `assembleSegment` /
+    `segment-build` log lines.
+  - **(ii)** Multiple pdf-segment frames OR one large frame →
+    wire carried >1 page. Viewer-side bug —
+    `PdfViewer.svelte` / `pdfFadeController.ts`.
+  - **(iii)** `compile-status` `error` → daemon failed on the
+    static source. Read `lastErrorDetail`; if a real upstream
+    failure, file `vendor/supertex/discussion/<N>_question.md`
+    *committed to the submodule* (the iter-279 attempt was
+    fabricated — see `284_answer.md`).
+  - **Surprise outcome.** If the static spec green-passes, the
+    bug IS in the editing path. Re-introduce the iter-287
+    shape-honest editing spec as a secondary case and resume the
+    iter-284 (β) cursor-past-`\end{document}` investigation.
+    Don't anticipate this — wait for the data.
 
 Local pin `test_supertex_incremental_multipage_emit.py` retained
 as regression / shape-baseline; not load-bearing for the

@@ -1,20 +1,48 @@
-// M15 — multi-page preview pin (per `241_answer.md` /
+// M15 — multi-page preview pin (per `287_answer.md` static
+// reframe of `241_answer.md` /
 // `.autodev/PLAN.md` §M15.multipage-preview).
 //
-// User report: a project body that compiles to ≥3 pages renders
-// only page 1 in the live preview pane. This pin reproduces the
-// shape against live, deliberately viewer-agnostic so it survives
-// any of the three candidate fixes named in `241_answer.md`:
+// User report: the PDF preview has NEVER shown more than 1 page,
+// even on manually-typed multi-page documents (`284_answer.md`
+// addendum). Prior iter-275/276/279 narratives chased an upstream
+// short-circuit hypothesis without ever confirming the bytes the
+// sidecar wrote. Iter 287's instruction: stop chasing
+// editing-path hypotheses; verify the trivial static case first.
 //
-//   (a) wire-format `totalLength` capped at page-1 size,
-//   (b) `PdfViewer` snapshot reference-equality short-circuit,
-//   (c) `.preview` CSS overflow clipping.
+// Practical impasse (see `287_answer.md`): there is no
+// seed-override mechanism — `MAIN_DOC_HELLO_WORLD` is hard-coded
+// in `packages/protocol/src/index.ts` and seeded into the Y.Text
+// on first sidecar hydration. Without implementing a per-project
+// seed override (forbidden this iteration), the closest faithful
+// "static multi-page source" we can produce is `Ctrl+A` →
+// `keyboard.type(STATIC_TWO_PAGE)` — atomic replacement, one
+// transaction, no cursor positioning, no virtual-line trap, no
+// per-keystroke coalescer cadence. From the supertex daemon's,
+// sidecar's, and viewer's perspectives, the source is the exact
+// 5-line two-page document below.
+//
+// Three candidate failure locations the static framing
+// disambiguates between:
+//   (i)   supertex compile output: only one shipout for the
+//         two-page source.
+//   (ii)  sidecar broadcast: shipout has ≥2 pages but the wire
+//         payload carries only page 1.
+//   (iii) PdfViewer: wire carries ≥2 pages but the viewer
+//         renders only one.
+//
+// Failure-path diagnostics emit per-frame byte sizes and a
+// compile-status timeline so the failure message directly feeds
+// the (i)/(ii)/(iii) classification. Local sidecar pins
+// `test_supertex_multipage_emit.py` and
+// `test_supertex_incremental_multipage_emit.py` are GREEN on
+// static 2-page sources, so a (i) failure on live would be a
+// fresh upstream finding rather than a known issue.
 //
 // Asserts the preview pane ends up with **either** ≥2
-// `canvas[data-page]` children **or** a single canvas whose
-// `height > viewport.height * 1.8` — both encode "more than one
-// page worth of content rendered", and at least one holds across
-// all three fix shapes.
+// `.pdf-page` wrappers **or** a single canvas whose `height >
+// viewport.height * 1.8` — both encode "more than one page
+// worth of content rendered", and at least one holds across all
+// candidate fix shapes.
 //
 // Expected RED until M15 diagnose-and-fix lands. Failures gate
 // `.autodev/finished.md` but do not revert the iteration.
@@ -26,22 +54,21 @@ import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.
 import { expectPreviewCanvasPainted } from "./fixtures/previewCanvas.js";
 import { captureFrames } from "./fixtures/wireFrames.js";
 
-// Body fragment inserted before `\end{document}` to force a
-// multi-page PDF. `\newpage` is an unconditional page break in
-// `article`, so four breaks plus the seeded "Hello, world!" line
-// produces a 5-page PDF irrespective of font metrics. Each page
-// carries a short tag so the rendered bytes differ between pages
-// (rules out a degenerate "all pages identical, viewer collapses"
-// case during diagnosis).
-const MULTIPAGE_BODY =
-  "\\newpage Page two body text.\n" +
-  "\\newpage Page three body text.\n" +
-  "\\newpage Page four body text.\n" +
-  "\\newpage Page five body text.\n";
+// The exact 5-line two-page LaTeX document from
+// `287_question.md`. `\newpage` is an unconditional break in
+// `article`, so this produces a 2-page PDF irrespective of font
+// metrics. Trailing `\n` retained for LaTeX-friendliness.
+const STATIC_TWO_PAGE =
+  "\\documentclass{article}\n" +
+  "\\begin{document}\n" +
+  "Page one body text.\n" +
+  "\\newpage\n" +
+  "Page two body text.\n" +
+  "\\end{document}\n";
 
-// Wallclock budget for the multi-page compile to land. A cold
-// per-project Machine takes ~60-90 s for first compile (see GT-8);
-// give the post-edit compile generous slack on top.
+// Wallclock budget for the compile to land. A cold per-project
+// Machine takes ~60-90 s for first compile (see GT-8); give the
+// post-replace compile generous slack on top.
 const COMPILE_BUDGET_MS = 180_000;
 
 test.describe("live multi-page PDF preview (M15)", () => {
@@ -56,7 +83,7 @@ test.describe("live multi-page PDF preview (M15)", () => {
     );
   });
 
-  test("≥3-page compile renders >1 page worth of canvas in the preview pane", async ({
+  test("static two-page source renders >1 page of canvas in the preview pane", async ({
     authedPage,
     db,
   }, testInfo) => {
@@ -80,7 +107,7 @@ test.describe("live multi-page PDF preview (M15)", () => {
 
       // Wait for the initial pdf-segment + first painted canvas
       // (one-page hello-world compile) so we know the daemon is
-      // warm before we edit.
+      // warm before we replace.
       await expect
         .poll(() => pdfSegmentFrames.length, {
           timeout: COMPILE_BUDGET_MS,
@@ -92,25 +119,21 @@ test.describe("live multi-page PDF preview (M15)", () => {
 
       const segmentsBefore = pdfSegmentFrames.length;
 
-      // Position just before `\end{document}` and insert the
-      // multipage body. Mirrors the GT-D / GT-5 cursor preamble.
+      // Atomic content replacement. Click → Ctrl+A → type:
+      // CodeMirror's selection-replace dispatches a single
+      // transaction that swaps the entire document for
+      // STATIC_TWO_PAGE. No cursor placement, no virtual-line
+      // trap, no per-keystroke timing artefacts. The wire sees
+      // one Yjs op carrying the full document.
       await cmContent.click();
-      await authedPage.keyboard.press("Control+End");
-      await authedPage.keyboard.press("ArrowUp");
-      await authedPage.keyboard.press("End");
-      await authedPage.keyboard.press("Enter");
-      await authedPage.keyboard.type(MULTIPAGE_BODY, { delay: 5 });
+      await authedPage.keyboard.press("Control+a");
+      await authedPage.keyboard.type(STATIC_TWO_PAGE);
 
-      // M15 Step B — surface the
-      // "body typed past `\end{document}`" failure mode directly,
-      // *before* the no-segment polling loop times out. If the test's
-      // keyboard sequence (Ctrl+End → ArrowUp → End → Enter) lands
-      // the cursor on the SEED's virtual blank trailing line, the
-      // typed body lands after `\end{document}` and supertex
-      // correctly emits one page — the bug is then client-side
-      // (cursor placement / SEED trailing newline / keyboard
-      // sequence), not the daemon. Per `284_answer.md` §"Resolution
-      // / plan".
+      // Read the page's view of the source by joining `.cm-line`
+      // textContent with `\n` (CodeMirror renders one `.cm-line`
+      // per logical line; `.cm-content`'s direct `textContent`
+      // loses newlines). Bounded poll up to 3 s for the DOM to
+      // reflect the replacement.
       const readCmSource = (): Promise<string> =>
         authedPage.evaluate(() => {
           const lines = Array.from(
@@ -118,38 +141,32 @@ test.describe("live multi-page PDF preview (M15)", () => {
           );
           return lines.map((l) => l.textContent ?? "").join("\n");
         });
-      // Allow CodeMirror's view to render the typed keystrokes
-      // before we read. `keyboard.type` resolves once the input
-      // events have dispatched; CodeMirror applies synchronously
-      // but the `.cm-line` DOM may need one paint tick for the new
-      // virtual lines to materialise.
       let typedSource = await readCmSource();
       const typingDeadline = Date.now() + 3_000;
       while (
         Date.now() < typingDeadline &&
-        !typedSource.includes("\\newpage")
+        (!typedSource.includes("\\newpage") ||
+          !typedSource.includes("Page two body text."))
       ) {
         await authedPage.waitForTimeout(100);
         typedSource = await readCmSource();
       }
-      const newpageIdx = typedSource.indexOf("\\newpage");
-      const endDocIdx = typedSource.indexOf("\\end{document}");
+      // Sanity: the replacement landed at the source level.
+      // STATIC_TWO_PAGE is the exact 5-line document; the
+      // `.cm-content` view should reflect it (modulo any
+      // CodeMirror trailing-newline rendering quirks, hence the
+      // structural rather than exact match here).
       expect(
-        newpageIdx >= 0 && endDocIdx >= 0 && newpageIdx < endDocIdx,
-        `keyboard sequence produced wrong shape: \\newpage was not ` +
-          `typed before \\end{document}. ` +
-          `newpageIdx=${newpageIdx} endDocIdx=${endDocIdx} ` +
+        typedSource.includes("\\newpage") &&
+          typedSource.includes("Page one body text.") &&
+          typedSource.includes("Page two body text."),
+        `Ctrl+A → type did not replace the document. ` +
           `sourceLen=${typedSource.length} ` +
-          `source=${JSON.stringify(typedSource)}. ` +
-          `If newpageIdx > endDocIdx, the cursor landed on the ` +
-          `SEED's virtual blank trailing line and the body was ` +
-          `inserted past \\end{document} — supertex correctly ` +
-          `short-circuits and emits only page 1; the bug is ` +
-          `client-side, not in the daemon.`,
+          `source=${JSON.stringify(typedSource)}`,
       ).toBe(true);
 
-      // Wait for at least one post-edit pdf-segment so we know the
-      // compile carrying the multipage body has shipped.
+      // Wait for at least one post-replace pdf-segment so we know
+      // the compile carrying the two-page body has shipped.
       const deadline = Date.now() + COMPILE_BUDGET_MS;
       while (
         Date.now() < deadline &&
@@ -158,18 +175,13 @@ test.describe("live multi-page PDF preview (M15)", () => {
         await authedPage.waitForTimeout(500);
       }
       if (pdfSegmentFrames.length <= segmentsBefore) {
-        // Diagnostic snapshot — iter 274 made this branch surface
-        // why the compile didn't fire (no DOC_UPDATE sent? typing
-        // didn't reach `.cm-content`? WS not bound to this
-        // project?). Three RED gold runs (271/272/273) gave us
-        // zero data to choose between those modes.
-        // M15 Step B — emit the full final source the page believes
-        // it has, not just a 40-byte tail. The tail couldn't
-        // disambiguate "body before vs after \end{document}".
+        // Distinguishes "coalescer never fired" / "compile
+        // errored" / "compile succeeded but no segment" failure
+        // modes. With STATIC_TWO_PAGE as the source shape, a
+        // compile error here would be a fresh upstream finding —
+        // local pin `test_supertex_multipage_emit.py` shows
+        // supertex handles this exact shape correctly.
         const finalSource = await readCmSource();
-        // iter 275: compile-status timeline distinguishes
-        // "coalescer never fired" / "compile errored" / "compile
-        // succeeded but no segment" failure modes.
         const csCounts = compileStatusEvents.reduce<Record<string, number>>(
           (acc, e) => {
             acc[e.state] = (acc[e.state] ?? 0) + 1;
@@ -187,8 +199,8 @@ test.describe("live multi-page PDF preview (M15)", () => {
             .find((e) => e.state === "error")?.detail ?? null;
         expect(
           pdfSegmentFrames.length,
-          `no post-edit pdf-segment carrying the multipage body ` +
-            `arrived within ${COMPILE_BUDGET_MS}ms. ` +
+          `no post-replace pdf-segment carrying the static two-page ` +
+            `source arrived within ${COMPILE_BUDGET_MS}ms. ` +
             `segmentsBefore=${segmentsBefore} ` +
             `pdfSegmentsAtFail=${pdfSegmentFrames.length} ` +
             `docUpdateSent=${docUpdateSent.value} ` +
@@ -199,19 +211,24 @@ test.describe("live multi-page PDF preview (M15)", () => {
         ).toBeGreaterThan(segmentsBefore);
       }
 
-      // Drain — the viewer renders pages serially after the segment
-      // lands, and a late page may still be appending when the wire
-      // first goes quiet.
+      // Drain — the viewer renders pages serially after the
+      // segment lands, and a late page may still be appending
+      // when the wire first goes quiet.
       await authedPage.waitForTimeout(5_000);
+
+      // Per-frame byte sizes feed the (i)/(ii)/(iii) failure
+      // classification: a tiny single post-replace segment
+      // implicates supertex/sidecar; a large or multiple
+      // segments with a one-page DOM implicates the viewer.
+      const postReplaceFrames = pdfSegmentFrames.slice(segmentsBefore);
+      const frameBytes = postReplaceFrames.map((f) => f.length);
+      const totalPostReplaceBytes = frameBytes.reduce((a, b) => a + b, 0);
 
       const measurement = await authedPage.evaluate(() => {
         const host = document.querySelector(".preview .host");
         const canvases = Array.from(
           document.querySelectorAll<HTMLCanvasElement>(".preview canvas"),
         );
-        // Iter 271 moved `data-page` from canvas to the
-        // `.pdf-page` wrapper (M17 cross-fade rewrite); count the
-        // wrappers, not the canvases.
         const pageWrappers = document.querySelectorAll(".preview .pdf-page");
         const heights = canvases.map((c) => c.getBoundingClientRect().height);
         const tallestPx = heights.reduce((m, h) => (h > m ? h : m), 0);
@@ -230,14 +247,21 @@ test.describe("live multi-page PDF preview (M15)", () => {
 
       expect(
         viewerAgnosticOk,
-        `preview pane shows only one page of rendered PDF. ` +
+        `preview pane shows only one page of rendered PDF for the ` +
+          `static two-page source. ` +
           `canvasCount=${measurement.canvasCount} ` +
           `pageWrapperCount=${measurement.pageWrapperCount} ` +
           `tallestPx=${measurement.tallestPx.toFixed(1)} ` +
           `viewportH=${measurement.viewportH} ` +
-          `hostScrollH=${measurement.hostScrollH ?? "null"}. ` +
-          `Expected ≥2 .pdf-page wrappers OR a single canvas > 1.8× ` +
-          `viewport height after typing 4 \\newpage breaks.`,
+          `hostScrollH=${measurement.hostScrollH ?? "null"} ` +
+          `postReplaceFrameCount=${postReplaceFrames.length} ` +
+          `postReplaceBytes=${totalPostReplaceBytes} ` +
+          `frameBytes=${JSON.stringify(frameBytes)}. ` +
+          `Expected ≥2 .pdf-page wrappers OR a single canvas > ` +
+          `1.8× viewport height for a 2-page LaTeX source. ` +
+          `Classify per 287_answer.md: 1 frame + small bytes → ` +
+          `supertex or sidecar broadcast suspect; many/large ` +
+          `frames → viewer suspect.`,
       ).toBe(true);
     } finally {
       await cleanupLiveProjectMachine({
