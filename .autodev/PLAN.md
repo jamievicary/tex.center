@@ -15,10 +15,14 @@ routed to (decision deferred post-MVP).
 1. **M22 wire-message debug toasts.** M22.1 closed iter 304 (all
    outbound control sends now emit `outgoing-*` debug events).
    M22.3 closed iter 305 (info TTL 5 s, newest-on-top stack,
-   user-dismissible × on info/success). Remaining: M22.2 GT-F
-   local Playwright cases (closes M9.editor-ux GT-F); **M22.4a
-   UI-only batch and M22.4b wire-shipoutPage batch** queued from
-   `306_answer.md` — pick up M22.4a next.
+   user-dismissible × on info/success). **M22.4a closed iter 309**
+   (settings `debugMode` default true, `FADE_MS_DEFAULT` 1000,
+   debug-\* TTLs 10 s, `Toasts.svelte` `animate:flip`, new
+   `compileCycleTracker.ts` prefixing `compile-status idle/error`
+   toasts with elapsed seconds, legacy `localStorage["debug"]`
+   migration). Remaining: M22.2 GT-F local Playwright cases (closes
+   M9.editor-ux GT-F); **M22.4b wire-shipoutPage batch** —
+   pick up next.
 2. **M20 lifecycle (suspend/stop/cold-storage).** M20.1 two-stage
    idle timer closed iter 302; remaining: M20.2 shared `BLOB_STORE`
    binding (sidecar persists source + latex artefacts on every
@@ -319,26 +323,33 @@ Slices:
   Locks: `apps/web/test/toastStore.test.mjs` case 2 (info-at-5s,
   error-at-6s); case 5 also pins the store's oldest-first
   insertion order, which the renderer reverses.
-- **M22.4a (UI-only, no wire change).** From `306_answer.md`.
-  Items 1–6 plus item 9-as-`compile-status`-elapsed. Concretely:
-  - `settingsStore` gains `debugMode: boolean` (default `true`);
-    `FADE_MS_DEFAULT` 180 → 1000.
-  - `initDebugFlag` migrates one-shot from `localStorage["debug"]`
-    into `editor-settings.debugMode`, then deletes the old key.
-  - `Settings.svelte` adds a debug-mode checkbox above the slider;
-    URL `?debug=1/0` and Ctrl+Shift+D write the same setting.
-  - All `debug-*` TTLs bumped from 2 s (red: 4 s) → 10 s in
-    `toastStore.DEFAULT_TTL_MS`. Info/success/error unchanged.
-  - `Toasts.svelte` keyed each gains `animate:flip` with
-    `{ duration: 500, easing: cubicOut }` for vertical reflow.
-  - New `apps/web/src/lib/compileCycleTracker.ts` (pure, injectable
-    clock). Wraps `debugEventToToast` only for `compile-status`
-    events; `running` resets the timer, `idle`/`error` prefix the
-    toast text with `${elapsed}s — `.
-  - Locks: `apps/web/test/settingsStore.test.mjs`,
-    `apps/web/test/toastStore.test.mjs`,
-    `apps/web/test/compileCycleTracker.test.mjs` (new),
-    `apps/web/test/debugToasts.test.mjs`.
+- **M22.4a (UI-only, no wire change).** **Closed iter 309.**
+  `settingsStore` gains `debugMode: boolean` (default `true`);
+  `FADE_MS_DEFAULT` 180 → 1000; `parseSettings`/`serializeSettings`
+  round-trip both fields. `initDebugFlag` replaced by
+  `initDebugMode(params, storage, settingsDebug) → { debug,
+  shouldPersist }`: URL `?debug=1/0` > legacy
+  `localStorage["debug"]` migration > settings; legacy key removed
+  on first read. URL override and Ctrl+Shift+D both write through
+  the editor's `setDebugMode` helper into `editor-settings`. All
+  `debug-*` TTLs in `toastStore.DEFAULT_TTL_MS` bumped from 2 s
+  (red: 4 s) → 10 s; info/success/error unchanged.
+  `Toasts.svelte` keyed each gains
+  `animate:flip={{ duration: 500, easing: cubicOut }}` for vertical
+  reflow. New `apps/web/src/lib/compileCycleTracker.ts` (pure,
+  injectable clock): `observe(event)` wraps `debugEventToToast`;
+  `compile-status running` resets the timer, `idle`/`error`
+  prefix the toast text with `${elapsed.toFixed(1)}s — `. The
+  editor `onDebugEvent` always passes through the tracker so cycle
+  state stays in sync even when toasts are muted. Settings
+  popover gains a debug-mode checkbox above the slider; cog →
+  slider focus path preserved. Locks:
+  `apps/web/test/settingsStore.test.mjs`,
+  `apps/web/test/toastStore.test.mjs` (case 7 made explicit-ttl,
+  new case 8 pins TTL table),
+  `apps/web/test/compileCycleTracker.test.mjs` (new — 6 cases),
+  `apps/web/test/debugToastsToggle.test.mjs` (rewritten for the
+  new resolution API + migration).
 - **M22.4b (wire change).** From `306_answer.md` items 7, 8.
   - `packages/protocol/src/index.ts`: `PdfSegment.shipoutPage?:
     number`; binary header 13 → 17 bytes, new `uint32` after

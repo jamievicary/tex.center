@@ -223,7 +223,8 @@ function snapshotFromSub(store) {
 
 // Case 7: aggregation re-arms the TTL each merge — the merged
 // toast survives at least one full TTL past the most recent
-// push.
+// push.  Uses an explicit ttlMs so the assertion is independent
+// of the per-category default.
 {
   const clk = makeFakeClock();
   const s = createToastStore({
@@ -235,12 +236,14 @@ function snapshotFromSub(store) {
     category: "debug-blue",
     text: "pdf",
     aggregateKey: "pdf-segment",
+    ttlMs: 2000,
   });
   clk.advance(1500); // within 2000ms TTL
   s.push({
     category: "debug-blue",
     text: "pdf",
     aggregateKey: "pdf-segment",
+    ttlMs: 2000,
   });
   // If TTL had NOT been re-armed, it would fire at t=2000 (just
   // 500ms from now). Advance 1500ms total — original would have
@@ -254,6 +257,20 @@ function snapshotFromSub(store) {
   // Wait the rest of the fresh TTL.
   clk.advance(600);
   assert.equal(snapshotFromSub(s).length, 0);
+}
+
+// Case 8 (M22.4a): debug-* default TTLs bumped to 10s.
+{
+  const { DEFAULT_TTL_MS } = await import("../src/lib/toastStore.ts");
+  assert.equal(DEFAULT_TTL_MS["debug-blue"], 10_000);
+  assert.equal(DEFAULT_TTL_MS["debug-green"], 10_000);
+  assert.equal(DEFAULT_TTL_MS["debug-orange"], 10_000);
+  assert.equal(DEFAULT_TTL_MS["debug-grey"], 10_000);
+  assert.equal(DEFAULT_TTL_MS["debug-red"], 10_000);
+  // User-facing TTLs unchanged from M22.3.
+  assert.equal(DEFAULT_TTL_MS.info, 5_000);
+  assert.equal(DEFAULT_TTL_MS.success, 3_000);
+  assert.equal(DEFAULT_TTL_MS.error, 6_000);
 }
 
 console.log("toastStore: OK");

@@ -99,30 +99,50 @@ export function debugEventToToast(event: WsDebugEvent): ToastInput {
 }
 
 /**
- * Computes the initial debug-mode flag from URL search params and
- * localStorage. `?debug=1` flips localStorage on for the session
- * so subsequent navigations stay in debug mode; `?debug=0` flips
- * it off. With no `debug` param, falls back to the persisted
- * localStorage value.
+ * Resolves the initial debug-mode flag at editor mount (M22.4a).
  *
- * Pure other than the localStorage read/write — exposed for the
- * editor page to call in `onMount` and for unit tests via fake
- * `URLSearchParams` and `Storage`.
+ * Source of truth is now `EditorSettings.debugMode` in
+ * `localStorage["editor-settings"]`; URL `?debug=1/0` and
+ * Ctrl+Shift+D all converge on writing that single key. The
+ * caller passes the parsed `settingsDebug` value and persists
+ * the returned `debug` back into settings when `shouldPersist`
+ * is `true`.
+ *
+ * Migration: an existing `localStorage["debug"]` key (the M9
+ * representation) is consumed on first call — its value (`"1"`
+ * or `"0"`) overrides the default but loses to a URL override.
+ * The key is removed after reading so subsequent loads see only
+ * the settings object.
+ *
+ * Pure other than the localStorage read/remove. Tests pass a
+ * fake `URLSearchParams` and `Storage`.
  */
-export function initDebugFlag(
+export interface DebugModeResolution {
+  debug: boolean;
+  /** True when the editor should write `debug` back into settings. */
+  shouldPersist: boolean;
+}
+
+export function initDebugMode(
   params: URLSearchParams,
-  storage: Pick<Storage, "getItem" | "setItem">,
-): boolean {
+  storage: Pick<Storage, "getItem" | "removeItem">,
+  settingsDebug: boolean,
+): DebugModeResolution {
+  const legacyRaw = storage.getItem("debug");
+  let migrated: boolean | null = null;
+  if (legacyRaw !== null) {
+    if (legacyRaw === "1") migrated = true;
+    else if (legacyRaw === "0") migrated = false;
+    storage.removeItem("debug");
+  }
+
   const fromUrl = params.get("debug");
-  if (fromUrl === "1") {
-    storage.setItem("debug", "1");
-    return true;
-  }
-  if (fromUrl === "0") {
-    storage.setItem("debug", "0");
-    return false;
-  }
-  return storage.getItem("debug") === "1";
+  if (fromUrl === "1") return { debug: true, shouldPersist: true };
+  if (fromUrl === "0") return { debug: false, shouldPersist: true };
+
+  if (migrated !== null) return { debug: migrated, shouldPersist: true };
+
+  return { debug: settingsDebug, shouldPersist: false };
 }
 
 /**

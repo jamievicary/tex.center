@@ -239,6 +239,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_debug_toasts_toggle(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "debugToastsToggle.test.mjs")
 
+    def test_web_compile_cycle_tracker(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "compileCycleTracker.test.mjs")
+
     def test_web_editor_marks(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "editorMarks.test.mjs")
 

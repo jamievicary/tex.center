@@ -3,7 +3,14 @@
   // renders the global `toasts` store. Color is derived from
   // category; debug-* categories are styled the same as their
   // user-facing siblings but with a smaller, monospace text.
+  //
+  // M22.4a: existing toasts animate downward when a new toast is
+  // pushed at the top, via Svelte 5's `animate:flip` directive on
+  // the keyed `{#each}` block. 500 ms cubic-out so the descent is
+  // deliberate enough to track visually.
   import { onDestroy } from "svelte";
+  import { cubicOut } from "svelte/easing";
+  import { flip } from "svelte/animate";
   import { toasts, type Toast } from "./toastStore";
 
   // Items rendered newest-on-top. The store keeps insertion
@@ -25,6 +32,7 @@
       data-toast-id={t.id}
       data-toast-category={t.category}
       role={t.category === "error" ? "alert" : "status"}
+      animate:flip={{ duration: 500, easing: cubicOut }}
     >
       <span class="text">{t.text}</span>
       {#if t.count > 1}

@@ -8,18 +8,23 @@
 export interface EditorSettings {
   /** PDF cross-fade duration in ms; 0 disables the transition. */
   fadeMs: number;
+  /** Debug-mode toast fan-out (M22.4a). Default on. */
+  debugMode: boolean;
 }
 
 export const SETTINGS_STORAGE_KEY = "editor-settings";
 
-export const FADE_MS_DEFAULT = 180;
+export const FADE_MS_DEFAULT = 1000;
 export const FADE_MS_MIN = 0;
 export const FADE_MS_MAX = 3000;
 /** Slider granularity. 50ms ≈ 0.05s steps per `293_answer.md`. */
 export const FADE_MS_STEP = 50;
 
+export const DEBUG_MODE_DEFAULT = true;
+
 export const DEFAULT_SETTINGS: EditorSettings = {
   fadeMs: FADE_MS_DEFAULT,
+  debugMode: DEBUG_MODE_DEFAULT,
 };
 
 export function clampFadeMs(ms: unknown): number {
@@ -27,6 +32,11 @@ export function clampFadeMs(ms: unknown): number {
   if (ms < FADE_MS_MIN) return FADE_MS_MIN;
   if (ms > FADE_MS_MAX) return FADE_MS_MAX;
   return ms;
+}
+
+function coerceDebugMode(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  return DEBUG_MODE_DEFAULT;
 }
 
 /**
@@ -50,9 +60,13 @@ export function parseSettings(raw: string | null | undefined): EditorSettings {
   const obj = parsed as Record<string, unknown>;
   return {
     fadeMs: clampFadeMs(obj.fadeMs),
+    debugMode: coerceDebugMode(obj.debugMode),
   };
 }
 
 export function serializeSettings(s: EditorSettings): string {
-  return JSON.stringify({ fadeMs: clampFadeMs(s.fadeMs) });
+  return JSON.stringify({
+    fadeMs: clampFadeMs(s.fadeMs),
+    debugMode: coerceDebugMode(s.debugMode),
+  });
 }

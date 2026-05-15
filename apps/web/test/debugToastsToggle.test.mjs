@@ -1,11 +1,13 @@
-// Unit test for the debug-mode toggle plumbing in
-// apps/web/src/lib/debugToasts.ts: URL `?debug=` precedence,
-// localStorage persistence, and the Ctrl+Shift+D keyboard
-// shortcut wiring.
+// Unit test for the debug-mode resolution plumbing in
+// apps/web/src/lib/debugToasts.ts (M22.4a). URL `?debug=` takes
+// precedence over the legacy `localStorage["debug"]` migration
+// and over the persisted `EditorSettings.debugMode`; the legacy
+// key is removed on first read so subsequent loads see only the
+// settings object. Also covers the Ctrl+Shift+D keyboard shortcut.
 
 import assert from "node:assert/strict";
 
-const { initDebugFlag, onDebugKeyShortcut } = await import(
+const { initDebugMode, onDebugKeyShortcut } = await import(
   "../src/lib/debugToasts.ts"
 );
 
@@ -19,44 +21,102 @@ class FakeStorage {
   setItem(k, v) {
     this.m.set(k, String(v));
   }
+  removeItem(k) {
+    this.m.delete(k);
+  }
 }
 
-// `?debug=1` sets the flag and persists to localStorage.
+// URL `?debug=1` overrides settings; shouldPersist=true so the
+// caller writes back into the settings object.
 {
   const storage = new FakeStorage();
-  const got = initDebugFlag(new URLSearchParams("debug=1"), storage);
-  assert.equal(got, true);
-  assert.equal(storage.getItem("debug"), "1");
+  const got = initDebugMode(
+    new URLSearchParams("debug=1"),
+    storage,
+    false,
+  );
+  assert.deepEqual(got, { debug: true, shouldPersist: true });
+  // No legacy key, nothing to clear.
+  assert.equal(storage.getItem("debug"), null);
 }
 
-// `?debug=0` clears the flag and persists.
+// URL `?debug=0` overrides settings.
+{
+  const storage = new FakeStorage();
+  const got = initDebugMode(
+    new URLSearchParams("debug=0"),
+    storage,
+    true,
+  );
+  assert.deepEqual(got, { debug: false, shouldPersist: true });
+}
+
+// No URL param: fall back to the settings value (no persist needed).
+{
+  const storage = new FakeStorage();
+  assert.deepEqual(
+    initDebugMode(new URLSearchParams(""), storage, true),
+    { debug: true, shouldPersist: false },
+  );
+  assert.deepEqual(
+    initDebugMode(new URLSearchParams(""), storage, false),
+    { debug: false, shouldPersist: false },
+  );
+}
+
+// Migration: legacy `localStorage["debug"]="1"` is consumed and
+// overrides the (default) settings value. Key is removed.
 {
   const storage = new FakeStorage({ debug: "1" });
-  const got = initDebugFlag(new URLSearchParams("debug=0"), storage);
-  assert.equal(got, false);
-  assert.equal(storage.getItem("debug"), "0");
+  const got = initDebugMode(new URLSearchParams(""), storage, false);
+  assert.deepEqual(got, { debug: true, shouldPersist: true });
+  assert.equal(storage.getItem("debug"), null);
 }
 
-// No URL param falls back to localStorage.
+// Migration: legacy `localStorage["debug"]="0"` consumed; user's
+// explicit-off preference survives the migration.
 {
-  const onStorage = new FakeStorage({ debug: "1" });
-  assert.equal(initDebugFlag(new URLSearchParams(""), onStorage), true);
-  const offStorage = new FakeStorage({ debug: "0" });
-  assert.equal(initDebugFlag(new URLSearchParams(""), offStorage), false);
-  const blankStorage = new FakeStorage();
-  assert.equal(initDebugFlag(new URLSearchParams(""), blankStorage), false);
+  const storage = new FakeStorage({ debug: "0" });
+  const got = initDebugMode(new URLSearchParams(""), storage, true);
+  assert.deepEqual(got, { debug: false, shouldPersist: true });
+  assert.equal(storage.getItem("debug"), null);
 }
 
-// Other `?debug=` values are ignored — fall back to storage.
+// URL beats migration: legacy key still cleared even when URL wins.
+{
+  const storage = new FakeStorage({ debug: "0" });
+  const got = initDebugMode(
+    new URLSearchParams("debug=1"),
+    storage,
+    false,
+  );
+  assert.deepEqual(got, { debug: true, shouldPersist: true });
+  assert.equal(storage.getItem("debug"), null);
+}
+
+// Junk legacy values are still cleared; fall through to settings.
+{
+  const storage = new FakeStorage({ debug: "garbage" });
+  const got = initDebugMode(new URLSearchParams(""), storage, true);
+  assert.deepEqual(got, { debug: true, shouldPersist: false });
+  assert.equal(storage.getItem("debug"), null);
+}
+
+// Other `?debug=` values fall through to migration / settings.
 {
   const storage = new FakeStorage({ debug: "1" });
-  assert.equal(initDebugFlag(new URLSearchParams("debug=foo"), storage), true);
-  // Storage is not mutated when the URL param is not 0/1.
-  assert.equal(storage.getItem("debug"), "1");
+  const got = initDebugMode(
+    new URLSearchParams("debug=foo"),
+    storage,
+    false,
+  );
+  assert.deepEqual(got, { debug: true, shouldPersist: true });
+  assert.equal(storage.getItem("debug"), null);
 }
 
 // Ctrl+Shift+D toggles via the supplied getter/setter. The
-// returned cleanup detaches the listener.
+// returned cleanup detaches the listener. Setter is now expected
+// to write into the settings object — not localStorage["debug"].
 {
   const listeners = new Map();
   const target = {

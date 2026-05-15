@@ -13,10 +13,10 @@
   import { WsClient, type WsClientSnapshot } from "$lib/wsClient";
   import { toasts } from "$lib/toastStore";
   import {
-    debugEventToToast,
-    initDebugFlag,
+    initDebugMode,
     onDebugKeyShortcut,
   } from "$lib/debugToasts";
+  import { createCompileCycleTracker } from "$lib/compileCycleTracker";
   import {
     EDITOR_FIRST_PDF_SEGMENT,
     EDITOR_FIRST_TEXT_PAINT,
@@ -68,21 +68,16 @@
   });
 
   let client: WsClient | null = null;
-  let debug = $state(false);
   let detachKey: (() => void) | null = null;
+  const compileCycle = createCompileCycleTracker();
 
   onMount(() => {
     markOnce(EDITOR_ROUTE_MOUNTED);
-    debug = initDebugFlag(
-      new URLSearchParams(window.location.search),
-      window.localStorage,
-    );
     detachKey = onDebugKeyShortcut(
       window,
-      () => debug,
+      () => settings.debugMode,
       (next) => {
-        debug = next;
-        window.localStorage.setItem("debug", next ? "1" : "0");
+        setDebugMode(next);
       },
     );
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -108,8 +103,13 @@
         });
       },
       onDebugEvent: (event) => {
-        if (!debug) return;
-        toasts.push(debugEventToToast(event));
+        if (!settings.debugMode) {
+          // Tracker still observes so cycle bookkeeping stays in
+          // sync with the wire even while toasts are muted.
+          compileCycle.observe(event);
+          return;
+        }
+        toasts.push(compileCycle.observe(event));
       },
     });
     text = client.getText(selected);
@@ -258,9 +258,7 @@
   let settingsCogEl: HTMLButtonElement | null = $state(null);
   let settingsSliderEl: HTMLInputElement | null = $state(null);
 
-  function updateFadeMs(ms: number): void {
-    const clamped = clampFadeMs(ms);
-    settings = { ...settings, fadeMs: clamped };
+  function persistSettings(): void {
     try {
       window.localStorage.setItem(
         SETTINGS_STORAGE_KEY,
@@ -269,6 +267,17 @@
     } catch {
       // Quota or disabled — silently drop.
     }
+  }
+
+  function updateFadeMs(ms: number): void {
+    const clamped = clampFadeMs(ms);
+    settings = { ...settings, fadeMs: clamped };
+    persistSettings();
+  }
+
+  function setDebugMode(next: boolean): void {
+    settings = { ...settings, debugMode: next };
+    persistSettings();
   }
 
   function toggleSettings(): void {
@@ -305,6 +314,18 @@
 
   onMount(() => {
     settings = parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
+    // Resolve initial debug mode: URL `?debug=` > legacy
+    // `localStorage["debug"]` migration > persisted setting. The
+    // helper removes the legacy key as a side effect on first read.
+    const resolved = initDebugMode(
+      new URLSearchParams(window.location.search),
+      window.localStorage,
+      settings.debugMode,
+    );
+    if (resolved.debug !== settings.debugMode) {
+      settings = { ...settings, debugMode: resolved.debug };
+    }
+    if (resolved.shouldPersist) persistSettings();
     window.addEventListener("pointerdown", onSettingsOutsidePointerDown);
     window.addEventListener("keydown", onSettingsKeydown);
     return () => {
@@ -385,6 +406,16 @@
       aria-label="Editor settings"
       data-testid="settings-popover"
     >
+      <label class="settings-row">
+        <span class="settings-label">Debug toasts</span>
+        <input
+          type="checkbox"
+          checked={settings.debugMode}
+          data-testid="settings-debug-mode"
+          onchange={(e) =>
+            setDebugMode((e.currentTarget as HTMLInputElement).checked)}
+        />
+      </label>
       <label class="settings-row">
         <span class="settings-label">PDF cross-fade duration</span>
         <input
