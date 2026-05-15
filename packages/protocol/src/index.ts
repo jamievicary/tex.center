@@ -15,6 +15,13 @@
 //   u32 totalLength    — total length of the PDF after this patch.
 //   u32 offset         — offset at which `bytes` is to be written.
 //   u32 segmentLength  — `bytes.length`.
+//   u32 shipoutPage    — 1-based supertex shipout page this segment
+//                        represents (the `[N.out]` index). Sentinel
+//                        `0` means "unknown" — the compiler did not
+//                        attach a shipout index, so consumers should
+//                        treat the segment as opaque w.r.t. paging.
+//                        Added M22.4b; header width 13 → 17 bytes
+//                        including the leading tag.
 //   bytes              — raw PDF bytes for this segment.
 
 export const PROTOCOL_VERSION = 1;
@@ -96,6 +103,15 @@ export interface PdfSegment {
   totalLength: number;
   offset: number;
   bytes: Uint8Array;
+  /**
+   * 1-based supertex shipout page this segment represents — the
+   * `[N.out]` index in the upstream `--daemon` protocol. Optional:
+   * compilers that don't expose per-shipout structure (or don't
+   * yet attach the field) leave it `undefined`, encoded on the
+   * wire as the sentinel `0`. Decoders surface a positive integer
+   * as `shipoutPage` and a `0` as `undefined`. Added M22.4b.
+   */
+  shipoutPage?: number;
 }
 
 export type DecodedFrame =
@@ -138,12 +154,17 @@ export function encodePdfSegment(seg: PdfSegment): Uint8Array {
   if (seg.offset + seg.bytes.length > seg.totalLength) {
     throw new Error("encodePdfSegment: segment overruns totalLength");
   }
-  const header = new Uint8Array(13);
+  const shipoutPage = seg.shipoutPage ?? 0;
+  if (shipoutPage < 0 || !Number.isInteger(shipoutPage)) {
+    throw new Error("encodePdfSegment: shipoutPage must be a non-negative integer");
+  }
+  const header = new Uint8Array(17);
   const view = new DataView(header.buffer);
   view.setUint8(0, TAG_PDF_SEGMENT);
   view.setUint32(1, seg.totalLength, false);
   view.setUint32(5, seg.offset, false);
   view.setUint32(9, seg.bytes.length, false);
+  view.setUint32(13, shipoutPage, false);
   return concat([header, seg.bytes]);
 }
 
@@ -162,16 +183,21 @@ export function decodeFrame(frame: Uint8Array): DecodedFrame {
       return { kind: "control", message: parsed };
     }
     case TAG_PDF_SEGMENT: {
-      if (body.length < 12) throw new Error("decodeFrame: pdf-segment header truncated");
+      if (body.length < 16) throw new Error("decodeFrame: pdf-segment header truncated");
       const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
       const totalLength = view.getUint32(0, false);
       const offset = view.getUint32(4, false);
       const segLen = view.getUint32(8, false);
-      const bytes = body.subarray(12, 12 + segLen);
+      const shipoutPage = view.getUint32(12, false);
+      const bytes = body.subarray(16, 16 + segLen);
       if (bytes.length !== segLen) {
         throw new Error("decodeFrame: pdf-segment payload truncated");
       }
-      return { kind: "pdf-segment", segment: { totalLength, offset, bytes } };
+      const segment: PdfSegment =
+        shipoutPage > 0
+          ? { totalLength, offset, bytes, shipoutPage }
+          : { totalLength, offset, bytes };
+      return { kind: "pdf-segment", segment };
     }
     default:
       throw new Error(`decodeFrame: unknown tag 0x${tag.toString(16)}`);

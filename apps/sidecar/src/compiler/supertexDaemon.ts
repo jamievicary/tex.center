@@ -174,6 +174,7 @@ export class SupertexDaemonCompiler implements Compiler {
         return { ok: true, segments: [] };
       }
       const segment = await this.assembleSegment(events.maxShipout);
+      segment.shipoutPage = events.maxShipout;
       return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
     } catch (e) {
       return { ok: false, error: errorMessage(e) };

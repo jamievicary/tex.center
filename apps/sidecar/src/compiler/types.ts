@@ -16,6 +16,15 @@ export interface PdfSegment {
   totalLength: number;
   offset: number;
   bytes: Uint8Array;
+  /**
+   * 1-based supertex shipout page this segment represents — the
+   * `[N.out]` index. M22.4b carried this onto the wire so the
+   * web client can render it in debug toasts; sidecar-internal
+   * code can also use it (e.g. for the coalescer's
+   * `highestEmittedShipoutPage` gate). Optional: compilers that
+   * don't expose per-shipout structure leave it undefined.
+   */
+  shipoutPage?: number;
 }
 
 export interface CompileRequest {

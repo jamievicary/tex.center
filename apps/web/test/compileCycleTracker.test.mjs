@@ -78,31 +78,50 @@ function makeClock() {
   assert.equal(b.text, "0.5s — compile-status idle");
 }
 
-// Case 5: non-compile-status events pass through unchanged.
+// Case 5 (M22.4b): pdf-segment toasts inside a cycle now carry the
+// elapsed-time prefix; non-prefixable events (outgoing-doc-update)
+// still pass through unchanged. The segment format also follows
+// M22.4b: stamped → `[N.out] <bytes> bytes`, unstamped → `<bytes>
+// bytes`.
 {
   const c = makeClock();
   const tr = createCompileCycleTracker({ now: c.now });
   c.set(0);
   tr.observe({ kind: "compile-status", state: "running" });
   c.set(1000);
-  const seg = tr.observe({ kind: "pdf-segment", bytes: 1234 });
-  // Today M22.4a leaves segment toasts unprefixed; M22.4b changes
-  // this. Pin the current behaviour so the M22.4b change is an
-  // explicit test-touching slice.
-  assert.equal(seg.text, "pdf-segment 1234B");
+  const seg = tr.observe({
+    kind: "pdf-segment",
+    bytes: 1234,
+    shipoutPage: 2,
+  });
+  assert.equal(seg.text, "1.0s — [2.out] 1234 bytes");
   assert.equal(seg.category, "debug-blue");
   const yjs = tr.observe({ kind: "outgoing-doc-update", bytes: 7 });
   assert.equal(yjs.text, "Yjs op 7B");
 }
 
-// Case 6: cycle survives across an intervening pdf-segment.
+// Case 5b: a pdf-segment WITHOUT a preceding `running` (cycle null)
+// passes through unprefixed, but still picks up the M22.4b
+// `<bytes> bytes` format.
+{
+  const c = makeClock();
+  const tr = createCompileCycleTracker({ now: c.now });
+  c.set(0);
+  const seg = tr.observe({ kind: "pdf-segment", bytes: 42 });
+  assert.equal(seg.text, "42 bytes");
+}
+
+// Case 6: cycle survives across an intervening pdf-segment. After
+// M22.4b the segment toast also carries the elapsed-time prefix —
+// the cycle is not cleared by the segment (only by `idle`/`error`).
 {
   const c = makeClock();
   const tr = createCompileCycleTracker({ now: c.now });
   c.set(0);
   tr.observe({ kind: "compile-status", state: "running" });
   c.set(1700);
-  tr.observe({ kind: "pdf-segment", bytes: 3652 });
+  const seg = tr.observe({ kind: "pdf-segment", bytes: 3652 });
+  assert.equal(seg.text, "1.7s — 3652 bytes");
   c.set(4600);
   const b = tr.observe({ kind: "compile-status", state: "idle" });
   assert.equal(b.text, "4.6s — compile-status idle");

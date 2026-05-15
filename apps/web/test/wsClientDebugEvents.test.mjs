@@ -59,7 +59,8 @@ function newClient() {
 }
 
 // Case 1: pdf-segment frame produces a debug event with the
-// segment length.
+// segment length. shipoutPage omitted ⇒ wire sentinel 0 ⇒ debug
+// event omits the field.
 {
   const { c, sock, events } = newClient();
   sock.dispatchMessage(
@@ -71,6 +72,27 @@ function newClient() {
   );
   assert.equal(events.length, 1);
   assert.deepEqual(events[0], { kind: "pdf-segment", bytes: 4 });
+  c.destroy();
+}
+
+// Case 1b (M22.4b): pdf-segment frame stamped with shipoutPage
+// surfaces it on the debug event.
+{
+  const { c, sock, events } = newClient();
+  sock.dispatchMessage(
+    encodePdfSegment({
+      totalLength: 4,
+      offset: 0,
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      shipoutPage: 5,
+    }),
+  );
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0], {
+    kind: "pdf-segment",
+    bytes: 4,
+    shipoutPage: 5,
+  });
   c.destroy();
 }
 
@@ -171,6 +193,7 @@ function newClient() {
 {
   const cases = [
     { kind: "pdf-segment", bytes: 100 },
+    { kind: "pdf-segment", bytes: 100, shipoutPage: 2 },
     { kind: "outgoing-doc-update", bytes: 50 },
     { kind: "compile-status", state: "running" },
     { kind: "compile-status", state: "error", detail: "boom" },
@@ -184,6 +207,7 @@ function newClient() {
     { kind: "outgoing-rename-file", oldName: "a.tex", newName: "b.tex" },
   ];
   const expectedCategories = [
+    "debug-blue",
     "debug-blue",
     "debug-green",
     "debug-orange",
@@ -219,10 +243,22 @@ function newClient() {
   assert.equal(a.aggregateKey, c2.aggregateKey);
   assert.notEqual(a.aggregateKey, b.aggregateKey);
   // pdf-segment and yjs-op share a single key per kind (burst
-  // coalescing); file-op-error keyed by reason.
+  // coalescing); file-op-error keyed by reason. M22.4b: a
+  // stamped-page segment formats as `[N.out] <bytes> bytes`; an
+  // unstamped one falls back to `<bytes> bytes`. Both kinds share
+  // the same aggregateKey so a burst still coalesces.
   const seg1 = debugEventToToast({ kind: "pdf-segment", bytes: 1 });
   const seg2 = debugEventToToast({ kind: "pdf-segment", bytes: 99 });
   assert.equal(seg1.aggregateKey, seg2.aggregateKey);
+  assert.equal(seg1.text, "1 bytes");
+  assert.equal(seg2.text, "99 bytes");
+  const seg3 = debugEventToToast({
+    kind: "pdf-segment",
+    bytes: 1024,
+    shipoutPage: 4,
+  });
+  assert.equal(seg3.text, "[4.out] 1024 bytes");
+  assert.equal(seg3.aggregateKey, seg1.aggregateKey);
   const e1 = debugEventToToast({
     kind: "file-op-error",
     reason: "duplicate",

@@ -1,14 +1,15 @@
-// Compile-cycle elapsed-time tracker (M22.4a).
+// Compile-cycle elapsed-time tracker (M22.4a + M22.4b).
 //
 // Wraps `debugEventToToast` to prefix `compile-status idle` /
-// `compile-status error` toasts with `${elapsed}s — ` (and later,
-// in M22.4b, `pdf-segment` toasts too). The wire shape is:
+// `compile-status error` AND `pdf-segment` toasts with the elapsed
+// time since the cycle's `compile-status running`. The wire shape is:
 //
 //   compile-status running  →  [0 or 1] pdf-segment  →  compile-status idle
 //
 // On each `running` we reset the timer; subsequent same-cycle
 // events report their delta. Cycles are independent: cycle N+1
-// does not inherit cycle N's start.
+// does not inherit cycle N's start. A stray prefixable event
+// without a preceding `running` passes through unprefixed.
 //
 // Pure module, injectable clock. SSR-safe, no DOM.
 
@@ -38,16 +39,22 @@ export function createCompileCycleTracker(
 
   function observe(event: WsDebugEvent): ToastInput {
     const base = debugEventToToast(event);
-    if (event.kind !== "compile-status") return base;
-    if (event.state === "running") {
-      cycleStart = now();
-      return base;
+    if (event.kind === "compile-status") {
+      if (event.state === "running") {
+        cycleStart = now();
+        return base;
+      }
+      if (event.state !== "idle" && event.state !== "error") return base;
+      if (cycleStart === null) return base;
+      const elapsed = now() - cycleStart;
+      cycleStart = null;
+      return { ...base, text: `${formatElapsed(elapsed)} — ${base.text}` };
     }
-    if (event.state !== "idle" && event.state !== "error") return base;
-    if (cycleStart === null) return base;
-    const elapsed = now() - cycleStart;
-    cycleStart = null;
-    return { ...base, text: `${formatElapsed(elapsed)} — ${base.text}` };
+    if (event.kind === "pdf-segment" && cycleStart !== null) {
+      const elapsed = now() - cycleStart;
+      return { ...base, text: `${formatElapsed(elapsed)} — ${base.text}` };
+    }
+    return base;
   }
 
   return { observe };

@@ -20,9 +20,8 @@ routed to (decision deferred post-MVP).
    created, uploaded, renamed, deleted, hydrated, OR edited
    in-place by the client — reaches the on-disk workspace before
    the supertex daemon needs it.
-2. **M22 remaining slices.** M22.2 GT-F local Playwright cases
-   (closes M9.editor-ux GT-F); M22.4b wire-shipoutPage batch
-   (header 13 → 17 bytes, `PdfSegment.shipoutPage?`).
+2. **M22.2 remaining slice.** GT-F local Playwright cases
+   (closes M9.editor-ux GT-F). M22.4b closed iter 317.
 3. **M20 lifecycle.** M20.2 shared `BLOB_STORE` (sidecar persists
    source + latex artefacts on every settle, rehydrates on cold
    boot) and M20.3 gold spec. Unblocks
@@ -292,22 +291,30 @@ From `293_answer.md` (7,8) + `306_answer.md`.
   `apps/web/test/toastStore.test.mjs`,
   `apps/web/test/compileCycleTracker.test.mjs`,
   `apps/web/test/debugToastsToggle.test.mjs`.
-- **M22.4b (open, wire change).** From `306_answer.md` items 7, 8.
+- **M22.4b** (iter 317). From `306_answer.md` items 7, 8.
   - `packages/protocol/src/index.ts`: `PdfSegment.shipoutPage?:
-    number`; binary header 13 → 17 bytes, new `uint32` after
-    `bytesLength`. 0 sentinel = unknown.
+    number`; binary header 13 → 17 bytes incl. tag (new `uint32`
+    after `bytesLength`). 0 sentinel = unknown ⇒ decoder omits
+    `shipoutPage` from the decoded segment.
+  - `apps/sidecar/src/compiler/types.ts` mirrors the optional
+    field on its internal `PdfSegment` so the compiler can stamp
+    before the server hands it to `encodePdfSegment`.
   - `apps/sidecar/src/compiler/supertexDaemon.ts:177` stamps the
     assembled segment with `shipoutPage: events.maxShipout`.
-  - `apps/sidecar/src/server.ts:544` passes segment through
-    unchanged.
-  - `WsDebugEvent.pdf-segment` carries `shipoutPage`;
+  - `WsDebugEvent.pdf-segment` carries `shipoutPage?`;
     `debugEventToToast` formats `[${n}.out] ${bytes} bytes` when
     known, falls back to `${bytes} bytes` when 0/missing.
-  - Tracker also prefixes segment toast with `${elapsedMs}s — `.
+  - `compileCycleTracker` also prefixes segment toasts with
+    `${elapsedMs}s — ` when a cycle is in progress; segments
+    without a preceding `running` pass through unprefixed and the
+    cycle stays open across segments (only `idle`/`error` clears).
   - Locks: `packages/protocol/test/codec.test.mjs` (header-width
-    case), `apps/sidecar/test/supertexDaemon.test.mjs` if it
-    asserts segment shape, `apps/web/test/debugToasts.test.mjs`,
-    `apps/web/test/wsClientDebugEvents.test.mjs`.
+    case + truncation guard + shipoutPage round-trip),
+    `apps/sidecar/test/supertexDaemonCompiler.test.mjs`
+    (happy-path asserts `seg.shipoutPage=3`),
+    `apps/web/test/wsClientDebugEvents.test.mjs` (stamped case +
+    text format), `apps/web/test/compileCycleTracker.test.mjs`
+    (segment-with-prefix + survives-across-segment cases).
 - **M22.5** uniform 10 s TTL (iter 310). Supersedes M22.3's
   per-category split. `DEFAULT_TTL_MS.info/success/error` all
   10_000.
@@ -400,7 +407,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2/4/5;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/4b/5; M23.1/2/4/5;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold

@@ -144,6 +144,8 @@ const require = createRequire(import.meta.url);
   const seg = r.segments[0];
   assert.equal(seg.offset, 0);
   assert.equal(seg.totalLength, seg.bytes.length);
+  // M22.4b: segment carries the highest shipout index from the round.
+  assert.equal(seg.shipoutPage, 3, "segment stamped with maxShipout=3");
   const text = Buffer.from(seg.bytes).toString("utf8");
   assert.match(text, /^CHUNK-1\nCHUNK-2\nCHUNK-3\n$/);
   // Chunk files on disk.

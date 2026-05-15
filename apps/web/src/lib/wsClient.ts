@@ -52,7 +52,7 @@ export interface WsClientSnapshot {
  * bursts without the WsClient deduping at the source.
  */
 export type WsDebugEvent =
-  | { kind: "pdf-segment"; bytes: number }
+  | { kind: "pdf-segment"; bytes: number; shipoutPage?: number }
   | {
       kind: "compile-status";
       state: "idle" | "running" | "error" | "unknown";
@@ -185,10 +185,20 @@ export class WsClient {
         break;
       case "pdf-segment":
         this._pdfBytes = this.pdf.applySegment(decoded.segment);
-        this.onDebugEvent?.({
-          kind: "pdf-segment",
-          bytes: decoded.segment.bytes.byteLength,
-        });
+        {
+          const ev: WsDebugEvent =
+            decoded.segment.shipoutPage !== undefined
+              ? {
+                  kind: "pdf-segment",
+                  bytes: decoded.segment.bytes.byteLength,
+                  shipoutPage: decoded.segment.shipoutPage,
+                }
+              : {
+                  kind: "pdf-segment",
+                  bytes: decoded.segment.bytes.byteLength,
+                };
+          this.onDebugEvent?.(ev);
+        }
         this.emit();
         break;
       case "control":

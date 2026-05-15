@@ -47,16 +47,60 @@ assert.equal(MAIN_DOC_NAME, "main.tex");
   assert.deepEqual(decoded.message, { type: "file-list", files: ["main.tex", "refs.bib"] });
 }
 
-// pdf-segment round-trip
+// pdf-segment round-trip (M22.4b: 17-byte header including tag,
+// shipoutPage omitted ⇒ wire sentinel 0 ⇒ decoded `shipoutPage`
+// stays undefined).
 {
   const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
   const frame = encodePdfSegment({ totalLength: 4, offset: 0, bytes });
   assert.equal(frame[0], TAG_PDF_SEGMENT);
+  assert.equal(frame.length, 17 + bytes.length, "header is 17 bytes incl. tag");
+  // shipoutPage sentinel (bytes 13..16 of the frame) is 0.
+  const shipoutWord =
+    (frame[13] << 24) | (frame[14] << 16) | (frame[15] << 8) | frame[16];
+  assert.equal(shipoutWord, 0);
   const decoded = decodeFrame(frame);
   assert.equal(decoded.kind, "pdf-segment");
   assert.equal(decoded.segment.totalLength, 4);
   assert.equal(decoded.segment.offset, 0);
   assert.deepEqual(Array.from(decoded.segment.bytes), [0x25, 0x50, 0x44, 0x46]);
+  assert.equal(decoded.segment.shipoutPage, undefined);
+}
+
+// pdf-segment round-trip with shipoutPage stamped.
+{
+  const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
+  const frame = encodePdfSegment({
+    totalLength: 4,
+    offset: 0,
+    bytes,
+    shipoutPage: 7,
+  });
+  assert.equal(frame.length, 17 + bytes.length);
+  const decoded = decodeFrame(frame);
+  assert.equal(decoded.kind, "pdf-segment");
+  assert.equal(decoded.segment.shipoutPage, 7);
+}
+
+// pdf-segment header-truncation rejection — a body shorter than
+// 16 bytes (the header following the tag) is malformed.
+{
+  // Old-shape 13-byte header (tag + three u32s, no shipoutPage) is
+  // rejected after M22.4b widened the format.
+  const oldShape = new Uint8Array(13);
+  oldShape[0] = TAG_PDF_SEGMENT;
+  assert.throws(() => decodeFrame(oldShape), /header truncated/);
+}
+
+// shipoutPage validation — negative / non-integer / undefined.
+{
+  const bytes = new Uint8Array([1]);
+  assert.throws(() =>
+    encodePdfSegment({ totalLength: 1, offset: 0, bytes, shipoutPage: -1 }),
+  );
+  assert.throws(() =>
+    encodePdfSegment({ totalLength: 1, offset: 0, bytes, shipoutPage: 1.5 }),
+  );
 }
 
 // pdf-segment overrun rejection
