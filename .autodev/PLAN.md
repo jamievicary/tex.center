@@ -17,13 +17,12 @@ routed to (decision deferred post-MVP).
    structural mirror + cold-boot rehydration landed iter 314 (every
    `addFile` / `deleteFile` / `renameFile` now reaches disk, and the
    hydration block writes every rehydrated non-main file to disk
-   before `awaitHydrated()` resolves). **M23.5** (open) handles
-   in-place `Y.Text` edits to non-main files via per-file
-   `Y.Text.observe` subscriptions — needed for the
-   "user edits sec1.tex in the editor" path. **M23.4** gold spec
-   (2-file project with `\input`) is the natural next pick-up; it
-   closes the categorical regression for the common (read-only aux
-   file) case.
+   before `awaitHydrated()` resolves); **M23.4** sidecar-level gold
+   spec landed iter 315 (cold-boot 2-file project with `\input{sec1}`
+   produces a valid `pdf-segment` via the real `SupertexDaemonCompiler`).
+   **M23.5** (open) handles in-place `Y.Text` edits to non-main files
+   via per-file `Y.Text.observe` subscriptions — needed for the
+   "user edits sec1.tex in the editor" path.
 2. **M22 remaining slices.** M22.2 GT-F local Playwright cases
    (closes M9.editor-ux GT-F); M22.4b wire-shipoutPage batch
    (header 13 → 17 bytes, `PdfSegment.shipoutPage?`).
@@ -348,10 +347,13 @@ Slices:
   deleted file via the tmp+rename atomicity); the
   persistence-level structural mirror is race-free because
   per-name ops serialise through `handleFileOp`'s await chain.
-- **M23.4 (open).** Gold spec: 2-file project (`main.tex` with
-  `\input{sec1}` + `sec1.tex` body); assert a `pdf-segment` ships
-  and the rendered page contains the body. Local Playwright if
-  feasible; otherwise a sidecar-level integration test.
+- **M23.4** (iter 315). Sidecar-level integration test. Pre-seeds
+  the blob store with `main.tex` (`\input{sec1}`) + `sec1.tex` body,
+  boots the sidecar with the real `SupertexDaemonCompiler`, and
+  asserts a `pdf-segment` frame arrives with a `%PDF` header.
+  Pre-M23.2, lualatex would error and no segment would ship. Lock:
+  `tests_gold/lib/test/sidecarWorkspaceMirrorCompile.test.mjs` via
+  `tests_gold/cases/test_sidecar_workspace_mirror_compile.py`.
 - **M23.5 (open).** In-place `Y.Text` edit mirror for non-main
   files. Subscribe per-file `Y.Text.observe` during hydration and
   `addFile`; on observe, debounce-write to disk. Unsubscribe on
@@ -394,7 +396,7 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/3/4a/5; M23.1/2/4;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
