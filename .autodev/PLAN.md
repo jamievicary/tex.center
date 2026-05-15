@@ -40,8 +40,12 @@ routed to (decision deferred post-MVP).
 6. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar.
-7. **M11.2.** Create/delete/rename via context menu + keyboard
-   (`F2`, `Del`-with-confirm).
+7. **M11.2.** Create/delete/rename via context menu + keyboard.
+   **M11.2a closed iter 307** — `F2` rename / `Del`-with-confirm on
+   the focused file row. Pure helper `fileTreeKeyboard.ts`. Locks:
+   `apps/web/test/fileTreeKeyboard.test.mjs`. Remaining: M11.2b —
+   right-click context menu (Create / Rename / Delete entries,
+   click-outside + Esc dismissal, keyboard nav within the menu).
 
 **M15 settled (α).** Seeded multi-page case GREEN since iter 295;
 no Playwright-reproducible path exhibits the user's page-1-only
@@ -99,8 +103,19 @@ Closed sub-slices, locks retained:
   `tests_gold/playwright/editor.spec.ts` local case.
 
 Remaining sub-slices:
-- **M11.2** create/delete/rename via context menu + keyboard
-  (`F2`, `Del`-with-confirm).
+- **M11.2a** keyboard CRUD — `F2` rename / `Del`-with-confirm /
+  `Backspace`-with-confirm on the focused file row. **Closed iter
+  307.** Pure helper `apps/web/src/lib/fileTreeKeyboard.ts` exports
+  `decideFileRowAction(ev, path, mainDocName) →
+  "rename" | "delete" | null` (suppresses modifier keys + the
+  `MAIN_DOC_NAME` row, mirroring the inline `✎`/`×` guards).
+  `FileTree.svelte` file-row button now has an `onkeydown` that
+  dispatches `promptRename` or `window.confirm` + `onDeleteFile`.
+  Confirm gate is keyboard-only; the `×` button stays one-click.
+  Lock: `apps/web/test/fileTreeKeyboard.test.mjs`.
+- **M11.2b** create/delete/rename via right-click context menu.
+  Click-outside + Esc dismissal; keyboard nav (arrow keys / Enter)
+  within the menu. Same imperative flows as the existing buttons.
 - **M11.3** create folder via virtual-folder model.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5a** OS drop-upload — text files. **Closed iter 306.**

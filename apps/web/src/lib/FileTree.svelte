@@ -3,6 +3,7 @@
   import { MAIN_DOC_NAME, validateProjectFileName } from "@tex-center/protocol";
   import { buildFileTree, type FileTreeNode } from "./fileTree.js";
   import { classifyDroppedNames } from "./fileDropUpload.js";
+  import { decideFileRowAction } from "./fileTreeKeyboard.js";
   import {
     createFileTreeInstance,
     type FileItemData,
@@ -220,6 +221,28 @@
     onRenameFile(path, trimmed);
   }
 
+  // M11.2a: keyboard CRUD on the focused file row. F2 → rename
+  // (existing prompt flow); Delete/Backspace → confirm-then-delete.
+  // Keyboard delete is one keystroke away from accident, so it gates
+  // on `window.confirm`; the explicit `×` button stays one-click
+  // because clicking the trash glyph is itself the confirmation.
+  function onFileRowKeyDown(e: KeyboardEvent, path: string): void {
+    const action = decideFileRowAction(e, path, MAIN_DOC_NAME);
+    if (action === null) return;
+    if (action === "rename") {
+      if (!onRenameFile) return;
+      e.preventDefault();
+      promptRename(path);
+      return;
+    }
+    if (action === "delete") {
+      if (!onDeleteFile) return;
+      e.preventDefault();
+      if (!window.confirm(`Delete ${path}?`)) return;
+      onDeleteFile(path);
+    }
+  }
+
   function toggleFolder(id: string): void {
     const inst = tree.getItemInstance(id);
     if (inst.isExpanded()) inst.collapse();
@@ -263,6 +286,7 @@
           class:active={row.data.path === selected}
           style:padding-left={indent}
           onclick={() => selectFile(row.data.path)}
+          onkeydown={(e) => onFileRowKeyDown(e, row.data.path)}
         >
           <span class="label">{row.data.name}</span>
         </button>
