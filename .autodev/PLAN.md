@@ -25,8 +25,11 @@ exists alongside but isn't routed to.
    source via a new discussion question. No further M15 work
    without that input — engineering against an unreproducible bug
    would only generate dark code.
-2. **M19 settings dialog + email-in-topbar.** Cog popover w/
-   fade-duration slider; swap displayName→email. New.
+2. **M19 settings dialog: email-in-topbar + a11y.** M19.1+M19.2
+   slider closed iter 297 (settings store, cog popover, fade
+   slider, `--pdf-fade-ms` CSS var wired through PdfViewer).
+   Remaining: M19.2's email-in-topbar swap (`displayName ?? email`
+   → `email`) + M19.3 Esc/focus management. Both small.
 3. **M17 reopen — cross-fade blend math.** Switch to single-
    layer opacity (leaving canvas above, opacity 1→0; entering
    canvas below, opacity 1). Pin via center-pixel-flatness
@@ -340,12 +343,26 @@ all future settings). Apply live via `--pdf-fade-ms` CSS var
 + `FADE_MS` const removed.
 
 Slices:
-- **M19.1** `apps/web/src/lib/settingsStore.ts` (Svelte 5
-  runes) + topbar cog affordance.
-- **M19.2** fade-duration slider; wire to PdfViewer +
-  controller. Email-in-topbar (swap `displayName ??
-  email` → `email`). Update affected tests.
-- **M19.3** keyboard / a11y (Esc closes; focus management).
+- **M19.1 + M19.2 (slider). Closed iter 297.**
+  `apps/web/src/lib/settingsStore.ts` (pure parse/serialize/clamp
+  helpers — SSR-safe, no DOM globals). Topbar cog button left of
+  email; outside-click closes the popover. Single slider
+  (0–3000ms, step 50ms, default 180ms). Persistence in
+  `localStorage["editor-settings"]` as a single JSON object —
+  one key for all future settings. Applied live via the
+  `--pdf-fade-ms` CSS custom property set on `.shell`;
+  `PdfViewer.svelte` reads it through `var(--pdf-fade-ms, 180ms)`
+  for both the wrapper transition (opacity/width/aspect-ratio)
+  and the per-canvas opacity transition. The previously-unused
+  `FADE_MS` const is gone. Lock:
+  `apps/web/test/settingsStore.test.mjs`.
+- **M19.2 remainder.** Email-in-topbar — swap `displayName ??
+  email` → `email` so the topbar reflects the actual signed-in
+  identity (per `293_answer.md` item 3). Touches editor.spec.ts
+  topbar assertions; needs a refreshed visible-text expectation
+  if the seed user has both display name and email.
+- **M19.3** keyboard / a11y (Esc closes; focus moves to first
+  slider on open; focus returns to cog on close).
 
 ### M20.lifecycle — suspend → stop → cold-storage cascade
 
@@ -482,7 +499,7 @@ sidecar debug log (iter 286); M15 Step B static-source spec
 clampPanelWidths dead-branch removal (iter 290); stale-`pw-*`
 project startup sweep + machine-count threshold bump (iter 293);
 M18.1 DPR-aware PDF backing store (iter 295); M21.1 max-visible
-wire switch (iter 296).
+wire switch (iter 296); M19.1 + M19.2 fade slider (iter 297).
 See git log and `.autodev/logs/` for detail.
 
 ## 3. Open questions / known gaps

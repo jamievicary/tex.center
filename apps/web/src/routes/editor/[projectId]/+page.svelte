@@ -33,6 +33,17 @@
     serializeWidths,
     widthsStorageKey,
   } from "$lib/editorPanelLayout";
+  import {
+    DEFAULT_SETTINGS,
+    FADE_MS_MAX,
+    FADE_MS_MIN,
+    FADE_MS_STEP,
+    SETTINGS_STORAGE_KEY,
+    clampFadeMs,
+    parseSettings,
+    serializeSettings,
+    type EditorSettings,
+  } from "$lib/settingsStore";
 
   let { data } = $props();
 
@@ -237,6 +248,49 @@
     return () => window.removeEventListener("resize", onResize);
   });
 
+  // M19: editor settings (cog popover). Stored as a single JSON
+  // blob in localStorage["editor-settings"]; parseSettings clamps
+  // and falls back to defaults so malformed storage can't break
+  // the editor. Hydrated in onMount because localStorage is
+  // browser-only.
+  let settings = $state<EditorSettings>({ ...DEFAULT_SETTINGS });
+  let settingsOpen = $state(false);
+
+  function updateFadeMs(ms: number): void {
+    const clamped = clampFadeMs(ms);
+    settings = { ...settings, fadeMs: clamped };
+    try {
+      window.localStorage.setItem(
+        SETTINGS_STORAGE_KEY,
+        serializeSettings(settings),
+      );
+    } catch {
+      // Quota or disabled — silently drop.
+    }
+  }
+
+  function toggleSettings(): void {
+    settingsOpen = !settingsOpen;
+  }
+
+  function onSettingsOutsidePointerDown(e: PointerEvent): void {
+    if (!settingsOpen) return;
+    const target = e.target as Node | null;
+    if (!target) return;
+    const popover = document.querySelector(".settings-popover");
+    const cog = document.querySelector(".settings-cog");
+    if (popover?.contains(target)) return;
+    if (cog?.contains(target)) return;
+    settingsOpen = false;
+  }
+
+  onMount(() => {
+    settings = parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
+    window.addEventListener("pointerdown", onSettingsOutsidePointerDown);
+    return () =>
+      window.removeEventListener("pointerdown", onSettingsOutsidePointerDown);
+  });
+
   onDestroy(() => {
     detachKey?.();
     client?.destroy();
@@ -248,7 +302,7 @@
   bind:this={shellEl}
   style="--col-tree: {treePx}px;{previewPx !== null
     ? ` --col-preview: ${previewPx}px;`
-    : ''}"
+    : ''} --pdf-fade-ms: {settings.fadeMs}ms;"
 >
   <header class="topbar">
     <div class="brand-group">
@@ -266,6 +320,34 @@
     {/if}
     {#if data.user}
       <div class="who">
+        <button
+          type="button"
+          class="settings-cog"
+          aria-label="Editor settings"
+          aria-expanded={settingsOpen}
+          aria-haspopup="dialog"
+          data-testid="settings-cog"
+          onclick={toggleSettings}
+        >
+          <!-- Inline cog glyph; 16px, currentColor stroke so it
+               tracks the topbar text colour. No external asset. -->
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            ></path>
+          </svg>
+        </button>
         <span class="email">{data.user.displayName ?? data.user.email}</span>
         <form method="POST" action="/auth/logout">
           <button type="submit" class="signout">Sign out</button>
@@ -273,6 +355,31 @@
       </div>
     {/if}
   </header>
+  {#if settingsOpen}
+    <div
+      class="settings-popover"
+      role="dialog"
+      aria-label="Editor settings"
+      data-testid="settings-popover"
+    >
+      <label class="settings-row">
+        <span class="settings-label">PDF cross-fade duration</span>
+        <input
+          type="range"
+          min={FADE_MS_MIN}
+          max={FADE_MS_MAX}
+          step={FADE_MS_STEP}
+          value={settings.fadeMs}
+          data-testid="settings-fade-ms"
+          oninput={(e) =>
+            updateFadeMs(Number((e.currentTarget as HTMLInputElement).value))}
+        />
+        <span class="settings-value" data-testid="settings-fade-ms-value"
+          >{(settings.fadeMs / 1000).toFixed(2)}s</span
+        >
+      </label>
+    </div>
+  {/if}
   <aside class="tree">
     <FileTree
       files={snapshot.files}
@@ -346,6 +453,7 @@
 <style>
   .shell {
     display: grid;
+    position: relative;
     /* M12: tree/preview hold absolute px via custom properties;
        editor takes the remaining 1fr. When --col-preview is 0
        (pre-mount, before clampWidths runs) we degrade gracefully
@@ -451,6 +559,56 @@
     align-items: center;
     gap: 0.75rem;
     justify-self: end;
+  }
+  .settings-cog {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #4b5563;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 0;
+  }
+  .settings-cog:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+  .settings-cog[aria-expanded="true"] {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+  }
+  .settings-popover {
+    position: absolute;
+    top: 36px;
+    right: 0.75rem;
+    z-index: 10;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 0.75rem;
+    min-width: 260px;
+    font-size: 0.8rem;
+  }
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .settings-row input[type="range"] {
+    width: 100%;
+  }
+  .settings-label {
+    color: #374151;
+    font-weight: 500;
+  }
+  .settings-value {
+    color: #6b7280;
+    justify-self: end;
+    font-variant-numeric: tabular-nums;
   }
   .email {
     color: #374151;

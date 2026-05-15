@@ -19,10 +19,12 @@
   let host: HTMLDivElement | undefined = $state();
   let renderToken = 0;
 
-  // Cross-fade duration (M17.b). Synced with the CSS transition
-  // duration below; a `transitionend` listener provides the canonical
-  // fade-complete signal so this number isn't load-bearing.
-  const FADE_MS = 180;
+  // Cross-fade duration is owned by the editor settings store and
+  // applied to the CSS transitions via the `--pdf-fade-ms` custom
+  // property set on `.shell` (see editor/[projectId]/+page.svelte).
+  // A `transitionend` listener is the canonical fade-complete
+  // signal — duration is purely user-visible, not load-bearing in
+  // any JS state machine.
 
   const tracker = new PageTracker();
   let observer: IntersectionObserver | null = null;
@@ -234,7 +236,10 @@
     position: relative;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     max-width: 100%;
-    transition: opacity 180ms ease, width 180ms ease, aspect-ratio 180ms ease;
+    transition:
+      opacity var(--pdf-fade-ms, 180ms) ease,
+      width var(--pdf-fade-ms, 180ms) ease,
+      aspect-ratio var(--pdf-fade-ms, 180ms) ease;
   }
   /*
    * Both canvases are absolutely positioned inside the wrapper, so
@@ -248,6 +253,6 @@
     display: block;
     width: 100%;
     height: 100%;
-    transition: opacity 180ms ease;
+    transition: opacity var(--pdf-fade-ms, 180ms) ease;
   }
 </style>

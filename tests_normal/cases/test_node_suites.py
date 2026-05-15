@@ -137,6 +137,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_pdf_render_scale(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "pdfRenderScale.test.mjs")
 
+    def test_web_settings_store(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "settingsStore.test.mjs")
+
     def test_web_oauth_start(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "oauthStart.test.mjs")
 
