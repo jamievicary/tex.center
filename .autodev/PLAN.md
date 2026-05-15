@@ -396,19 +396,17 @@ elements **or** a single canvas of height > viewport.height * 1.8.
   checkpoint restore, partial Yjs sync timing, or different
   coalescer cadence). Pin retained as a regression lock and a
   shape-baseline for the next investigation iteration.
-- **Next iter (M15 close-out path).** Two options:
-  (i) Extend the local pin to attempt to reproduce the live
-  short-circuit so the fix can be iterated inside
-  `vendor/supertex/`. Candidate variations: larger first-compile
-  source (mimicking ~20 chars buffered before first coalescer
-  flush), simulating `checkpoint restore` via consecutive
-  `compiler` instances, or feeding the SEED via baseline
-  `targetPage=1` first (mirroring an older sidecar path).
-  (ii) Escalate via a discussion question in
-  `vendor/supertex/discussion/<N>_question.md` with the live log
-  evidence and the iter-276 local-pin contrast, letting the
-  supertex agent identify why highwater fails to advance on the
-  insert-before-\end shape.
+- **Escalation iter 279.** Wrote
+  `vendor/supertex/discussion/764_question.md` (option ii from iter
+  276) describing the live shape, the smoking-gun stderr line, the
+  local-pin contrast (green for the same sequence of writes), and
+  candidate predicate fixes. M15 close-out is now blocked on the
+  supertex agent picking that up in its next iteration. tex-center
+  side has no further work until either (a) supertex lands a fix
+  and the upstream commit is rolled into `SIDECAR_IMAGE`, or (b)
+  supertex responds with a reason the bug is downstream — in which
+  case option (i) (extending the local pin until it reproduces)
+  becomes the next move.
 - **Diagnosis + fix landed iter 269.** Root cause was the
   sidecar's `targetPage = maxViewingPage(p)` default in
   `apps/sidecar/src/server.ts` `runCompile`. Supertex's daemon
