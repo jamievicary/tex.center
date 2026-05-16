@@ -1,87 +1,68 @@
 run_parallel_cases.py: dispatching 20 module(s) across 4 worker(s)
-test_cleanup_old_playwright_projects (test_cleanup_old_playwright_projects.TestCleanupOldPlaywrightProjects.test_cleanup_old_playwright_projects) ... ok
-
-----------------------------------------------------------------------
-Ran 1 test in 0.821s
-
-OK
 test_cleanup_project_machine (test_cleanup_project_machine.TestCleanupProjectMachine.test_cleanup_project_machine) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.844s
+Ran 1 test in 0.827s
+
+OK
+test_cleanup_old_playwright_projects (test_cleanup_old_playwright_projects.TestCleanupOldPlaywrightProjects.test_cleanup_old_playwright_projects) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.850s
 
 OK
 test_mint_google_id_token (test_mint_google_id_token.TestMintGoogleIdToken.test_mint_google_id_token) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.769s
+Ran 1 test in 0.735s
 
 OK
 test_authed_cookie (test_authed_cookie.TestAuthedCookie.test_authed_cookie) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.873s
+Ran 1 test in 1.768s
 
 OK
 test_fly_proxy (test_fly_proxy.TestFlyProxy.test_fly_proxy) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.972s
+Ran 1 test in 2.004s
 
 OK
 test_local_db (test_local_db.TestLocalDb.test_local_db) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 5.074s
+Ran 1 test in 4.965s
 
 OK
 test_mint_session (test_mint_session.TestMintSession.test_mint_session) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 4.674s
+Ran 1 test in 4.662s
 
 OK
-test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... FAIL
-
-======================================================================
-FAIL: test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold)
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/cases/test_sidecar_machine_count.py", line 129, in test_machine_count_under_threshold
-    self.fail("\n".join(lines))
-AssertionError: tex-center-sidecar has 11 non-shared Machines (of 13 total), threshold is 10 (TEXCENTER_MAX_SIDECAR_MACHINES). Likely cause: a live spec failed to reap its per-project Machine. Triage / destroy:
-  - d8d1494f193728 name=small-sound-2294 state=suspended created=2026-05-15T14:56:42Z texcenter_project=3367d53a-b8e3-4298-81fb-585b1df34c46
-  - 28624d4f7d25e8 name=bold-sky-8019 state=suspended created=2026-05-15T16:40:26Z texcenter_project=498d8578-886d-458b-8ed9-ad8c3f9efe0a
-  - 48e635ec3ee468 name=holy-sound-7542 state=suspended created=2026-05-14T18:21:37Z texcenter_project=1ead1a1d-2392-4c8c-ba8e-dfebaa78792f
-  - d8d35d6a17de18 name=broken-sound-1266 state=suspended created=2026-05-15T16:39:21Z texcenter_project=<untagged>
-  - 7844043be67258 name=wandering-dawn-1091 state=suspended created=2026-05-15T11:03:41Z texcenter_project=2bc1a126-7705-4a87-8f2e-6f69e9577dea
-  - 78496e5fde4608 name=dark-sun-4506 state=started created=2026-05-14T19:28:29Z texcenter_project=2dda63f4-5e16-4955-b5ff-e329adcd7e5b
-  - d8d5459a1d32d8 name=aged-glade-8425 state=suspended created=2026-05-15T16:39:51Z texcenter_project=88492faa-3fb4-4113-9d98-e6242f97d3fe
-  - 48e0e36f7997d8 name=snowy-wave-2337 state=suspended created=2026-05-14T19:23:32Z texcenter_project=c6790016-eb36-4f6e-8e18-27fc50a8f602
-  - 7819d00c033138 name=dawn-breeze-1115 state=suspended created=2026-05-15T10:54:09Z texcenter_project=b4de1e54-2513-403f-9497-5d13417ab00b
-  - e829133c693438 name=throbbing-sun-3165 state=stopped created=2026-05-16T07:58:10Z texcenter_project=f5e707e9-3f5a-40aa-90ee-b9edf7539d76
-  - 7845d4eb45e168 name=green-dew-9542 state=suspended created=2026-05-15T11:55:02Z texcenter_project=24bfe15a-fb25-43b4-be44-545e751180b5
+test_machine_count_under_threshold (test_sidecar_machine_count.TestSidecarMachineCount.test_machine_count_under_threshold) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.174s
+Ran 1 test in 0.163s
 
-FAILED (failures=1)
+OK
 test_sidecar_workspace_mirror_compile (test_sidecar_workspace_mirror_compile.TestSidecarWorkspaceMirrorCompile.test_sidecar_workspace_mirror_compile) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 2.318s
+Ran 1 test in 2.376s
 
 OK
 test_sidecar_cold_start_coalescer (test_sidecar_cold_start_coalescer.TestSidecarColdStartCoalescer.test_sidecar_cold_start_coalescer) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 5.142s
+Ran 1 test in 5.326s
 
 OK
 test_supertex_daemon_real (test_supertex_daemon_real.TestSupertexDaemonReal.test_supertex_daemon_real) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.281s
+Ran 1 test in 1.359s
 
 OK
 test_machine_assignments (test_pglite.TestPglite.test_machine_assignments) ... ok
@@ -90,52 +71,1835 @@ test_projects (test_pglite.TestPglite.test_projects) ... ok
 test_users_sessions (test_pglite.TestPglite.test_users_sessions) ... ok
 
 ----------------------------------------------------------------------
-Ran 4 tests in 11.435s
+Ran 4 tests in 11.800s
 
 OK
 test_supertex_incremental_multipage_emit (test_supertex_incremental_multipage_emit.TestSupertexIncrementalMultipageEmit.test_supertex_incremental_multipage_emit) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.946s
+Ran 1 test in 2.080s
 
 OK
 test_supertex_filewatcher_race (test_supertex_filewatcher_race.TestSupertexFilewatcherRace.test_supertex_filewatcher_race) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 3.389s
+Ran 1 test in 3.631s
 
 OK
 test_supertex_multipage_emit (test_supertex_multipage_emit.TestSupertexMultipageEmit.test_supertex_multipage_emit) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.642s
+Ran 1 test in 1.958s
 
 OK
 test_supertex_oversize_target (test_supertex_oversize_target.TestSupertexOversizeTarget.test_supertex_oversize_target) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 1.490s
+Ran 1 test in 1.612s
 
 OK
 test_sweep_orphaned_sidecar_machines (test_sweep_orphaned_sidecar_machines.TestSweepOrphanedSidecarMachines.test_sweep_orphaned_sidecar_machines) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.584s
+Ran 1 test in 0.643s
 
 OK
 test_supertex_warm_doc_body_edit_noop (test_supertex_warm_doc_body_edit_noop.TestSupertexWarmDocBodyEditNoop.test_supertex_warm_doc_body_edit_noop) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 2.603s
+Ran 1 test in 2.605s
 
 OK
 test_supertex_cold_newpage_crash (test_supertex_cold_newpage_crash.TestSupertexColdNewpageCrash.test_supertex_cold_newpage_crash) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 15.859s
+Ran 1 test in 16.413s
 
 OK
-test_playwright (test_playwright.TestPlaywright.test_playwright) ... FAIL
+setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
+
+Running 61 tests using 1 worker
+
+[authed visit to / lands on /projects] timeline: no project WS observed
+  ✓  1 [local] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (9.2s)
+[renders three-panel layout for an owned project] timeline (project=b03bfdbc-191d-4a99-b555-a433aa150326):
+[renders three-panel layout for an owned project] summary (project=b03bfdbc-191d-4a99-b555-a433aa150326): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[renders three-panel layout for an owned project] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/b03bfdbc-191d-4a99-b555-a433aa150326' failed: Connection closed before receiving a handshake response
+  ✓  2 [local] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.6s)
+[`?debug=1` persists debugMode:true and checkbox reflects it] timeline (project=e2b41b4f-893c-4c11-9b87-31647b837647):
+[`?debug=1` persists debugMode:true and checkbox reflects it] summary (project=e2b41b4f-893c-4c11-9b87-31647b837647): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[`?debug=1` persists debugMode:true and checkbox reflects it] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/e2b41b4f-893c-4c11-9b87-31647b837647' failed: Connection closed before receiving a handshake response
+  ✓  3 [local] › editorDebugToggle.spec.ts:75:7 › editor debug toggle (M22.2 GT-F) › `?debug=1` persists debugMode:true and checkbox reflects it (472ms)
+[`?debug=0` persists debugMode:false and checkbox reflects it] timeline (project=db61bc6b-de4a-4013-a24e-f343fe837d17):
+[`?debug=0` persists debugMode:false and checkbox reflects it] summary (project=db61bc6b-de4a-4013-a24e-f343fe837d17): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[`?debug=0` persists debugMode:false and checkbox reflects it] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/db61bc6b-de4a-4013-a24e-f343fe837d17' failed: Connection closed before receiving a handshake response
+  ✓  4 [local] › editorDebugToggle.spec.ts:103:7 › editor debug toggle (M22.2 GT-F) › `?debug=0` persists debugMode:false and checkbox reflects it (481ms)
+[checkbox click flips the persisted debugMode] timeline (project=84e1b6cd-77c1-4d92-b296-921112d9bebb):
+[checkbox click flips the persisted debugMode] summary (project=84e1b6cd-77c1-4d92-b296-921112d9bebb): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[checkbox click flips the persisted debugMode] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/84e1b6cd-77c1-4d92-b296-921112d9bebb' failed: Connection closed before receiving a handshake response
+  ✓  5 [local] › editorDebugToggle.spec.ts:129:7 › editor debug toggle (M22.2 GT-F) › checkbox click flips the persisted debugMode (524ms)
+[Ctrl+Shift+D keyboard shortcut toggles debugMode] timeline (project=e81ce0b9-6329-4d5a-a7df-cba158e5bc50):
+[Ctrl+Shift+D keyboard shortcut toggles debugMode] summary (project=e81ce0b9-6329-4d5a-a7df-cba158e5bc50): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[Ctrl+Shift+D keyboard shortcut toggles debugMode] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/e81ce0b9-6329-4d5a-a7df-cba158e5bc50' failed: Connection closed before receiving a handshake response
+  ✓  6 [local] › editorDebugToggle.spec.ts:171:7 › editor debug toggle (M22.2 GT-F) › Ctrl+Shift+D keyboard shortcut toggles debugMode (473ms)
+[right-click on `main.tex` opens a menu with Rename + Delete disabled (mirrors the inline button guards)] timeline (project=38ce310f-14b4-47d8-ab37-a55e22955aa2):
+[right-click on `main.tex` opens a menu with Rename + Delete disabled (mirrors the inline button guards)] summary (project=38ce310f-14b4-47d8-ab37-a55e22955aa2): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[right-click on `main.tex` opens a menu with Rename + Delete disabled (mirrors the inline button guards)] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/38ce310f-14b4-47d8-ab37-a55e22955aa2' failed: Connection closed before receiving a handshake response
+  ✓  7 [local] › editorFileTreeContextMenu.spec.ts:32:7 › editor file-tree context menu (M11.2b) › right-click on `main.tex` opens a menu with Rename + Delete disabled (mirrors the inline button guards) (465ms)
+[right-click on the tree's empty area opens a menu with `New file…`; clicking it fires the create prompt] timeline (project=238db564-2f24-4e81-9c92-0636c04e2720):
+[right-click on the tree's empty area opens a menu with `New file…`; clicking it fires the create prompt] summary (project=238db564-2f24-4e81-9c92-0636c04e2720): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[right-click on the tree's empty area opens a menu with `New file…`; clicking it fires the create prompt] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/238db564-2f24-4e81-9c92-0636c04e2720' failed: Connection closed before receiving a handshake response
+  ✓  8 [local] › editorFileTreeContextMenu.spec.ts:61:7 › editor file-tree context menu (M11.2b) › right-click on the tree's empty area opens a menu with `New file…`; clicking it fires the create prompt (488ms)
+[click anywhere outside the menu dismisses it] timeline (project=c516db98-ff89-46bd-8361-9a3f6c14c1e1):
+[click anywhere outside the menu dismisses it] summary (project=c516db98-ff89-46bd-8361-9a3f6c14c1e1): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[click anywhere outside the menu dismisses it] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/c516db98-ff89-46bd-8361-9a3f6c14c1e1' failed: Connection closed before receiving a handshake response
+  ✓  9 [local] › editorFileTreeContextMenu.spec.ts:108:7 › editor file-tree context menu (M11.2b) › click anywhere outside the menu dismisses it (494ms)
+[dragging the tree divider resizes the tree column and persists across reload] timeline (project=ecfe68dc-a4c7-4471-8f91-6da452c6f939):
+[dragging the tree divider resizes the tree column and persists across reload] summary (project=ecfe68dc-a4c7-4471-8f91-6da452c6f939): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[dragging the tree divider resizes the tree column and persists across reload] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/ecfe68dc-a4c7-4471-8f91-6da452c6f939' failed: Connection closed before receiving a handshake response
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/ecfe68dc-a4c7-4471-8f91-6da452c6f939' failed: Connection closed before receiving a handshake response
+  ✓  10 [local] › editorPanelDividers.spec.ts:32:7 › editor panel dividers (M12) › dragging the tree divider resizes the tree column and persists across reload (701ms)
+[dragging the preview divider resizes the preview column and persists across reload] timeline (project=73ea588a-6c90-4c98-9684-7246932c5ffa):
+[dragging the preview divider resizes the preview column and persists across reload] summary (project=73ea588a-6c90-4c98-9684-7246932c5ffa): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[dragging the preview divider resizes the preview column and persists across reload] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/73ea588a-6c90-4c98-9684-7246932c5ffa' failed: Connection closed before receiving a handshake response
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/73ea588a-6c90-4c98-9684-7246932c5ffa' failed: Connection closed before receiving a handshake response
+  ✓  11 [local] › editorPanelDividers.spec.ts:88:7 › editor panel dividers (M12) › dragging the preview divider resizes the preview column and persists across reload (836ms)
+[fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts] timeline (project=248b7dd5-0417-4430-b0ca-c5c64bcd40fb):
+[fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts] summary (project=248b7dd5-0417-4430-b0ca-c5c64bcd40fb): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+[fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts] browser diagnostics:
+    [browser:console.error] WebSocket connection to 'ws://127.0.0.1:3000/ws/project/248b7dd5-0417-4430-b0ca-c5c64bcd40fb' failed: Connection closed before receiving a handshake response
+  ✓  12 [local] › editorSeedPlaceholder.spec.ts:42:7 › editor seed placeholder (M13.2(a)) › fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts (436ms)
+  ✓  13 [local] › landing.spec.ts:13:5 › landing page has only a sign-in widget and no marketing copy (450ms)
+[lists seeded projects with editor links] timeline: no project WS observed
+  ✓  14 [local] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (223ms)
+[shows empty-state when the user has no projects] timeline: no project WS observed
+  ✓  15 [local] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects (443ms)
+[sign-out clears the cookie and lands on /] timeline: no project WS observed
+  ✓  16 [local] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (530ms)
+[authed visit to / lands on /projects] timeline: no project WS observed
+  ✓  17 [live] › authedHome.spec.ts:9:5 › authed visit to / lands on /projects (1.8s)
+[renders three-panel layout for an owned project] timeline (project=f6cdb2a5-6083-46ba-a681-80572d1e9ef8):
+[renders three-panel layout for an owned project] summary (project=f6cdb2a5-6083-46ba-a681-80572d1e9ef8): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+  ✓  18 [live] › editor.spec.ts:24:7 › editor route › renders three-panel layout for an owned project (1.3s)
+  -  19 [live] › editorDebugToggle.spec.ts:75:7 › editor debug toggle (M22.2 GT-F) › `?debug=1` persists debugMode:true and checkbox reflects it
+  -  20 [live] › editorDebugToggle.spec.ts:103:7 › editor debug toggle (M22.2 GT-F) › `?debug=0` persists debugMode:false and checkbox reflects it
+  -  21 [live] › editorDebugToggle.spec.ts:129:7 › editor debug toggle (M22.2 GT-F) › checkbox click flips the persisted debugMode
+  -  22 [live] › editorDebugToggle.spec.ts:171:7 › editor debug toggle (M22.2 GT-F) › Ctrl+Shift+D keyboard shortcut toggles debugMode
+  -  23 [live] › editorFileTreeContextMenu.spec.ts:32:7 › editor file-tree context menu (M11.2b) › right-click on `main.tex` opens a menu with Rename + Delete disabled (mirrors the inline button guards)
+  -  24 [live] › editorFileTreeContextMenu.spec.ts:61:7 › editor file-tree context menu (M11.2b) › right-click on the tree's empty area opens a menu with `New file…`; clicking it fires the create prompt
+  -  25 [live] › editorFileTreeContextMenu.spec.ts:108:7 › editor file-tree context menu (M11.2b) › click anywhere outside the menu dismisses it
+  -  26 [live] › editorPanelDividers.spec.ts:32:7 › editor panel dividers (M12) › dragging the tree divider resizes the tree column and persists across reload
+  -  27 [live] › editorPanelDividers.spec.ts:88:7 › editor panel dividers (M12) › dragging the preview divider resizes the preview column and persists across reload
+  -  28 [live] › editorSeedPlaceholder.spec.ts:42:7 › editor seed placeholder (M13.2(a)) › fresh project renders `<pre class=editor-seed>` carrying the canonical documentclass sentinel before CodeMirror mounts
+  ✓  29 [live] › landing.spec.ts:13:5 › landing page has only a sign-in widget and no marketing copy (149ms)
+[lists seeded projects with editor links] timeline: no project WS observed
+  ✓  30 [live] › projects.spec.ts:26:7 › projects dashboard › lists seeded projects with editor links (480ms)
+[shows empty-state when the user has no projects] timeline: no project WS observed
+  -  31 [live] › projects.spec.ts:50:7 › projects dashboard › shows empty-state when the user has no projects
+[sign-out clears the cookie and lands on /] timeline: no project WS observed
+  ✓  32 [live] › signout.spec.ts:9:5 › sign-out clears the cookie and lands on / (517ms)
+[authed GET /projects → 200] timeline: no project WS observed
+  ✓  33 [live] › verifyLiveAuthed.spec.ts:41:7 › live authed deploy verification › authed GET /projects → 200 (185ms)
+  ✓  34 [live] › verifyLiveAuthed.spec.ts:47:7 › live authed deploy verification › anon GET /projects → 302 to / (93ms)
+[dashboard delete reaps DB row, machine_assignments row, and tagged Fly Machine] timeline (project=429b6778-918b-4988-aaba-73adf04f6651):
+[dashboard delete reaps DB row, machine_assignments row, and tagged Fly Machine] summary (project=429b6778-918b-4988-aaba-73adf04f6651): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+  ✓  35 [live] › verifyLiveDeleteProject.spec.ts:103:7 › live delete-project (M9.live-hygiene delete verb) › dashboard delete reaps DB row, machine_assignments row, and tagged Fly Machine (3.0s)
+[edit → pdf-segment frame → non-blank preview canvas] timeline (project=3153f8df-64a6-44c4-ab8e-06cb751cd7c6):
+   +16.600s  in   control:hello             hello
+   +16.753s  in   doc-update                bytes=92
+   +16.834s  in   doc-update                bytes=92
+   +16.836s  in   control:file-list         file-list
+   +16.842s  in   control:compile-status    state=running
+   +17.069s  out  doc-update                bytes=19
+   +17.083s  out  doc-update                bytes=19
+   +17.093s  out  doc-update                bytes=19
+   +17.101s  out  doc-update                bytes=19
+   +17.110s  out  doc-update                bytes=19
+   +17.118s  out  doc-update                bytes=19
+   +17.126s  out  doc-update                bytes=19
+   +17.134s  out  doc-update                bytes=19
+   +17.142s  out  doc-update                bytes=19
+   +17.150s  out  doc-update                bytes=19
+   +17.158s  out  doc-update                bytes=19
+   +17.166s  out  doc-update                bytes=19
+   +17.174s  out  doc-update                bytes=19
+   +17.181s  out  doc-update                bytes=19
+   +17.190s  out  doc-update                bytes=20
+   +17.199s  out  doc-update                bytes=25
+   +17.208s  out  doc-update                bytes=25
+   +17.218s  out  doc-update                bytes=25
+   +17.227s  out  doc-update                bytes=25
+   +17.237s  out  doc-update                bytes=25
+   +17.246s  out  doc-update                bytes=25
+   +17.257s  out  doc-update                bytes=25
+   +17.267s  out  doc-update                bytes=27
+   +17.277s  out  doc-update                bytes=19
+   +17.287s  out  doc-update                bytes=19
+   +17.297s  out  doc-update                bytes=19
+   +17.306s  out  doc-update                bytes=19
+   +17.314s  out  doc-update                bytes=19
+   +17.323s  out  doc-update                bytes=19
+   +17.332s  out  doc-update                bytes=20
+   +17.341s  out  doc-update                bytes=25
+   +17.350s  out  doc-update                bytes=25
+   +17.359s  out  doc-update                bytes=25
+   +17.368s  out  doc-update                bytes=25
+   +17.377s  out  doc-update                bytes=25
+   +17.388s  out  doc-update                bytes=25
+   +17.397s  out  doc-update                bytes=25
+   +17.406s  out  doc-update                bytes=25
+   +17.416s  out  doc-update                bytes=27
+   +17.425s  out  doc-update                bytes=19
+   +17.433s  out  doc-update                bytes=19
+   +17.442s  out  doc-update                bytes=19
+   +17.450s  out  doc-update                bytes=19
+   +17.458s  out  doc-update                bytes=19
+   +17.466s  out  doc-update                bytes=19
+   +17.474s  out  doc-update                bytes=19
+   +17.481s  out  doc-update                bytes=19
+   +17.490s  out  doc-update                bytes=19
+   +17.498s  out  doc-update                bytes=19
+   +17.506s  out  doc-update                bytes=19
+   +17.514s  out  doc-update                bytes=19
+   +17.522s  out  doc-update                bytes=19
+   +17.530s  out  doc-update                bytes=19
+   +17.538s  out  doc-update                bytes=19
+   +17.546s  out  doc-update                bytes=19
+   +17.554s  out  doc-update                bytes=19
+   +17.562s  out  doc-update                bytes=19
+   +17.571s  out  doc-update                bytes=19
+   +17.579s  out  doc-update                bytes=19
+   +17.588s  out  doc-update                bytes=20
+   +17.597s  out  doc-update                bytes=25
+   +17.606s  out  doc-update                bytes=25
+   +17.614s  out  doc-update                bytes=25
+   +17.622s  out  doc-update                bytes=25
+   +17.630s  out  doc-update                bytes=25
+   +17.638s  out  doc-update                bytes=25
+   +17.646s  out  doc-update                bytes=25
+   +17.654s  out  doc-update                bytes=25
+   +17.662s  out  doc-update                bytes=27
+   +21.332s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +21.333s  in   control:compile-status    state=idle
+   +21.401s  in   control:compile-status    state=running
+   +21.562s  in   control:compile-status    state=idle
+   +21.674s  out  control:view              view
+[edit → pdf-segment frame → non-blank preview canvas] summary (project=3153f8df-64a6-44c4-ab8e-06cb751cd7c6): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×2, pdf-segment×1} (compile-cycles=2 zero-segment-cycles=1 mean-cycle=2.326s pdf-segment-bytes=56544), out {control:view×1, doc-update×69} (doc-update-bytes=1476)
+  ✓  36 [live] › verifyLiveFullPipeline.spec.ts:64:7 › live full pipeline (M8.pw.4) › edit → pdf-segment frame → non-blank preview canvas (33.6s)
+[reused project: edit → pdf-segment frame → non-blank preview canvas] timeline (project=00000000-0000-4000-8000-000000000001):
+   +11.372s  in   control:hello             hello
+   +11.537s  in   doc-update                bytes=92
+   +11.589s  out  doc-update                bytes=11
+   +11.597s  out  doc-update                bytes=19
+   +11.606s  out  doc-update                bytes=19
+   +11.615s  out  doc-update                bytes=19
+   +11.624s  out  doc-update                bytes=19
+   +11.624s  in   doc-update                bytes=30
+   +11.625s  in   control:file-list         file-list
+   +11.630s  in   control:compile-status    state=running
+   +11.633s  out  doc-update                bytes=19
+   +11.642s  out  doc-update                bytes=19
+   +11.652s  out  doc-update                bytes=19
+   +11.660s  out  doc-update                bytes=19
+   +11.668s  out  doc-update                bytes=19
+   +11.675s  out  doc-update                bytes=19
+   +11.685s  out  doc-update                bytes=19
+   +11.693s  out  doc-update                bytes=19
+   +11.701s  out  doc-update                bytes=19
+   +11.708s  out  doc-update                bytes=19
+   +11.718s  out  doc-update                bytes=20
+   +11.726s  out  doc-update                bytes=25
+   +11.735s  out  doc-update                bytes=25
+   +11.743s  out  doc-update                bytes=25
+   +11.752s  out  doc-update                bytes=25
+   +11.760s  out  doc-update                bytes=25
+   +11.768s  out  doc-update                bytes=25
+   +11.776s  out  doc-update                bytes=25
+   +11.785s  out  doc-update                bytes=27
+   +11.793s  out  doc-update                bytes=19
+   +11.801s  out  doc-update                bytes=19
+   +11.809s  out  doc-update                bytes=19
+   +11.817s  out  doc-update                bytes=19
+   +11.825s  out  doc-update                bytes=19
+   +11.834s  out  doc-update                bytes=19
+   +11.842s  out  doc-update                bytes=20
+   +11.852s  out  doc-update                bytes=25
+   +11.860s  out  doc-update                bytes=25
+   +11.868s  out  doc-update                bytes=25
+   +11.876s  out  doc-update                bytes=25
+   +11.884s  out  doc-update                bytes=25
+   +11.893s  out  doc-update                bytes=25
+   +11.902s  out  doc-update                bytes=25
+   +11.910s  out  doc-update                bytes=25
+   +11.918s  out  doc-update                bytes=27
+   +11.926s  out  doc-update                bytes=19
+   +11.935s  out  doc-update                bytes=19
+   +11.943s  out  doc-update                bytes=19
+   +11.951s  out  doc-update                bytes=19
+   +11.960s  out  doc-update                bytes=19
+   +11.969s  out  doc-update                bytes=19
+   +11.977s  out  doc-update                bytes=19
+   +11.985s  out  doc-update                bytes=19
+   +11.993s  out  doc-update                bytes=19
+   +12.001s  out  doc-update                bytes=19
+   +12.008s  out  doc-update                bytes=19
+   +12.017s  out  doc-update                bytes=19
+   +12.024s  out  doc-update                bytes=19
+   +12.032s  out  doc-update                bytes=19
+   +12.040s  out  doc-update                bytes=19
+   +12.049s  out  doc-update                bytes=19
+   +12.057s  out  doc-update                bytes=19
+   +12.065s  out  doc-update                bytes=19
+   +12.073s  out  doc-update                bytes=19
+   +12.081s  out  doc-update                bytes=19
+   +12.091s  out  doc-update                bytes=19
+   +12.102s  out  doc-update                bytes=19
+   +12.109s  out  doc-update                bytes=19
+   +12.119s  out  doc-update                bytes=19
+   +12.127s  out  doc-update                bytes=19
+   +12.139s  out  doc-update                bytes=19
+   +12.148s  out  doc-update                bytes=19
+   +12.158s  out  doc-update                bytes=20
+   +12.168s  out  doc-update                bytes=25
+   +12.177s  out  doc-update                bytes=25
+   +12.185s  out  doc-update                bytes=25
+   +12.193s  out  doc-update                bytes=25
+   +12.201s  out  doc-update                bytes=25
+   +12.209s  out  doc-update                bytes=25
+   +12.218s  out  doc-update                bytes=25
+   +12.226s  out  doc-update                bytes=25
+   +12.235s  out  doc-update                bytes=27
+   +14.118s  in   control:compile-status    state=error
+   +14.219s  in   control:compile-status    state=running
+   +14.262s  in   control:compile-status    state=error
+[reused project: edit → pdf-segment frame → non-blank preview canvas] summary (project=00000000-0000-4000-8000-000000000001): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×2} (compile-cycles=2 zero-segment-cycles=2 mean-cycle=1.266s pdf-segment-bytes=0), out {doc-update×77} (doc-update-bytes=1620)
+  ✘  37 [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas (2.5m)
+[freshly-seeded project: .cm-content is never visible empty] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.371s  in   control:hello             hello
+    +0.387s  in   doc-update                bytes=92
+    +0.389s  in   control:file-list         file-list
+    +0.404s  in   pdf-segment               bytes=56544 shipoutPage=1
+[freshly-seeded project: .cm-content is never visible empty] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:file-list×1, control:hello×1, doc-update×1, pdf-segment×1} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=56544), out {(none)} (doc-update-bytes=0)
+  ✓  38 [live] › verifyLiveGt1NoFlashLoad.spec.ts:46:7 › live no-flash editor load (GT-A) › freshly-seeded project: .cm-content is never visible empty (1.9s)
+[seeded project: pdf-segment arrives without user input] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.337s  in   control:hello             hello
+    +0.351s  in   doc-update                bytes=92
+    +0.352s  in   control:file-list         file-list
+    +0.364s  in   pdf-segment               bytes=56544 shipoutPage=1
+    +0.438s  in   control:compile-status    state=running
+    +0.447s  in   control:compile-status    state=idle
+    +0.588s  out  control:view              view
+[seeded project: pdf-segment arrives without user input] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×2, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×1} (compile-cycles=1 zero-segment-cycles=1 mean-cycle=9ms pdf-segment-bytes=56544), out {control:view×1} (doc-update-bytes=0)
+  ✓  39 [live] › verifyLiveGt2InitialPdfSeeded.spec.ts:40:7 › live initial PDF for seeded content (GT-B) › seeded project: pdf-segment arrives without user input (716ms)
+[single keystroke produces a distinct second pdf-segment, no overlap error] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.255s  in   control:hello             hello
+    +0.269s  in   doc-update                bytes=92
+    +0.270s  in   control:file-list         file-list
+    +0.286s  in   pdf-segment               bytes=56544 shipoutPage=1
+    +0.354s  in   control:compile-status    state=running
+    +0.364s  in   control:compile-status    state=idle
+    +0.525s  out  control:view              view
+    +0.539s  out  doc-update                bytes=25
+    +0.700s  in   control:compile-status    state=running
+    +1.861s  in   pdf-segment               bytes=56545 shipoutPage=1
+    +1.861s  in   control:compile-status    state=idle
+[single keystroke produces a distinct second pdf-segment, no overlap error] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×2} (compile-cycles=2 zero-segment-cycles=1 mean-cycle=586ms pdf-segment-bytes=113089), out {control:view×1, doc-update×1} (doc-update-bytes=25)
+  ✓  40 [live] › verifyLiveGt3EditTriggersFreshPdf.spec.ts:41:7 › live edit triggers fresh PDF (GT-C) › single keystroke produces a distinct second pdf-segment, no overlap error (2.5s)
+[sustained typing: no overlap error, final state matches, ≥1 pdf-segment] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.272s  in   control:hello             hello
+    +0.287s  in   doc-update                bytes=122
+    +0.293s  in   control:file-list         file-list
+    +0.298s  in   pdf-segment               bytes=56545 shipoutPage=1
+    +0.374s  in   control:compile-status    state=running
+    +0.381s  in   control:compile-status    state=idle
+    +0.530s  out  doc-update                bytes=25
+    +0.534s  out  control:view              view
+    +0.567s  out  doc-update                bytes=25
+    +0.602s  out  doc-update                bytes=25
+    +0.639s  out  doc-update                bytes=25
+    +0.667s  in   control:compile-status    state=running
+    +0.678s  out  doc-update                bytes=25
+    +0.711s  out  doc-update                bytes=25
+    +0.746s  out  doc-update                bytes=25
+    +0.786s  out  doc-update                bytes=25
+    +0.821s  out  doc-update                bytes=25
+    +0.856s  out  doc-update                bytes=25
+    +0.892s  out  doc-update                bytes=25
+    +0.926s  out  doc-update                bytes=25
+    +0.960s  out  doc-update                bytes=25
+    +0.994s  out  doc-update                bytes=25
+    +1.028s  out  doc-update                bytes=25
+    +1.064s  out  doc-update                bytes=25
+    +1.099s  out  doc-update                bytes=25
+    +1.133s  out  doc-update                bytes=25
+    +1.168s  out  doc-update                bytes=25
+    +1.204s  out  doc-update                bytes=25
+    +1.239s  out  doc-update                bytes=25
+    +1.273s  out  doc-update                bytes=25
+    +1.308s  out  doc-update                bytes=25
+    +1.343s  out  doc-update                bytes=25
+    +1.378s  out  doc-update                bytes=25
+    +1.414s  out  doc-update                bytes=25
+    +1.449s  out  doc-update                bytes=25
+    +1.484s  out  doc-update                bytes=25
+    +1.519s  out  doc-update                bytes=25
+    +1.553s  out  doc-update                bytes=25
+    +1.576s  in   pdf-segment               bytes=56550 shipoutPage=1
+    +1.577s  in   control:compile-status    state=idle
+    +1.577s  in   control:compile-status    state=running
+    +1.586s  out  doc-update                bytes=25
+    +1.622s  out  doc-update                bytes=25
+    +1.657s  out  doc-update                bytes=25
+    +1.693s  out  doc-update                bytes=25
+    +1.727s  out  doc-update                bytes=25
+    +1.762s  out  doc-update                bytes=25
+    +1.796s  out  doc-update                bytes=25
+    +1.831s  out  doc-update                bytes=25
+    +1.866s  out  doc-update                bytes=25
+    +1.901s  out  doc-update                bytes=25
+    +1.935s  out  doc-update                bytes=25
+    +1.969s  out  doc-update                bytes=25
+    +2.003s  out  doc-update                bytes=25
+    +2.038s  out  doc-update                bytes=25
+    +2.073s  out  doc-update                bytes=25
+    +2.107s  out  doc-update                bytes=25
+    +2.143s  out  doc-update                bytes=25
+    +2.179s  out  doc-update                bytes=25
+    +2.214s  out  doc-update                bytes=25
+    +2.249s  out  doc-update                bytes=25
+    +2.283s  out  doc-update                bytes=25
+    +2.317s  out  doc-update                bytes=25
+    +2.351s  out  doc-update                bytes=25
+    +2.386s  out  doc-update                bytes=25
+    +2.421s  out  doc-update                bytes=25
+    +2.437s  in   pdf-segment               bytes=56595 shipoutPage=1
+    +2.439s  in   control:compile-status    state=idle
+    +2.458s  out  doc-update                bytes=25
+    +2.480s  in   control:compile-status    state=running
+    +2.493s  out  doc-update                bytes=25
+    +2.528s  out  doc-update                bytes=25
+    +2.563s  out  doc-update                bytes=25
+    +2.603s  out  doc-update                bytes=25
+    +2.638s  out  doc-update                bytes=25
+    +2.672s  out  doc-update                bytes=25
+    +2.707s  out  doc-update                bytes=25
+    +2.742s  out  doc-update                bytes=25
+    +2.775s  out  doc-update                bytes=25
+    +2.808s  out  doc-update                bytes=25
+    +2.843s  out  doc-update                bytes=25
+    +2.877s  out  doc-update                bytes=25
+    +2.913s  out  doc-update                bytes=25
+    +2.948s  out  doc-update                bytes=25
+    +2.982s  out  doc-update                bytes=25
+    +3.017s  out  doc-update                bytes=25
+    +3.050s  out  doc-update                bytes=25
+    +3.084s  out  doc-update                bytes=25
+    +3.119s  out  doc-update                bytes=25
+    +3.153s  out  doc-update                bytes=25
+    +3.187s  out  doc-update                bytes=25
+    +3.221s  out  doc-update                bytes=25
+    +3.256s  out  doc-update                bytes=25
+    +3.290s  out  doc-update                bytes=25
+    +3.325s  out  doc-update                bytes=25
+    +3.361s  out  doc-update                bytes=25
+    +3.395s  out  doc-update                bytes=25
+    +3.430s  out  doc-update                bytes=25
+    +3.465s  out  doc-update                bytes=25
+    +3.500s  out  doc-update                bytes=25
+    +3.508s  in   pdf-segment               bytes=56644 shipoutPage=1
+    +3.509s  in   control:compile-status    state=idle
+    +3.534s  out  doc-update                bytes=25
+    +3.556s  in   control:compile-status    state=running
+    +3.568s  out  doc-update                bytes=25
+    +3.603s  out  doc-update                bytes=25
+    +3.638s  out  doc-update                bytes=25
+    +3.673s  out  doc-update                bytes=25
+    +3.707s  out  doc-update                bytes=25
+    +3.742s  out  doc-update                bytes=25
+    +3.776s  out  doc-update                bytes=25
+    +3.810s  out  doc-update                bytes=25
+    +3.844s  out  doc-update                bytes=25
+    +3.878s  out  doc-update                bytes=25
+    +3.913s  out  doc-update                bytes=25
+    +3.949s  out  doc-update                bytes=25
+    +3.983s  out  doc-update                bytes=25
+    +4.018s  out  doc-update                bytes=25
+    +4.053s  out  doc-update                bytes=25
+    +4.088s  out  doc-update                bytes=25
+    +4.122s  out  doc-update                bytes=25
+    +4.156s  out  doc-update                bytes=25
+    +4.191s  out  doc-update                bytes=25
+    +4.226s  out  doc-update                bytes=25
+    +4.261s  out  doc-update                bytes=25
+    +4.296s  out  doc-update                bytes=25
+    +4.329s  out  doc-update                bytes=25
+    +4.363s  out  doc-update                bytes=25
+    +4.398s  out  doc-update                bytes=25
+    +4.433s  out  doc-update                bytes=25
+    +4.467s  out  doc-update                bytes=25
+    +4.487s  in   pdf-segment               bytes=56708 shipoutPage=1
+    +4.488s  in   control:compile-status    state=idle
+    +4.501s  out  doc-update                bytes=25
+    +4.521s  in   control:compile-status    state=running
+    +4.535s  out  doc-update                bytes=25
+    +4.569s  out  doc-update                bytes=25
+    +4.604s  out  doc-update                bytes=25
+    +4.640s  out  doc-update                bytes=25
+    +4.674s  out  doc-update                bytes=25
+    +4.709s  out  doc-update                bytes=25
+    +4.743s  out  doc-update                bytes=25
+    +4.778s  out  doc-update                bytes=25
+    +4.812s  out  doc-update                bytes=25
+    +4.846s  out  doc-update                bytes=25
+    +4.881s  out  doc-update                bytes=25
+    +4.915s  out  doc-update                bytes=25
+    +4.950s  out  doc-update                bytes=25
+    +4.984s  out  doc-update                bytes=26
+    +5.019s  out  doc-update                bytes=27
+    +5.053s  out  doc-update                bytes=27
+    +5.088s  out  doc-update                bytes=27
+    +5.121s  out  doc-update                bytes=27
+    +5.156s  out  doc-update                bytes=27
+    +5.189s  out  doc-update                bytes=27
+    +5.225s  out  doc-update                bytes=27
+    +5.259s  out  doc-update                bytes=27
+    +5.294s  out  doc-update                bytes=27
+    +5.328s  out  doc-update                bytes=27
+    +5.362s  out  doc-update                bytes=27
+    +5.380s  in   pdf-segment               bytes=56746 shipoutPage=1
+    +5.381s  in   control:compile-status    state=idle
+    +5.382s  in   control:compile-status    state=running
+    +5.396s  out  doc-update                bytes=27
+    +5.431s  out  doc-update                bytes=27
+    +5.466s  out  doc-update                bytes=27
+    +5.500s  out  doc-update                bytes=27
+    +5.534s  out  doc-update                bytes=27
+    +5.568s  out  doc-update                bytes=27
+    +5.603s  out  doc-update                bytes=27
+    +5.638s  out  doc-update                bytes=27
+    +5.673s  out  doc-update                bytes=27
+    +5.708s  out  doc-update                bytes=27
+    +5.742s  out  doc-update                bytes=27
+    +6.244s  in   pdf-segment               bytes=56792 shipoutPage=1
+    +6.244s  in   control:compile-status    state=idle
+    +6.338s  in   control:compile-status    state=running
+    +7.214s  in   pdf-segment               bytes=56807 shipoutPage=1
+    +7.215s  in   control:compile-status    state=idle
+[sustained typing: no overlap error, final state matches, ≥1 pdf-segment] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×16, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×8} (compile-cycles=8 zero-segment-cycles=1 mean-cycle=792ms pdf-segment-bytes=453387), out {control:view×1, doc-update×151} (doc-update-bytes=3820)
+  ✓  41 [live] › verifyLiveGt4SustainedTyping.spec.ts:53:7 › live sustained typing (GT-D) › sustained typing: no overlap error, final state matches, ≥1 pdf-segment (35.9s)
+[source edit produces a visually distinct preview canvas] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.386s  in   control:hello             hello
+    +0.402s  in   doc-update                bytes=295
+    +0.403s  in   control:file-list         file-list
+    +0.419s  in   pdf-segment               bytes=56807 shipoutPage=1
+    +0.487s  in   control:compile-status    state=running
+    +0.495s  in   control:compile-status    state=idle
+    +0.656s  out  control:view              view
+    +1.158s  out  doc-update                bytes=26
+    +1.170s  out  doc-update                bytes=25
+    +1.180s  out  doc-update                bytes=25
+    +1.188s  out  doc-update                bytes=25
+    +1.196s  out  doc-update                bytes=25
+    +1.204s  out  doc-update                bytes=25
+    +1.212s  out  doc-update                bytes=25
+    +1.220s  out  doc-update                bytes=25
+    +1.228s  out  doc-update                bytes=25
+    +1.237s  out  doc-update                bytes=26
+    +1.246s  out  doc-update                bytes=25
+    +1.255s  out  doc-update                bytes=25
+    +1.264s  out  doc-update                bytes=25
+    +1.273s  out  doc-update                bytes=25
+    +1.279s  in   control:compile-status    state=running
+    +1.282s  out  doc-update                bytes=25
+    +1.290s  out  doc-update                bytes=25
+    +1.299s  out  doc-update                bytes=25
+    +1.308s  out  doc-update                bytes=25
+    +1.317s  out  doc-update                bytes=25
+    +1.326s  out  doc-update                bytes=25
+    +1.337s  out  doc-update                bytes=25
+    +1.348s  out  doc-update                bytes=33
+    +1.358s  out  doc-update                bytes=25
+    +2.659s  in   pdf-segment               bytes=110528 shipoutPage=1
+    +2.659s  in   control:compile-status    state=idle
+    +2.741s  in   control:compile-status    state=running
+    +4.093s  in   pdf-segment               bytes=110541 shipoutPage=1
+    +4.093s  in   control:compile-status    state=idle
+[source edit produces a visually distinct preview canvas] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×6, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×3} (compile-cycles=3 zero-segment-cycles=1 mean-cycle=913ms pdf-segment-bytes=277876), out {control:view×1, doc-update×23} (doc-update-bytes=585)
+  ✓  42 [live] › verifyLiveGt5EditUpdatesPreview.spec.ts:52:7 › live edit updates preview canvas (GT-5) › source edit produces a visually distinct preview canvas (5.0s)
+[fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive] timeline (project=ce063288-c6f3-44ba-866c-b1f2ceb22975):
+[fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive] summary (project=ce063288-c6f3-44ba-866c-b1f2ceb22975): in {(none)} (compile-cycles=0 zero-segment-cycles=0 mean-cycle=n/a pdf-segment-bytes=0), out {(none)} (doc-update-bytes=0)
+  ✓  43 [live] › verifyLiveGt6FastContentAppearance.spec.ts:55:7 › live fast .cm-content appearance after dashboard click (GT-6) › fresh cold project: seed .tex source appears in .cm-content within 500 ms of editor route becoming interactive (877ms)
+[verifyLiveGt6LiveEditableState] project=b0d7bae1-399f-4278-834d-2b41f8e5c3bf machine=781741db465558 cmContentReadyMs=844 keystrokeAckMs=9 cmTextPrefix="\\documentclass{article}\\begin{document}Hello, world!\\end{document}"
+[suspended project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each] timeline (project=b0d7bae1-399f-4278-834d-2b41f8e5c3bf):
+   +11.875s  in   control:hello             hello
+   +12.020s  in   doc-update                bytes=92
+   +12.124s  in   doc-update                bytes=92
+   +12.125s  in   control:file-list         file-list
+   +12.128s  in   control:compile-status    state=running
+   +16.491s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +16.492s  in   control:compile-status    state=idle
+   +16.570s  in   control:compile-status    state=running
+   +16.584s  in   control:compile-status    state=idle
+   +20.194s  in   control:hello             hello
+   +20.202s  in   doc-update                bytes=92
+   +20.203s  in   control:file-list         file-list
+   +20.230s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +20.302s  in   control:compile-status    state=running
+   +20.325s  out  doc-update                bytes=19
+   +20.332s  in   control:compile-status    state=idle
+   +20.444s  out  control:view              view
+   +20.452s  in   control:compile-status    state=running
+   +20.741s  in   control:compile-status    state=idle
+[suspended project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each] summary (project=b0d7bae1-399f-4278-834d-2b41f8e5c3bf): in {control:compile-status×8, control:file-list×2, control:hello×2, doc-update×3, pdf-segment×2} (compile-cycles=4 zero-segment-cycles=3 mean-cycle=1.174s pdf-segment-bytes=113088), out {control:view×1, doc-update×1} (doc-update-bytes=19)
+  ✓  44 [live] › verifyLiveGt6LiveEditableState.spec.ts:76:7 › live cold-from-suspended editable state (M13.2(b).3) › suspended project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each (26.9s)
+[verifyLiveGt6LiveEditableStateStopped] project=852464f2-8548-42c3-94cf-561f44333b0b machine=48e2133c906168 cmContentReadyMs=4867 keystrokeAckMs=8 cmTextPrefix="\\documentclass{article}\\begin{document}Hello, world!\\end{document}"
+[stopped project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each] timeline (project=852464f2-8548-42c3-94cf-561f44333b0b):
+    +7.172s  in   control:hello             hello
+    +7.478s  in   doc-update                bytes=92
+    +7.574s  in   doc-update                bytes=92
+    +7.576s  in   control:file-list         file-list
+    +7.579s  in   control:compile-status    state=running
+   +11.860s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +11.861s  in   control:compile-status    state=idle
+   +23.232s  in   control:hello             hello
+   +23.403s  in   doc-update                bytes=92
+   +23.406s  in   doc-update                bytes=92
+   +23.407s  in   control:file-list         file-list
+   +23.495s  out  doc-update                bytes=19
+   +23.502s  in   control:compile-status    state=running
+   +28.355s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +28.355s  in   control:compile-status    state=idle
+   +28.429s  in   control:compile-status    state=running
+   +28.534s  out  control:view              view
+   +28.607s  in   control:compile-status    state=idle
+[stopped project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each] summary (project=852464f2-8548-42c3-94cf-561f44333b0b): in {control:compile-status×6, control:file-list×2, control:hello×2, doc-update×4, pdf-segment×2} (compile-cycles=3 zero-segment-cycles=1 mean-cycle=3.104s pdf-segment-bytes=113088), out {control:view×1, doc-update×1} (doc-update-bytes=19)
+  ✘  45 [live] › verifyLiveGt6LiveEditableStateStopped.spec.ts:57:7 › live cold-from-stopped editable state (M13.2(b).4) › stopped project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each (29.9s)
+[zero-delay typing produces no daemon protocol-violation control frame] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.285s  in   control:hello             hello
+    +0.304s  in   doc-update                bytes=390
+    +0.310s  in   control:file-list         file-list
+    +0.330s  in   pdf-segment               bytes=110541 shipoutPage=1
+    +0.387s  in   control:compile-status    state=running
+    +0.393s  out  doc-update                bytes=25
+    +0.403s  out  doc-update                bytes=25
+    +0.407s  out  doc-update                bytes=25
+    +0.412s  out  doc-update                bytes=25
+    +0.417s  out  doc-update                bytes=25
+    +0.419s  out  doc-update                bytes=25
+    +0.422s  out  doc-update                bytes=25
+    +0.425s  out  doc-update                bytes=25
+    +0.428s  out  doc-update                bytes=25
+    +0.431s  out  doc-update                bytes=25
+    +0.434s  out  doc-update                bytes=25
+    +0.437s  out  doc-update                bytes=25
+    +0.440s  out  doc-update                bytes=25
+    +0.443s  out  doc-update                bytes=25
+    +0.449s  out  doc-update                bytes=25
+    +0.454s  out  doc-update                bytes=25
+    +0.457s  out  doc-update                bytes=25
+    +0.460s  out  doc-update                bytes=25
+    +0.465s  out  doc-update                bytes=25
+    +0.469s  out  doc-update                bytes=25
+    +0.472s  out  doc-update                bytes=25
+    +0.476s  out  doc-update                bytes=25
+    +0.481s  out  doc-update                bytes=25
+    +0.485s  out  doc-update                bytes=25
+    +0.487s  out  doc-update                bytes=25
+    +0.490s  out  doc-update                bytes=25
+    +0.494s  out  doc-update                bytes=25
+    +0.499s  out  doc-update                bytes=25
+    +0.502s  out  doc-update                bytes=25
+    +0.505s  out  doc-update                bytes=25
+    +0.508s  out  doc-update                bytes=25
+    +0.519s  out  doc-update                bytes=25
+    +0.520s  in   control:compile-status    state=idle
+    +0.525s  out  doc-update                bytes=25
+    +0.533s  out  doc-update                bytes=25
+    +0.539s  out  doc-update                bytes=25
+    +0.543s  out  doc-update                bytes=25
+    +0.549s  out  doc-update                bytes=25
+    +0.563s  out  doc-update                bytes=25
+    +0.573s  out  doc-update                bytes=25
+    +0.578s  out  doc-update                bytes=25
+    +0.588s  out  doc-update                bytes=25
+    +0.592s  out  doc-update                bytes=25
+    +0.596s  out  doc-update                bytes=25
+    +0.602s  out  doc-update                bytes=25
+    +0.605s  out  doc-update                bytes=25
+    +0.609s  out  doc-update                bytes=25
+    +0.615s  out  doc-update                bytes=25
+    +0.619s  in   control:compile-status    state=running
+    +0.621s  out  doc-update                bytes=25
+    +0.627s  out  doc-update                bytes=25
+    +0.636s  out  doc-update                bytes=25
+    +0.640s  out  doc-update                bytes=25
+    +0.644s  out  doc-update                bytes=25
+    +0.659s  out  doc-update                bytes=25
+    +0.666s  out  doc-update                bytes=25
+    +0.671s  out  doc-update                bytes=25
+    +0.682s  out  doc-update                bytes=25
+    +0.686s  out  doc-update                bytes=25
+    +0.689s  out  doc-update                bytes=25
+    +0.692s  out  doc-update                bytes=25
+    +0.700s  out  doc-update                bytes=25
+    +0.706s  out  doc-update                bytes=25
+    +0.709s  out  doc-update                bytes=25
+    +0.717s  out  doc-update                bytes=25
+    +0.723s  out  doc-update                bytes=25
+    +0.727s  out  doc-update                bytes=25
+    +0.734s  out  doc-update                bytes=25
+    +0.738s  out  doc-update                bytes=25
+    +0.742s  out  doc-update                bytes=25
+    +0.757s  out  doc-update                bytes=25
+    +0.761s  out  doc-update                bytes=25
+    +0.769s  out  doc-update                bytes=25
+    +0.784s  out  doc-update                bytes=25
+    +0.785s  out  control:view              view
+    +0.790s  out  doc-update                bytes=25
+    +0.794s  out  doc-update                bytes=25
+    +0.801s  out  doc-update                bytes=25
+    +0.803s  out  doc-update                bytes=25
+    +0.806s  out  doc-update                bytes=25
+    +0.809s  out  doc-update                bytes=25
+    +0.813s  out  doc-update                bytes=25
+    +0.816s  out  doc-update                bytes=25
+    +0.819s  out  doc-update                bytes=25
+    +0.822s  out  doc-update                bytes=25
+    +0.825s  out  doc-update                bytes=25
+    +0.828s  out  doc-update                bytes=25
+    +0.832s  out  doc-update                bytes=25
+    +0.835s  out  doc-update                bytes=25
+    +0.839s  out  doc-update                bytes=25
+    +0.842s  out  doc-update                bytes=25
+    +0.848s  out  doc-update                bytes=25
+    +0.851s  out  doc-update                bytes=25
+    +0.854s  out  doc-update                bytes=25
+    +0.857s  out  doc-update                bytes=25
+    +0.860s  out  doc-update                bytes=25
+    +0.864s  out  doc-update                bytes=25
+    +0.867s  out  doc-update                bytes=25
+    +0.869s  out  doc-update                bytes=25
+    +0.872s  out  doc-update                bytes=25
+    +0.875s  out  doc-update                bytes=25
+    +0.878s  out  doc-update                bytes=25
+    +0.883s  out  doc-update                bytes=25
+    +0.886s  out  doc-update                bytes=25
+    +0.888s  out  doc-update                bytes=25
+    +0.891s  out  doc-update                bytes=25
+    +0.894s  out  doc-update                bytes=25
+    +0.898s  out  doc-update                bytes=25
+    +0.901s  out  doc-update                bytes=25
+    +0.904s  out  doc-update                bytes=25
+    +0.907s  out  doc-update                bytes=25
+    +0.909s  out  doc-update                bytes=25
+    +0.914s  out  doc-update                bytes=25
+    +0.917s  out  doc-update                bytes=25
+    +0.920s  out  doc-update                bytes=25
+    +0.922s  out  doc-update                bytes=25
+    +0.925s  out  doc-update                bytes=25
+    +0.927s  out  doc-update                bytes=25
+    +0.932s  out  doc-update                bytes=25
+    +0.935s  out  doc-update                bytes=25
+    +0.939s  out  doc-update                bytes=25
+    +0.942s  out  doc-update                bytes=25
+    +0.945s  out  doc-update                bytes=25
+    +0.949s  out  doc-update                bytes=25
+    +0.952s  out  doc-update                bytes=25
+    +0.955s  out  doc-update                bytes=25
+    +0.958s  out  doc-update                bytes=25
+    +0.961s  out  doc-update                bytes=25
+    +0.966s  out  doc-update                bytes=25
+    +0.968s  out  doc-update                bytes=25
+    +0.971s  out  doc-update                bytes=25
+    +0.974s  out  doc-update                bytes=26
+    +0.976s  out  doc-update                bytes=27
+    +0.981s  out  doc-update                bytes=27
+    +0.984s  out  doc-update                bytes=27
+    +0.986s  out  doc-update                bytes=27
+    +0.989s  out  doc-update                bytes=27
+    +0.992s  out  doc-update                bytes=27
+    +0.995s  out  doc-update                bytes=27
+    +1.000s  out  doc-update                bytes=27
+    +1.003s  out  doc-update                bytes=27
+    +1.005s  out  doc-update                bytes=27
+    +1.008s  out  doc-update                bytes=27
+    +1.010s  out  doc-update                bytes=27
+    +1.015s  out  doc-update                bytes=27
+    +1.018s  out  doc-update                bytes=27
+    +1.021s  out  doc-update                bytes=27
+    +1.024s  out  doc-update                bytes=27
+    +1.028s  out  doc-update                bytes=27
+    +1.033s  out  doc-update                bytes=27
+    +1.035s  out  doc-update                bytes=27
+    +1.038s  out  doc-update                bytes=27
+    +1.041s  out  doc-update                bytes=27
+    +1.043s  out  doc-update                bytes=27
+    +1.048s  out  doc-update                bytes=27
+    +1.051s  out  doc-update                bytes=27
+    +1.053s  out  doc-update                bytes=27
+    +1.056s  out  doc-update                bytes=27
+    +1.059s  out  doc-update                bytes=27
+    +1.065s  out  doc-update                bytes=27
+    +1.068s  out  doc-update                bytes=27
+    +1.071s  out  doc-update                bytes=27
+    +1.074s  out  doc-update                bytes=27
+    +1.077s  out  doc-update                bytes=27
+    +1.081s  out  doc-update                bytes=27
+    +1.084s  out  doc-update                bytes=27
+    +1.087s  out  doc-update                bytes=27
+    +1.090s  out  doc-update                bytes=27
+    +1.093s  out  doc-update                bytes=27
+    +1.097s  out  doc-update                bytes=27
+    +1.101s  out  doc-update                bytes=27
+    +1.104s  out  doc-update                bytes=27
+    +1.106s  out  doc-update                bytes=27
+    +1.110s  out  doc-update                bytes=27
+    +1.115s  out  doc-update                bytes=27
+    +1.118s  out  doc-update                bytes=27
+    +1.121s  out  doc-update                bytes=27
+    +1.124s  out  doc-update                bytes=27
+    +1.127s  out  doc-update                bytes=27
+    +1.131s  out  doc-update                bytes=27
+    +1.134s  out  doc-update                bytes=27
+    +1.137s  out  doc-update                bytes=27
+    +1.140s  out  doc-update                bytes=27
+    +1.143s  out  doc-update                bytes=27
+    +1.147s  out  doc-update                bytes=27
+    +1.155s  out  doc-update                bytes=27
+    +1.159s  out  doc-update                bytes=27
+    +1.161s  out  doc-update                bytes=27
+    +1.170s  out  doc-update                bytes=27
+    +1.172s  out  doc-update                bytes=27
+    +1.175s  out  doc-update                bytes=27
+    +1.178s  out  doc-update                bytes=27
+    +1.182s  out  doc-update                bytes=27
+    +1.185s  out  doc-update                bytes=27
+    +1.188s  out  doc-update                bytes=27
+    +1.191s  out  doc-update                bytes=27
+    +1.194s  out  doc-update                bytes=27
+    +1.198s  out  doc-update                bytes=27
+    +1.201s  out  doc-update                bytes=27
+    +1.204s  out  doc-update                bytes=27
+    +1.207s  out  doc-update                bytes=27
+    +1.210s  out  doc-update                bytes=27
+    +1.214s  out  doc-update                bytes=27
+    +1.217s  out  doc-update                bytes=27
+    +1.220s  out  doc-update                bytes=27
+    +1.223s  out  doc-update                bytes=27
+    +1.226s  out  doc-update                bytes=27
+    +1.231s  out  doc-update                bytes=27
+    +1.234s  out  doc-update                bytes=27
+    +1.238s  out  doc-update                bytes=27
+    +1.241s  out  doc-update                bytes=27
+    +1.244s  out  doc-update                bytes=27
+    +1.249s  out  doc-update                bytes=27
+    +1.252s  out  doc-update                bytes=27
+    +1.256s  out  doc-update                bytes=27
+    +1.259s  out  doc-update                bytes=27
+    +1.264s  out  doc-update                bytes=27
+    +1.268s  out  doc-update                bytes=27
+    +1.272s  out  doc-update                bytes=27
+    +1.275s  out  doc-update                bytes=27
+    +1.278s  out  doc-update                bytes=27
+    +1.284s  out  doc-update                bytes=27
+    +1.287s  out  doc-update                bytes=27
+    +1.290s  out  doc-update                bytes=27
+    +1.294s  out  doc-update                bytes=27
+    +1.299s  out  doc-update                bytes=27
+    +1.302s  out  doc-update                bytes=27
+    +1.304s  out  doc-update                bytes=27
+    +1.307s  out  doc-update                bytes=27
+    +1.310s  out  doc-update                bytes=27
+    +1.315s  out  doc-update                bytes=27
+    +1.318s  out  doc-update                bytes=27
+    +1.320s  out  doc-update                bytes=27
+    +1.323s  out  doc-update                bytes=27
+    +1.326s  out  doc-update                bytes=27
+    +1.330s  out  doc-update                bytes=27
+    +1.333s  out  doc-update                bytes=27
+    +1.335s  out  doc-update                bytes=27
+    +1.338s  out  doc-update                bytes=27
+    +1.341s  out  doc-update                bytes=27
+    +1.344s  out  doc-update                bytes=27
+    +1.349s  out  doc-update                bytes=27
+    +1.353s  out  doc-update                bytes=27
+    +1.358s  out  doc-update                bytes=27
+    +1.362s  out  doc-update                bytes=27
+    +1.366s  out  doc-update                bytes=27
+    +1.370s  out  doc-update                bytes=27
+    +1.373s  out  doc-update                bytes=27
+    +1.377s  out  doc-update                bytes=27
+    +1.382s  out  doc-update                bytes=27
+    +1.386s  out  doc-update                bytes=27
+    +1.389s  out  doc-update                bytes=27
+    +1.392s  out  doc-update                bytes=27
+    +1.398s  out  doc-update                bytes=27
+    +1.401s  out  doc-update                bytes=27
+    +1.404s  out  doc-update                bytes=27
+    +1.407s  out  doc-update                bytes=27
+    +1.411s  out  doc-update                bytes=27
+    +1.415s  out  doc-update                bytes=27
+    +1.418s  out  doc-update                bytes=27
+    +1.421s  out  doc-update                bytes=27
+    +1.424s  out  doc-update                bytes=27
+    +1.426s  out  doc-update                bytes=27
+    +1.431s  out  doc-update                bytes=27
+    +1.434s  out  doc-update                bytes=27
+    +1.437s  out  doc-update                bytes=27
+    +1.440s  out  doc-update                bytes=27
+    +1.443s  out  doc-update                bytes=27
+    +1.452s  out  doc-update                bytes=27
+    +1.454s  out  doc-update                bytes=27
+    +1.457s  out  doc-update                bytes=27
+    +1.459s  out  doc-update                bytes=27
+    +1.463s  out  doc-update                bytes=27
+    +1.469s  out  doc-update                bytes=27
+    +1.471s  out  doc-update                bytes=27
+    +1.473s  out  doc-update                bytes=27
+    +1.476s  out  doc-update                bytes=27
+    +1.480s  out  doc-update                bytes=27
+    +1.482s  out  doc-update                bytes=27
+    +1.484s  out  doc-update                bytes=27
+    +1.487s  out  doc-update                bytes=27
+    +1.490s  out  doc-update                bytes=27
+    +1.492s  out  doc-update                bytes=27
+    +1.495s  out  doc-update                bytes=27
+    +1.499s  out  doc-update                bytes=27
+    +1.502s  out  doc-update                bytes=27
+    +1.504s  out  doc-update                bytes=27
+    +1.506s  out  doc-update                bytes=27
+    +1.509s  out  doc-update                bytes=27
+    +1.511s  out  doc-update                bytes=27
+    +1.515s  out  doc-update                bytes=27
+    +1.518s  out  doc-update                bytes=27
+    +1.520s  out  doc-update                bytes=27
+    +1.523s  out  doc-update                bytes=27
+    +1.525s  out  doc-update                bytes=27
+    +1.530s  out  doc-update                bytes=27
+    +1.532s  out  doc-update                bytes=27
+    +1.535s  out  doc-update                bytes=27
+    +1.537s  out  doc-update                bytes=27
+    +1.539s  out  doc-update                bytes=27
+    +1.542s  out  doc-update                bytes=27
+    +1.544s  out  doc-update                bytes=27
+    +1.548s  out  doc-update                bytes=27
+    +1.551s  out  doc-update                bytes=27
+    +1.554s  out  doc-update                bytes=27
+    +1.556s  out  doc-update                bytes=27
+    +1.558s  out  doc-update                bytes=27
+    +1.561s  out  doc-update                bytes=27
+    +1.566s  out  doc-update                bytes=27
+    +1.569s  out  doc-update                bytes=27
+    +1.571s  out  doc-update                bytes=27
+    +1.574s  out  doc-update                bytes=27
+    +1.576s  out  doc-update                bytes=27
+    +1.581s  out  doc-update                bytes=27
+    +1.583s  out  doc-update                bytes=27
+    +1.586s  out  doc-update                bytes=27
+    +1.588s  out  doc-update                bytes=27
+    +1.590s  out  doc-update                bytes=27
+    +1.592s  out  doc-update                bytes=27
+    +1.596s  out  doc-update                bytes=27
+    +1.600s  out  doc-update                bytes=27
+    +1.602s  out  doc-update                bytes=27
+    +1.605s  out  doc-update                bytes=27
+    +1.607s  out  doc-update                bytes=27
+    +1.610s  out  doc-update                bytes=27
+    +1.615s  out  doc-update                bytes=27
+    +1.618s  out  doc-update                bytes=27
+    +1.621s  out  doc-update                bytes=27
+    +1.624s  out  doc-update                bytes=27
+    +1.627s  out  doc-update                bytes=27
+    +1.632s  out  doc-update                bytes=27
+    +1.635s  out  doc-update                bytes=27
+    +1.637s  out  doc-update                bytes=27
+    +1.639s  out  doc-update                bytes=27
+    +1.642s  out  doc-update                bytes=27
+    +1.647s  out  doc-update                bytes=27
+    +1.650s  out  doc-update                bytes=27
+    +1.652s  out  doc-update                bytes=27
+    +1.655s  out  doc-update                bytes=27
+    +1.658s  out  doc-update                bytes=27
+    +1.660s  out  doc-update                bytes=27
+    +1.665s  out  doc-update                bytes=27
+    +1.667s  out  doc-update                bytes=27
+    +1.670s  out  doc-update                bytes=27
+    +1.673s  out  doc-update                bytes=27
+    +1.675s  out  doc-update                bytes=27
+    +1.678s  out  doc-update                bytes=27
+    +1.682s  out  doc-update                bytes=27
+    +1.684s  out  doc-update                bytes=27
+    +1.687s  out  doc-update                bytes=27
+    +1.689s  out  doc-update                bytes=27
+    +1.692s  out  doc-update                bytes=27
+    +1.695s  out  doc-update                bytes=27
+    +1.699s  out  doc-update                bytes=27
+    +1.702s  out  doc-update                bytes=27
+    +1.704s  out  doc-update                bytes=27
+    +1.706s  out  doc-update                bytes=27
+    +1.709s  out  doc-update                bytes=27
+    +1.713s  out  doc-update                bytes=27
+    +1.716s  out  doc-update                bytes=27
+    +1.719s  out  doc-update                bytes=27
+    +1.721s  out  doc-update                bytes=27
+    +1.725s  out  doc-update                bytes=27
+    +1.728s  out  doc-update                bytes=27
+    +1.732s  out  doc-update                bytes=27
+    +1.735s  out  doc-update                bytes=27
+    +1.738s  out  doc-update                bytes=27
+    +1.740s  out  doc-update                bytes=27
+    +1.744s  out  doc-update                bytes=27
+    +1.748s  out  doc-update                bytes=27
+    +1.751s  out  doc-update                bytes=27
+    +1.754s  out  doc-update                bytes=27
+    +1.757s  out  doc-update                bytes=27
+    +1.759s  out  doc-update                bytes=27
+    +1.764s  out  doc-update                bytes=27
+    +1.767s  out  doc-update                bytes=27
+    +1.770s  out  doc-update                bytes=27
+    +1.773s  out  doc-update                bytes=27
+    +1.775s  out  doc-update                bytes=27
+    +1.778s  out  doc-update                bytes=27
+    +1.783s  out  doc-update                bytes=27
+    +1.786s  out  doc-update                bytes=27
+    +1.788s  out  doc-update                bytes=27
+    +1.791s  out  doc-update                bytes=27
+    +1.794s  out  doc-update                bytes=27
+    +1.799s  out  doc-update                bytes=27
+    +1.802s  out  doc-update                bytes=27
+    +1.806s  out  doc-update                bytes=27
+    +1.811s  out  doc-update                bytes=27
+    +1.816s  out  doc-update                bytes=27
+    +1.820s  out  doc-update                bytes=27
+    +1.824s  out  doc-update                bytes=27
+    +1.827s  out  doc-update                bytes=27
+    +1.835s  out  doc-update                bytes=27
+    +1.838s  out  doc-update                bytes=27
+    +1.842s  out  doc-update                bytes=27
+    +1.845s  out  doc-update                bytes=27
+    +1.850s  out  doc-update                bytes=27
+    +1.853s  out  doc-update                bytes=27
+    +1.855s  out  doc-update                bytes=27
+    +1.859s  out  doc-update                bytes=27
+    +1.864s  out  doc-update                bytes=27
+    +1.866s  out  doc-update                bytes=27
+    +1.869s  out  doc-update                bytes=27
+    +1.871s  out  doc-update                bytes=27
+    +1.874s  out  doc-update                bytes=27
+    +1.877s  out  doc-update                bytes=27
+    +1.881s  out  doc-update                bytes=27
+    +1.884s  out  doc-update                bytes=27
+    +1.887s  out  doc-update                bytes=27
+    +1.890s  out  doc-update                bytes=27
+    +1.893s  out  doc-update                bytes=27
+    +1.898s  out  doc-update                bytes=27
+    +1.901s  out  doc-update                bytes=27
+    +1.909s  out  doc-update                bytes=27
+    +1.912s  out  doc-update                bytes=27
+    +1.919s  out  doc-update                bytes=27
+    +1.922s  out  doc-update                bytes=27
+    +1.925s  out  doc-update                bytes=27
+    +1.927s  out  doc-update                bytes=27
+    +1.931s  out  doc-update                bytes=27
+    +1.934s  out  doc-update                bytes=27
+    +1.936s  out  doc-update                bytes=27
+    +1.939s  out  doc-update                bytes=27
+    +1.942s  out  doc-update                bytes=27
+    +1.944s  out  doc-update                bytes=27
+    +1.949s  out  doc-update                bytes=27
+    +1.951s  out  doc-update                bytes=27
+    +1.954s  out  doc-update                bytes=27
+    +1.956s  out  doc-update                bytes=27
+    +1.960s  out  doc-update                bytes=27
+    +1.964s  out  doc-update                bytes=27
+    +1.967s  out  doc-update                bytes=27
+    +1.969s  out  doc-update                bytes=27
+    +1.972s  out  doc-update                bytes=27
+    +1.974s  out  doc-update                bytes=27
+    +1.977s  out  doc-update                bytes=27
+    +1.981s  out  doc-update                bytes=27
+    +1.984s  out  doc-update                bytes=27
+    +1.987s  out  doc-update                bytes=27
+    +1.990s  out  doc-update                bytes=27
+    +1.992s  out  doc-update                bytes=27
+    +1.995s  out  doc-update                bytes=27
+    +1.999s  out  doc-update                bytes=27
+    +2.002s  out  doc-update                bytes=27
+    +2.004s  out  doc-update                bytes=27
+    +2.007s  out  doc-update                bytes=27
+    +2.009s  out  doc-update                bytes=27
+    +2.013s  out  doc-update                bytes=27
+    +2.017s  out  doc-update                bytes=27
+    +2.020s  out  doc-update                bytes=27
+    +2.022s  out  doc-update                bytes=27
+    +2.025s  out  doc-update                bytes=27
+    +2.027s  out  doc-update                bytes=27
+    +2.033s  out  doc-update                bytes=27
+    +2.036s  out  doc-update                bytes=27
+    +2.038s  out  doc-update                bytes=27
+    +2.041s  out  doc-update                bytes=27
+    +2.044s  out  doc-update                bytes=27
+    +2.049s  out  doc-update                bytes=27
+    +2.051s  out  doc-update                bytes=27
+    +2.054s  out  doc-update                bytes=27
+    +2.057s  out  doc-update                bytes=27
+    +2.060s  out  doc-update                bytes=27
+    +2.065s  out  doc-update                bytes=27
+    +2.067s  out  doc-update                bytes=27
+    +2.070s  out  doc-update                bytes=27
+    +2.073s  out  doc-update                bytes=27
+    +2.076s  out  doc-update                bytes=27
+    +2.081s  out  doc-update                bytes=27
+    +2.372s  in   pdf-segment               bytes=110601 shipoutPage=1
+    +2.373s  in   control:compile-status    state=idle
+    +2.463s  in   control:compile-status    state=running
+    +3.582s  in   pdf-segment               bytes=111115 shipoutPage=1
+    +3.583s  in   control:compile-status    state=idle
+[zero-delay typing produces no daemon protocol-violation control frame] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×6, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×3} (compile-cycles=3 zero-segment-cycles=1 mean-cycle=1.002s pdf-segment-bytes=332257), out {control:view×1, doc-update×467} (doc-update-bytes=12352)
+  ✓  46 [live] › verifyLiveGt7RapidTypingDaemonStable.spec.ts:60:7 › live rapid-typing daemon stability (GT-7) › zero-delay typing produces no daemon protocol-violation control frame (13.3s)
+[verifyLiveGt8] project=5846dbde-6f67-441e-832b-e5b12f2e2e65 coldStartMs=20486 framesSent=242 pdfSegments=14 controlFrames=30 errorFrames=0
+[verifyLiveGt8][control] {"type":"hello","protocol":1}
+[verifyLiveGt8][control] {"type":"file-list","files":["main.tex"]}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"running"}
+[verifyLiveGt8][control] {"type":"compile-status","state":"idle"}
+[fresh cold project: \newpage cadence does not crash the supertex daemon] timeline (project=5846dbde-6f67-441e-832b-e5b12f2e2e65):
+    +8.765s  in   control:hello             hello
+    +8.848s  in   doc-update                bytes=91
+    +8.937s  in   doc-update                bytes=91
+    +8.938s  in   control:file-list         file-list
+    +8.944s  in   control:compile-status    state=running
+    +9.141s  out  doc-update                bytes=23
+    +9.154s  out  doc-update                bytes=24
+    +9.161s  out  doc-update                bytes=25
+    +9.165s  out  doc-update                bytes=25
+    +9.170s  out  doc-update                bytes=25
+    +9.173s  out  doc-update                bytes=25
+    +9.176s  out  doc-update                bytes=25
+    +9.179s  out  doc-update                bytes=25
+    +9.182s  out  doc-update                bytes=25
+    +9.187s  out  doc-update                bytes=25
+    +9.189s  out  doc-update                bytes=25
+    +9.193s  out  doc-update                bytes=25
+    +9.196s  out  doc-update                bytes=25
+    +9.703s  out  doc-update                bytes=25
+    +9.706s  out  doc-update                bytes=25
+    +9.709s  out  doc-update                bytes=25
+    +9.712s  out  doc-update                bytes=25
+    +9.716s  out  doc-update                bytes=25
+    +9.721s  out  doc-update                bytes=25
+    +9.724s  out  doc-update                bytes=25
+    +9.727s  out  doc-update                bytes=25
+    +9.731s  out  doc-update                bytes=25
+    +9.735s  out  doc-update                bytes=25
+    +9.739s  out  doc-update                bytes=25
+    +9.743s  out  doc-update                bytes=25
+   +10.250s  out  doc-update                bytes=25
+   +10.256s  out  doc-update                bytes=25
+   +10.260s  out  doc-update                bytes=25
+   +10.265s  out  doc-update                bytes=25
+   +10.272s  out  doc-update                bytes=25
+   +10.276s  out  doc-update                bytes=25
+   +10.280s  out  doc-update                bytes=25
+   +10.284s  out  doc-update                bytes=25
+   +10.289s  out  doc-update                bytes=25
+   +10.292s  out  doc-update                bytes=25
+   +10.295s  out  doc-update                bytes=25
+   +10.300s  out  doc-update                bytes=25
+   +10.809s  out  doc-update                bytes=25
+   +10.813s  out  doc-update                bytes=25
+   +10.816s  out  doc-update                bytes=25
+   +10.821s  out  doc-update                bytes=25
+   +10.825s  out  doc-update                bytes=25
+   +10.828s  out  doc-update                bytes=25
+   +10.832s  out  doc-update                bytes=25
+   +10.837s  out  doc-update                bytes=25
+   +10.840s  out  doc-update                bytes=25
+   +10.843s  out  doc-update                bytes=25
+   +10.846s  out  doc-update                bytes=25
+   +10.850s  out  doc-update                bytes=25
+   +11.358s  out  doc-update                bytes=25
+   +11.362s  out  doc-update                bytes=25
+   +11.365s  out  doc-update                bytes=25
+   +11.370s  out  doc-update                bytes=25
+   +11.372s  out  doc-update                bytes=25
+   +11.375s  out  doc-update                bytes=25
+   +11.377s  out  doc-update                bytes=25
+   +11.380s  out  doc-update                bytes=25
+   +11.383s  out  doc-update                bytes=25
+   +11.386s  out  doc-update                bytes=25
+   +11.389s  out  doc-update                bytes=25
+   +11.392s  out  doc-update                bytes=25
+   +11.898s  out  doc-update                bytes=25
+   +11.904s  out  doc-update                bytes=25
+   +11.907s  out  doc-update                bytes=25
+   +11.909s  out  doc-update                bytes=25
+   +11.912s  out  doc-update                bytes=25
+   +11.915s  out  doc-update                bytes=25
+   +11.920s  out  doc-update                bytes=25
+   +11.924s  out  doc-update                bytes=25
+   +11.927s  out  doc-update                bytes=25
+   +11.930s  out  doc-update                bytes=25
+   +11.933s  out  doc-update                bytes=25
+   +11.937s  out  doc-update                bytes=25
+   +12.445s  out  doc-update                bytes=25
+   +12.449s  out  doc-update                bytes=25
+   +12.454s  out  doc-update                bytes=25
+   +12.459s  out  doc-update                bytes=25
+   +12.462s  out  doc-update                bytes=25
+   +12.465s  out  doc-update                bytes=25
+   +12.469s  out  doc-update                bytes=25
+   +12.472s  out  doc-update                bytes=25
+   +12.475s  out  doc-update                bytes=25
+   +12.477s  out  doc-update                bytes=25
+   +12.480s  out  doc-update                bytes=25
+   +12.483s  out  doc-update                bytes=25
+   +12.990s  out  doc-update                bytes=25
+   +12.993s  out  doc-update                bytes=25
+   +12.995s  out  doc-update                bytes=25
+   +12.998s  out  doc-update                bytes=25
+   +13.002s  out  doc-update                bytes=25
+   +13.004s  out  doc-update                bytes=25
+   +13.007s  out  doc-update                bytes=25
+   +13.010s  out  doc-update                bytes=25
+   +13.013s  out  doc-update                bytes=25
+   +13.015s  out  doc-update                bytes=25
+   +13.019s  out  doc-update                bytes=25
+   +13.022s  out  doc-update                bytes=25
+   +13.528s  out  doc-update                bytes=25
+   +13.531s  out  doc-update                bytes=25
+   +13.535s  out  doc-update                bytes=25
+   +13.538s  out  doc-update                bytes=25
+   +13.541s  out  doc-update                bytes=25
+   +13.543s  out  doc-update                bytes=25
+   +13.547s  out  doc-update                bytes=25
+   +13.550s  out  doc-update                bytes=25
+   +13.553s  out  doc-update                bytes=25
+   +13.556s  out  doc-update                bytes=25
+   +13.558s  out  doc-update                bytes=25
+   +13.561s  out  doc-update                bytes=25
+   +13.639s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +13.640s  in   control:compile-status    state=idle
+   +13.653s  in   control:compile-status    state=running
+   +13.973s  out  control:view              view
+   +14.068s  out  doc-update                bytes=25
+   +14.074s  out  doc-update                bytes=25
+   +14.077s  out  doc-update                bytes=25
+   +14.080s  out  doc-update                bytes=25
+   +14.083s  out  doc-update                bytes=25
+   +14.088s  out  doc-update                bytes=25
+   +14.091s  out  doc-update                bytes=25
+   +14.094s  out  doc-update                bytes=25
+   +14.097s  out  doc-update                bytes=25
+   +14.100s  out  doc-update                bytes=25
+   +14.106s  out  doc-update                bytes=25
+   +14.111s  out  doc-update                bytes=25
+   +14.603s  in   pdf-segment               bytes=70441 shipoutPage=10
+   +14.604s  in   control:compile-status    state=idle
+   +14.621s  out  doc-update                bytes=25
+   +14.625s  out  doc-update                bytes=25
+   +14.629s  out  doc-update                bytes=25
+   +14.632s  out  doc-update                bytes=25
+   +14.639s  out  doc-update                bytes=25
+   +14.642s  out  doc-update                bytes=25
+   +14.646s  out  doc-update                bytes=25
+   +14.650s  out  doc-update                bytes=26
+   +14.655s  out  doc-update                bytes=27
+   +14.658s  out  doc-update                bytes=27
+   +14.662s  out  doc-update                bytes=27
+   +14.665s  out  doc-update                bytes=27
+   +14.689s  in   control:compile-status    state=running
+   +14.832s  in   pdf-segment               bytes=74331 shipoutPage=12
+   +14.833s  in   control:compile-status    state=idle
+   +15.175s  out  doc-update                bytes=27
+   +15.178s  out  doc-update                bytes=27
+   +15.182s  out  doc-update                bytes=27
+   +15.188s  out  doc-update                bytes=27
+   +15.191s  out  doc-update                bytes=27
+   +15.193s  out  doc-update                bytes=27
+   +15.196s  out  doc-update                bytes=27
+   +15.199s  out  doc-update                bytes=27
+   +15.204s  out  doc-update                bytes=27
+   +15.207s  out  doc-update                bytes=27
+   +15.210s  out  doc-update                bytes=27
+   +15.213s  out  doc-update                bytes=27
+   +15.297s  in   control:compile-status    state=running
+   +15.440s  in   pdf-segment               bytes=76367 shipoutPage=13
+   +15.441s  in   control:compile-status    state=idle
+   +15.723s  out  doc-update                bytes=27
+   +15.727s  out  doc-update                bytes=27
+   +15.730s  out  doc-update                bytes=27
+   +15.734s  out  doc-update                bytes=27
+   +15.743s  out  doc-update                bytes=27
+   +15.746s  out  doc-update                bytes=27
+   +15.750s  out  doc-update                bytes=27
+   +15.759s  out  doc-update                bytes=27
+   +15.763s  out  doc-update                bytes=27
+   +15.767s  out  doc-update                bytes=27
+   +15.774s  out  doc-update                bytes=27
+   +15.777s  out  doc-update                bytes=27
+   +15.846s  in   control:compile-status    state=running
+   +16.028s  in   pdf-segment               bytes=78469 shipoutPage=14
+   +16.029s  in   control:compile-status    state=idle
+   +16.284s  out  doc-update                bytes=27
+   +16.291s  out  doc-update                bytes=27
+   +16.295s  out  doc-update                bytes=27
+   +16.298s  out  doc-update                bytes=27
+   +16.306s  out  doc-update                bytes=27
+   +16.310s  out  doc-update                bytes=27
+   +16.313s  out  doc-update                bytes=27
+   +16.316s  out  doc-update                bytes=27
+   +16.325s  out  doc-update                bytes=27
+   +16.328s  out  doc-update                bytes=27
+   +16.332s  out  doc-update                bytes=27
+   +16.340s  out  doc-update                bytes=27
+   +16.409s  in   control:compile-status    state=running
+   +16.551s  in   pdf-segment               bytes=80638 shipoutPage=15
+   +16.553s  in   control:compile-status    state=idle
+   +16.847s  out  doc-update                bytes=27
+   +16.851s  out  doc-update                bytes=27
+   +16.858s  out  doc-update                bytes=27
+   +16.861s  out  doc-update                bytes=27
+   +16.864s  out  doc-update                bytes=27
+   +16.869s  out  doc-update                bytes=27
+   +16.874s  out  doc-update                bytes=27
+   +16.878s  out  doc-update                bytes=27
+   +16.881s  out  doc-update                bytes=27
+   +16.884s  out  doc-update                bytes=27
+   +16.893s  out  doc-update                bytes=27
+   +16.897s  out  doc-update                bytes=27
+   +16.971s  in   control:compile-status    state=running
+   +17.157s  in   pdf-segment               bytes=82875 shipoutPage=16
+   +17.158s  in   control:compile-status    state=idle
+   +17.405s  out  doc-update                bytes=27
+   +17.417s  out  doc-update                bytes=27
+   +17.424s  out  doc-update                bytes=27
+   +17.428s  out  doc-update                bytes=27
+   +17.432s  out  doc-update                bytes=27
+   +17.438s  out  doc-update                bytes=27
+   +17.443s  out  doc-update                bytes=27
+   +17.446s  out  doc-update                bytes=27
+   +17.449s  out  doc-update                bytes=27
+   +17.456s  out  doc-update                bytes=27
+   +17.459s  out  doc-update                bytes=27
+   +17.462s  out  doc-update                bytes=27
+   +17.529s  in   control:compile-status    state=running
+   +17.673s  in   pdf-segment               bytes=85176 shipoutPage=17
+   +17.680s  in   control:compile-status    state=idle
+   +17.972s  out  doc-update                bytes=27
+   +17.978s  out  doc-update                bytes=27
+   +17.982s  out  doc-update                bytes=27
+   +17.990s  out  doc-update                bytes=27
+   +17.993s  out  doc-update                bytes=27
+   +17.996s  out  doc-update                bytes=27
+   +18.000s  out  doc-update                bytes=27
+   +18.013s  out  doc-update                bytes=27
+   +18.016s  out  doc-update                bytes=27
+   +18.022s  out  doc-update                bytes=27
+   +18.027s  out  doc-update                bytes=27
+   +18.030s  out  doc-update                bytes=27
+   +18.094s  in   control:compile-status    state=running
+   +18.240s  in   pdf-segment               bytes=87547 shipoutPage=18
+   +18.241s  in   control:compile-status    state=idle
+   +18.540s  out  doc-update                bytes=27
+   +18.544s  out  doc-update                bytes=27
+   +18.549s  out  doc-update                bytes=27
+   +18.557s  out  doc-update                bytes=27
+   +18.560s  out  doc-update                bytes=27
+   +18.564s  out  doc-update                bytes=27
+   +18.567s  out  doc-update                bytes=27
+   +18.574s  out  doc-update                bytes=27
+   +18.577s  out  doc-update                bytes=27
+   +18.580s  out  doc-update                bytes=27
+   +18.588s  out  doc-update                bytes=27
+   +18.595s  out  doc-update                bytes=27
+   +18.661s  in   control:compile-status    state=running
+   +18.808s  in   pdf-segment               bytes=89984 shipoutPage=19
+   +18.812s  in   control:compile-status    state=idle
+   +19.114s  out  doc-update                bytes=27
+   +19.137s  out  doc-update                bytes=27
+   +19.144s  out  doc-update                bytes=27
+   +19.155s  out  doc-update                bytes=27
+   +19.181s  out  doc-update                bytes=27
+   +19.189s  out  doc-update                bytes=27
+   +19.217s  out  doc-update                bytes=27
+   +19.225s  out  doc-update                bytes=27
+   +19.236s  in   control:compile-status    state=running
+   +19.257s  out  doc-update                bytes=27
+   +19.283s  out  doc-update                bytes=27
+   +19.301s  out  doc-update                bytes=27
+   +19.322s  out  doc-update                bytes=27
+   +19.379s  in   pdf-segment               bytes=89984 shipoutPage=19
+   +19.386s  in   control:compile-status    state=idle
+   +19.447s  in   control:compile-status    state=running
+   +19.585s  in   pdf-segment               bytes=92489 shipoutPage=20
+   +19.590s  in   control:compile-status    state=idle
+   +19.842s  out  doc-update                bytes=27
+   +19.849s  out  doc-update                bytes=27
+   +19.873s  out  doc-update                bytes=27
+   +19.897s  out  doc-update                bytes=27
+   +19.903s  out  doc-update                bytes=27
+   +19.920s  out  doc-update                bytes=27
+   +19.937s  out  doc-update                bytes=27
+   +19.960s  out  doc-update                bytes=27
+   +19.965s  in   control:compile-status    state=running
+   +19.980s  out  doc-update                bytes=27
+   +20.000s  out  doc-update                bytes=27
+   +20.009s  out  doc-update                bytes=27
+   +20.015s  out  doc-update                bytes=27
+   +20.101s  in   pdf-segment               bytes=92489 shipoutPage=20
+   +20.107s  in   control:compile-status    state=idle
+   +20.187s  in   control:compile-status    state=running
+   +20.331s  in   pdf-segment               bytes=95101 shipoutPage=21
+   +20.334s  in   control:compile-status    state=idle
+[fresh cold project: \newpage cadence does not crash the supertex daemon] summary (project=5846dbde-6f67-441e-832b-e5b12f2e2e65): in {control:compile-status×28, control:file-list×1, control:hello×1, doc-update×2, pdf-segment×14} (compile-cycles=14 zero-segment-cycles=0 mean-cycle=534ms pdf-segment-bytes=1152435), out {control:view×1, doc-update×241} (doc-update-bytes=6247)
+  ✓  47 [live] › verifyLiveGt8ColdProjectNewpageDaemonCrash.spec.ts:65:7 › live cold-project \newpage daemon-crash regression (GT-8) › fresh cold project: \newpage cadence does not crash the supertex daemon (32.3s)
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=43 phase=project-created projectId=df1c8b6c-224f-4dc5-be5c-b0da9e38493b sentinel=preserve-94674d30-f837-49ca-99f7-059ef404d906
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=43 phase=1-cold-start:goto
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=137 phase=1-cold-start:goto-done
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=945 phase=1-cold-start:probe cmCount=0 editorTextLen=70 wsOpenCount=1 wsCloseCount=0 wsFrameCount=0 lastWsCloseInfo=(none) pageErrors=[] marks={"editor:route-mounted":456.30000001192093,"editor:ws-open":null,"editor:yjs-hydrated":null,"editor:first-text-paint":null,"editor:first-pdf-segment":null}
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=4953 phase=1-cold-start:probe cmCount=0 editorTextLen=70 wsOpenCount=1 wsCloseCount=0 wsFrameCount=0 lastWsCloseInfo=(none) pageErrors=[] marks={"editor:route-mounted":456.30000001192093,"editor:ws-open":null,"editor:yjs-hydrated":null,"editor:first-text-paint":null,"editor:first-pdf-segment":null}
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=8963 phase=1-cold-start:probe cmCount=0 editorTextLen=70 wsOpenCount=1 wsCloseCount=0 wsFrameCount=0 lastWsCloseInfo=(none) pageErrors=[] marks={"editor:route-mounted":456.30000001192093,"editor:ws-open":null,"editor:yjs-hydrated":null,"editor:first-text-paint":null,"editor:first-pdf-segment":null}
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=12975 phase=1-cold-start:probe cmCount=0 editorTextLen=70 wsOpenCount=1 wsCloseCount=0 wsFrameCount=0 lastWsCloseInfo=(none) pageErrors=[] marks={"editor:route-mounted":456.30000001192093,"editor:ws-open":null,"editor:yjs-hydrated":null,"editor:first-text-paint":null,"editor:first-pdf-segment":null}
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=16980 phase=1-cold-start:cm-visible
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=18484 phase=1-cold-start:first-segment pdfSegmentCount=1
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=18485 phase=2-type-sentinel
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=18980 phase=3-post-edit:wait-segment segmentsAfterCold=1
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=19787 phase=3-post-edit:done pdfSegmentCount=2
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=19789 phase=4-nav-to-dashboard
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=19949 phase=4-nav-to-dashboard:link-visible
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=19990 phase=5-stop:post machineId=d892d05a244048
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=20093 phase=5-stop:settle-poll
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=26971 phase=5-stop:settled lastState=stopped
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=26973 phase=6-reopen:click
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=27044 phase=6-reopen:url-arrived
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=27097 phase=7-sentinel:poll wsOpensBeforeReopen=1 wsFramesBeforeReopen=11 pdfSegmentsBeforeReopen=2 flyState=stopped
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=28131 phase=7-sentinel:probe iter=1 cmLen=0 cmPrefix= url=https://tex.center/editor/df1c8b6c-224f-4dc5-be5c-b0da9e38493b title=tex.center bodyLen=89 seedPresent=false cmContentPresent=false cmEditorPresent=false wsOpens=2 wsFrames=11 wsCloses=1 lastWsClose=wasClean=true pdfSegments=2 pageErrorsCount=0 lastPageError=(none) flyState=starting
+[verifyLiveGt9StoppedPreservesEdits] elapsedMs=32614 phase=7-sentinel:done iter=5 found=true cmLen=112 wsOpens=2 wsFrames=16 wsCloses=1 pdfSegments=2 pageErrorsCount=0 flyState=started
+[verifyLiveGt9StoppedPreservesEdits] project=df1c8b6c-224f-4dc5-be5c-b0da9e38493b machine=d892d05a244048 sentinel=preserve-94674d30-f837-49ca-99f7-059ef404d906 cmTextPrefix="\\documentclass{article}\\begin{document}Hello, world! preserve-94674d30-f837-49ca-99f7-059ef404d906\\end{document}"
+[stopped project: unique edit sentinel survives force-stop + cold reopen] timeline (project=df1c8b6c-224f-4dc5-be5c-b0da9e38493b):
+   +13.694s  in   control:hello             hello
+   +13.985s  in   doc-update                bytes=91
+   +14.051s  in   doc-update                bytes=91
+   +14.052s  in   control:file-list         file-list
+   +14.079s  in   control:compile-status    state=running
+   +18.356s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +18.356s  in   control:compile-status    state=idle
+   +18.532s  out  doc-update                bytes=22
+   +18.544s  out  doc-update                bytes=22
+   +18.555s  out  doc-update                bytes=22
+   +18.564s  out  doc-update                bytes=22
+   +18.575s  out  doc-update                bytes=22
+   +18.586s  out  doc-update                bytes=22
+   +18.596s  out  doc-update                bytes=22
+   +18.607s  out  doc-update                bytes=22
+   +18.619s  out  doc-update                bytes=22
+   +18.630s  out  doc-update                bytes=22
+   +18.641s  out  doc-update                bytes=22
+   +18.651s  out  doc-update                bytes=22
+   +18.664s  in   control:compile-status    state=running
+   +18.668s  out  doc-update                bytes=22
+   +18.680s  out  doc-update                bytes=22
+   +18.691s  out  doc-update                bytes=22
+   +18.703s  out  doc-update                bytes=22
+   +18.718s  out  doc-update                bytes=22
+   +18.727s  out  doc-update                bytes=22
+   +18.736s  out  doc-update                bytes=22
+   +18.751s  out  doc-update                bytes=22
+   +18.761s  out  doc-update                bytes=22
+   +18.770s  out  doc-update                bytes=22
+   +18.785s  out  doc-update                bytes=22
+   +18.786s  out  control:view              view
+   +18.794s  out  doc-update                bytes=22
+   +18.802s  out  doc-update                bytes=22
+   +18.810s  out  doc-update                bytes=22
+   +18.818s  out  doc-update                bytes=22
+   +18.826s  out  doc-update                bytes=22
+   +18.835s  out  doc-update                bytes=22
+   +18.843s  out  doc-update                bytes=22
+   +18.851s  out  doc-update                bytes=22
+   +18.860s  out  doc-update                bytes=22
+   +18.868s  out  doc-update                bytes=22
+   +18.876s  out  doc-update                bytes=22
+   +18.884s  out  doc-update                bytes=22
+   +18.892s  out  doc-update                bytes=22
+   +18.900s  out  doc-update                bytes=22
+   +18.908s  out  doc-update                bytes=22
+   +18.917s  out  doc-update                bytes=22
+   +18.924s  out  doc-update                bytes=22
+   +18.933s  out  doc-update                bytes=22
+   +18.941s  out  doc-update                bytes=22
+   +18.950s  out  doc-update                bytes=22
+   +18.958s  out  doc-update                bytes=22
+   +18.968s  out  doc-update                bytes=22
+   +18.976s  out  doc-update                bytes=22
+   +19.649s  in   pdf-segment               bytes=56562 shipoutPage=1
+   +19.650s  in   control:compile-status    state=idle
+   +19.743s  in   control:compile-status    state=running
+   +32.134s  in   control:hello             hello
+   +32.279s  in   doc-update                bytes=138
+   +32.281s  in   doc-update                bytes=138
+   +32.284s  in   control:file-list         file-list
+   +32.378s  in   control:compile-status    state=running
+   +36.833s  in   pdf-segment               bytes=56612 shipoutPage=1
+   +36.835s  in   control:compile-status    state=idle
+   +36.951s  out  control:view              view
+[stopped project: unique edit sentinel survives force-stop + cold reopen] summary (project=df1c8b6c-224f-4dc5-be5c-b0da9e38493b): in {control:compile-status×7, control:file-list×2, control:hello×2, doc-update×4, pdf-segment×3} (compile-cycles=4 zero-segment-cycles=1 mean-cycle=5.589s pdf-segment-bytes=169718), out {control:view×2, doc-update×46} (doc-update-bytes=1012)
+  ✓  48 [live] › verifyLiveGt9StoppedPreservesEdits.spec.ts:96:7 › live stopped-Machine source preservation (M20.3 GT-9) › stopped project: unique edit sentinel survives force-stop + cold reopen (39.6s)
+  -  49 [live] › verifyLiveOauthCallback.spec.ts:131:7 › live OAuth callback round-trip › test-callback → 302 /projects + working tc_session
+[static two-page source renders >1 page of canvas in the preview pane] timeline (project=7eb86c67-bef5-466a-b019-bef6ac28b5f6):
+    +6.606s  in   control:hello             hello
+    +6.763s  in   doc-update                bytes=91
+    +6.847s  in   doc-update                bytes=91
+    +6.848s  in   control:file-list         file-list
+    +6.855s  in   control:compile-status    state=running
+   +11.543s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +11.544s  in   control:compile-status    state=idle
+   +11.759s  out  control:view              view
+   +11.910s  out  doc-update                bytes=25
+   +11.917s  out  doc-update                bytes=19
+   +11.920s  out  doc-update                bytes=19
+   +11.927s  out  doc-update                bytes=19
+   +11.930s  out  doc-update                bytes=19
+   +11.933s  out  doc-update                bytes=19
+   +11.936s  out  doc-update                bytes=19
+   +11.941s  out  doc-update                bytes=19
+   +11.944s  out  doc-update                bytes=19
+   +11.947s  out  doc-update                bytes=19
+   +11.949s  out  doc-update                bytes=19
+   +11.952s  out  doc-update                bytes=19
+   +11.955s  out  doc-update                bytes=19
+   +11.958s  out  doc-update                bytes=19
+   +11.962s  out  doc-update                bytes=20
+   +11.965s  out  doc-update                bytes=25
+   +11.968s  out  doc-update                bytes=25
+   +11.972s  out  doc-update                bytes=25
+   +11.975s  out  doc-update                bytes=25
+   +11.978s  out  doc-update                bytes=25
+   +11.981s  out  doc-update                bytes=25
+   +11.983s  out  doc-update                bytes=25
+   +11.986s  out  doc-update                bytes=27
+   +11.991s  out  doc-update                bytes=19
+   +11.994s  out  doc-update                bytes=19
+   +11.996s  out  doc-update                bytes=19
+   +11.999s  out  doc-update                bytes=19
+   +12.003s  out  doc-update                bytes=19
+   +12.007s  out  doc-update                bytes=19
+   +12.010s  out  doc-update                bytes=19
+   +12.018s  out  doc-update                bytes=20
+   +12.024s  out  doc-update                bytes=25
+   +12.027s  out  doc-update                bytes=25
+   +12.030s  out  doc-update                bytes=25
+   +12.033s  out  doc-update                bytes=25
+   +12.035s  in   control:compile-status    state=running
+   +12.037s  out  doc-update                bytes=25
+   +12.043s  out  doc-update                bytes=25
+   +12.046s  out  doc-update                bytes=25
+   +12.049s  out  doc-update                bytes=25
+   +12.053s  out  doc-update                bytes=27
+   +12.059s  out  doc-update                bytes=19
+   +12.062s  out  doc-update                bytes=19
+   +12.064s  out  doc-update                bytes=19
+   +12.067s  out  doc-update                bytes=19
+   +12.070s  out  doc-update                bytes=19
+   +12.076s  out  doc-update                bytes=19
+   +12.078s  out  doc-update                bytes=19
+   +12.081s  out  doc-update                bytes=19
+   +12.084s  out  doc-update                bytes=19
+   +12.087s  out  doc-update                bytes=19
+   +12.092s  out  doc-update                bytes=19
+   +12.096s  out  doc-update                bytes=19
+   +12.099s  out  doc-update                bytes=19
+   +12.102s  out  doc-update                bytes=19
+   +12.109s  out  doc-update                bytes=19
+   +12.114s  out  doc-update                bytes=19
+   +12.118s  out  doc-update                bytes=19
+   +12.125s  out  doc-update                bytes=19
+   +12.129s  out  doc-update                bytes=19
+   +12.133s  out  doc-update                bytes=19
+   +12.136s  out  doc-update                bytes=19
+   +12.142s  out  doc-update                bytes=19
+   +12.149s  out  doc-update                bytes=19
+   +12.151s  out  doc-update                bytes=19
+   +12.157s  out  doc-update                bytes=19
+   +12.162s  out  doc-update                bytes=19
+   +12.165s  out  doc-update                bytes=19
+   +12.168s  out  doc-update                bytes=19
+   +12.172s  out  doc-update                bytes=19
+   +12.175s  out  doc-update                bytes=19
+   +12.178s  out  doc-update                bytes=19
+   +12.180s  out  doc-update                bytes=19
+   +12.183s  out  doc-update                bytes=19
+   +12.186s  out  doc-update                bytes=19
+   +12.190s  out  doc-update                bytes=19
+   +12.193s  out  doc-update                bytes=19
+   +12.195s  out  doc-update                bytes=19
+   +12.197s  out  doc-update                bytes=19
+   +12.200s  out  doc-update                bytes=19
+   +12.202s  out  doc-update                bytes=19
+   +12.207s  out  doc-update                bytes=19
+   +12.209s  out  doc-update                bytes=19
+   +12.212s  out  doc-update                bytes=19
+   +12.215s  out  doc-update                bytes=19
+   +12.217s  out  doc-update                bytes=19
+   +12.220s  out  doc-update                bytes=19
+   +12.224s  out  doc-update                bytes=19
+   +12.227s  out  doc-update                bytes=19
+   +12.229s  out  doc-update                bytes=19
+   +12.232s  out  doc-update                bytes=19
+   +12.235s  out  doc-update                bytes=19
+   +12.240s  out  doc-update                bytes=19
+   +12.243s  out  doc-update                bytes=19
+   +12.246s  out  doc-update                bytes=19
+   +12.249s  out  doc-update                bytes=20
+   +12.252s  out  doc-update                bytes=25
+   +12.256s  out  doc-update                bytes=25
+   +12.259s  out  doc-update                bytes=25
+   +12.265s  out  doc-update                bytes=25
+   +12.268s  out  doc-update                bytes=25
+   +12.273s  out  doc-update                bytes=25
+   +12.277s  out  doc-update                bytes=25
+   +12.279s  out  doc-update                bytes=25
+   +12.282s  out  doc-update                bytes=27
+   +12.284s  out  doc-update                bytes=19
+   +12.706s  in   control:compile-status    state=idle
+   +12.809s  in   control:compile-status    state=running
+   +13.467s  in   pdf-segment               bytes=57877 shipoutPage=2
+   +13.468s  in   control:compile-status    state=idle
+[static two-page source renders >1 page of canvas in the preview pane] summary (project=7eb86c67-bef5-466a-b019-bef6ac28b5f6): in {control:compile-status×6, control:file-list×1, control:hello×1, doc-update×2, pdf-segment×2} (compile-cycles=3 zero-segment-cycles=1 mean-cycle=2.006s pdf-segment-bytes=114421), out {control:view×1, doc-update×105} (doc-update-bytes=2166)
+  ✓  50 [live] › verifyLivePdfMultiPage.spec.ts:86:7 › live multi-page PDF preview (M15) › static two-page source renders >1 page of canvas in the preview pane (25.9s)
+[in-body manual edit inserting `\newpage` renders >1 page of canvas] timeline (project=173b2f17-2b30-49bf-9ce3-d7cc5a29fe78):
+    +6.702s  in   control:hello             hello
+    +7.025s  in   doc-update                bytes=92
+    +7.061s  in   doc-update                bytes=92
+    +7.062s  in   control:file-list         file-list
+    +7.120s  in   control:compile-status    state=running
+   +11.716s  in   pdf-segment               bytes=56544 shipoutPage=1
+   +11.717s  in   control:compile-status    state=idle
+   +12.058s  out  control:view              view
+   +12.423s  out  doc-update                bytes=25
+   +12.431s  out  doc-update                bytes=25
+   +12.435s  out  doc-update                bytes=25
+   +12.440s  out  doc-update                bytes=25
+   +12.443s  out  doc-update                bytes=25
+   +12.446s  out  doc-update                bytes=25
+   +12.449s  out  doc-update                bytes=25
+   +12.455s  out  doc-update                bytes=25
+   +12.458s  out  doc-update                bytes=25
+   +12.462s  out  doc-update                bytes=25
+   +12.466s  out  doc-update                bytes=25
+   +12.468s  out  doc-update                bytes=25
+   +12.473s  out  doc-update                bytes=25
+   +12.475s  out  doc-update                bytes=25
+   +12.478s  out  doc-update                bytes=25
+   +12.481s  out  doc-update                bytes=25
+   +12.483s  out  doc-update                bytes=25
+   +12.486s  out  doc-update                bytes=25
+   +12.490s  out  doc-update                bytes=25
+   +12.492s  out  doc-update                bytes=25
+   +12.494s  out  doc-update                bytes=25
+   +12.497s  out  doc-update                bytes=25
+   +12.499s  out  doc-update                bytes=25
+   +12.502s  out  doc-update                bytes=25
+   +12.506s  out  doc-update                bytes=25
+   +12.508s  out  doc-update                bytes=25
+   +12.511s  out  doc-update                bytes=25
+   +12.513s  out  doc-update                bytes=25
+   +12.516s  out  doc-update                bytes=25
+   +12.549s  in   control:compile-status    state=running
+   +13.397s  in   pdf-segment               bytes=57862 shipoutPage=2
+   +13.397s  in   control:compile-status    state=idle
+[in-body manual edit inserting `\newpage` renders >1 page of canvas] summary (project=173b2f17-2b30-49bf-9ce3-d7cc5a29fe78): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×2, pdf-segment×2} (compile-cycles=2 zero-segment-cycles=0 mean-cycle=2.723s pdf-segment-bytes=114406), out {control:view×1, doc-update×29} (doc-update-bytes=725)
+  ✓  51 [live] › verifyLivePdfMultiPage.spec.ts:309:7 › live multi-page PDF preview (M15) › in-body manual edit inserting `\newpage` renders >1 page of canvas (25.7s)
+[seeded two-page source renders >1 page with zero editing] timeline (project=9883eb20-b40c-48e7-bf2e-5f9eea591afe):
+    +7.245s  in   control:hello             hello
+    +7.326s  in   doc-update                bytes=127
+    +7.447s  in   doc-update                bytes=127
+    +7.448s  in   control:file-list         file-list
+    +7.454s  in   control:compile-status    state=running
+   +12.396s  in   pdf-segment               bytes=57877 shipoutPage=2
+   +12.397s  in   control:compile-status    state=idle
+   +12.473s  in   control:compile-status    state=running
+   +12.483s  in   control:compile-status    state=idle
+   +12.761s  out  control:view              view
+[seeded two-page source renders >1 page with zero editing] summary (project=9883eb20-b40c-48e7-bf2e-5f9eea591afe): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×2, pdf-segment×1} (compile-cycles=2 zero-segment-cycles=1 mean-cycle=2.477s pdf-segment-bytes=57877), out {control:view×1} (doc-update-bytes=0)
+  ✓  52 [live] › verifyLivePdfMultiPageSeeded.spec.ts:94:7 › live seeded multi-page PDF preview (M15 Step D) › seeded two-page source renders >1 page with zero editing (23.9s)
+[`.pdf-page > canvas` count stays ≥1 across a segment swap] timeline (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec):
+    +0.356s  in   control:hello             hello
+    +0.377s  in   doc-update                bytes=879
+    +0.384s  in   control:file-list         file-list
+    +0.400s  in   pdf-segment               bytes=111115 shipoutPage=1
+    +0.455s  in   control:compile-status    state=running
+    +0.465s  in   control:compile-status    state=idle
+    +0.625s  out  control:view              view
+    +0.736s  out  doc-update                bytes=26
+    +0.863s  in   control:compile-status    state=running
+    +2.219s  in   pdf-segment               bytes=111120 shipoutPage=1
+    +2.220s  in   control:compile-status    state=idle
+[`.pdf-page > canvas` count stays ≥1 across a segment swap] summary (project=4aee0623-2f1f-4aae-80d6-5bdd3ee761ec): in {control:compile-status×4, control:file-list×1, control:hello×1, doc-update×1, pdf-segment×2} (compile-cycles=2 zero-segment-cycles=1 mean-cycle=684ms pdf-segment-bytes=222235), out {control:view×1, doc-update×1} (doc-update-bytes=26)
+  ✓  53 [live] › verifyLivePdfNoFlashBetweenSegments.spec.ts:64:7 › live PDF preview never blanks between segments (M17) › `.pdf-page > canvas` count stays ≥1 across a segment swap (3.7s)
+  -  54 [live] › verifyLiveWsUpgrade.spec.ts:48:7 › live WS-upgrade with cookie › authed upgrade /ws/project/<id> → 101 from real Machine
+  ✓  55 [live] › verifyLive.spec.ts:46:7 › live deploy verification › healthz returns 200 with tex-center-web-v1 marker (142ms)
+  ✓  56 [live] › verifyLive.spec.ts:55:7 › live deploy verification › readyz returns 200 with db up (46ms)
+  ✓  57 [live] › verifyLive.spec.ts:68:7 › live deploy verification › / returns 200 HTML (white sign-in page) (32ms)
+  ✓  58 [live] › verifyLive.spec.ts:76:7 › live deploy verification › /auth/google/start 302s to accounts.google.com with client_id (45ms)
+  ✓  59 [live] › verifyLive.spec.ts:90:7 › live deploy verification › /auth/google/callback?error=fake → 400 (module graph loads) (141ms)
+  ✓  60 [live] › verifyLive.spec.ts:108:7 › live deploy verification › WS upgrade /ws/project/smoke without cookie → 401 (58ms)
+  ✓  61 [live] › verifyLive.spec.ts:113:7 › live deploy verification › WS upgrade /ws/nope → 404 (56ms)
+
+
+  1) [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas 
+
+    Error: no pdf-segment frame received within timeout (reused project)
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: > [32m0[39m
+    Received:   [31m0[39m
+
+    Call Log:
+    - Test timeout of 150000ms exceeded
+
+      138 |     await authedPage.keyboard.type(SRC, { delay: 5 });
+      139 |
+    > 140 |     await expect
+          |     ^
+      141 |       .poll(() => pdfSegmentFrames.length, {
+      142 |         timeout: 240_000,
+      143 |         message:
+        at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveFullPipelineReused.spec.ts:140:5
+
+  2) [live] › verifyLiveGt6LiveEditableStateStopped.spec.ts:57:7 › live cold-from-stopped editable state (M13.2(b).4) › stopped project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each 
+
+    Error: .cm-content ready time exceeded 1000ms
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m1000[39m
+    Received:    [31m4867[39m
+
+      235 |         cmContentReadyMs!,
+      236 |         `.cm-content ready time exceeded ${CM_CONTENT_BUDGET_MS}ms`,
+    > 237 |       ).toBeLessThanOrEqual(CM_CONTENT_BUDGET_MS);
+          |         ^
+      238 |       expect(
+      239 |         keystrokeAckMs,
+      240 |         `keystroke did not produce a DOC_UPDATE wire frame within ` +
+        at /mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/verifyLiveGt6LiveEditableStateStopped.spec.ts:237:9
+
+  Slow test file: [live] › verifyLiveFullPipelineReused.spec.ts (2.5m)
+  Slow test file: [live] › verifyLivePdfMultiPage.spec.ts (51.5s)
+  Slow test file: [live] › verifyLiveGt9StoppedPreservesEdits.spec.ts (39.6s)
+  Slow test file: [live] › verifyLiveGt4SustainedTyping.spec.ts (35.9s)
+  Slow test file: [live] › verifyLiveFullPipeline.spec.ts (33.6s)
+  Consider splitting slow test files to speed up parallel execution
+  2 failed
+    [live] › verifyLiveFullPipelineReused.spec.ts:71:7 › live full pipeline reused (M8.pw.4 reused project) › reused project: edit → pdf-segment frame → non-blank preview canvas 
+    [live] › verifyLiveGt6LiveEditableStateStopped.spec.ts:57:7 › live cold-from-stopped editable state (M13.2(b).4) › stopped project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each 
+  13 skipped
+  46 passed (8.7m)
+test_playwright (test_playwright.TestPlaywright.test_playwright) ... [globalSetup] live warm-up: pdf-segment observed in 15121ms (project 4aee0623-2f1f-4aae-80d6-5bdd3ee761ec)
+[dev:3000] (node:5214) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[dev:3000] (node:5233) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5031) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[dev:3000] 1:08:44 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:44 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:45 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:45 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:46 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:46 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:47 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:47 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:48 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:48 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:48 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:49 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+[dev:3000] 1:08:49 PM [vite] ws proxy error:
+Error: connect ECONNREFUSED 127.0.0.1:3001
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)
+(node:6001) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11469) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14338) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[globalSetup] orphan sweep: inspected=4 tagged=4 destroyed=2 failed=0
+FAIL
 
 ======================================================================
 FAIL: test_playwright (test_playwright.TestPlaywright.test_playwright)
@@ -146,23 +1910,8 @@ Traceback (most recent call last):
 AssertionError: playwright failed (exit 1) — see ✓ / ✘ lines above for per-spec breakdown
 
 ----------------------------------------------------------------------
-Ran 1 test in 93.784s
+Ran 1 test in 521.747s
 
 FAILED (failures=1)
-setup_playwright.sh: ready (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/.tools/playwright)
-Error: liveProjectBootstrap warm-up: no initial pdf-segment within 90000ms for project 0da4ca32-d778-419d-bec2-f0482dcba08b (elapsed=90077ms)
 
-   at fixtures/liveProjectBootstrap.ts:248
-
-  246 |       while (!sawFrame) {
-  247 |         if (Date.now() > deadline) {
-> 248 |           throw new Error(
-      |                 ^
-  249 |             `liveProjectBootstrap warm-up: no initial pdf-segment within ` +
-  250 |               `${WARMUP_TIMEOUT_MS}ms for project ${project.id} ` +
-  251 |               `(elapsed=${Date.now() - started}ms)`,
-    at bootstrapLiveProject (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/fixtures/liveProjectBootstrap.ts:248:17)
-    at globalSetup (/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/tests_gold/playwright/globalSetup.ts:23:16)
-
-
-run_parallel_cases.py: failed modules: test_sidecar_machine_count, test_playwright
+run_parallel_cases.py: failed modules: test_playwright

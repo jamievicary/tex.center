@@ -110,6 +110,27 @@ routed to (decision deferred post-MVP).
 10. **M15 user-bug.** Multi-page seeded GREEN; awaiting
    user-supplied offending source via discussion mode.
 
+**Iter 356 gold blocker — bootstrap warm-up timeout.** Iter 356's
+gold run aborted at `globalSetup` because
+`liveProjectBootstrap` exceeded its 90s `WARMUP_TIMEOUT_MS`
+budget. Sidecar logs for the bootstrap Machine
+`08003d7c053648` (since destroyed) show: Machine created
+2026-05-16T11:49:46Z, `started` event fired 2026-05-16T11:51:09Z
+(83s for Fly create→started), sidecar listening at 11:51:12Z,
+WS opened then closed at 11:51:13Z (code 1001 "going away"
+from browser), supertex pdf-segment ready at 11:51:17Z — i.e.
+the WS closed BEFORE the segment was sent. Bootstrap loop
+threw at 11:51:16Z. Two unexplained items: (a) Fly cold-start
+of 83s vs documented 11-30s typical, (b) browser closing WS
+1s after open. Hypotheses: (a) image-pull cold cache for an
+older Fly host, (b) editor JS hitting an early error before
+the page settled. Iter 357 deliberately did NOT bump
+`WARMUP_TIMEOUT_MS`; the next gold pass tells us if this
+recurs. If it recurs, the right move is to bump to ~150-180s
+AND root-cause the early WS close (the latter is more
+informative since WS close races segment delivery regardless
+of budget).
+
 **Open red specs (gold), per iter 347 pass:**
 
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
@@ -132,6 +153,18 @@ routed to (decision deferred post-MVP).
   also added `console.error` on `decodeFrame` failure in
   `apps/web/src/lib/wsClient.ts` so future wire-protocol drift
   surfaces in the iter-355 fixture's browser-diagnostics capture.
+
+**Iter 357 mass-destroy:** 12 long-lived per-project Machines
+created before 2026-05-16T00:00Z on pre-iter-317 images were
+destroyed via a one-shot script (`ops_destroy_stale_machines_357
+.mjs`, deleted after use). 9 corresponding
+`machine_assignments` rows deleted; 3 untagged Machines had no
+row. The leaked bootstrap Machine `08003d7c053648` (project row
+already deleted by `liveProjectBootstrap.ts`'s catch handler
+after the iter-356 90s warm-up timeout) was also destroyed.
+Result: 1 non-shared Machine remaining (`e829133c693438`,
+current image, real user project). `test_machine_count_under_
+threshold` should now pass.
 
 (GT-9, GT-6-suspended both GREEN in iter 347.)
 
