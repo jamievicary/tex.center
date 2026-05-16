@@ -12,23 +12,37 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — iter-343 disconnect-arm fix.**
-   Iter-340 removed the *startup* suspend arm but GT-9 +
-   GT-6-stopped stayed RED. Iter 342 traced the residual cause
-   to the *disconnect-arm* path: a transient cold-reopen WS
-   open-then-close cycle drives `noteViewerRemoved` → 5 s suspend
-   timer → self-suspend mid-handshake, after which the web proxy's
-   6PN TCP dial cannot auto-resume the Machine.
+1. **M20.3 closeout — iter-343 fix didn't suffice; iter-344
+   diagnostic probe added.**
+   Iter 340 removed the *startup* suspend arm. Iter 343
+   generalised that to also remove the *disconnect* suspend arm,
+   so `buildServer` now arms only the stop stage on every idle
+   entry. CD pinned the iter-343 image to `SIDECAR_IMAGE` and
+   `tex-center` redeployed at 07:38:21 Z — confirmed live before
+   the iter-344 gold pass at 08:28 Z.
 
-   Iter 343 generalised the iter-340 invariant: `buildServer`
-   now arms ONLY the stop stage on every idle entry (cold boot
-   AND disconnect 1→0). The suspend primitive remains in the
-   API surface for a future explicit tab-close wire (see
-   `FUTURE_IDEAS.md` — "Explicit tab-close wire signal").
+   Despite the fix being on the wire, the iter-344 gold pass
+   reproduced GT-9 + GT-6-stopped + GT-6-suspended RED, all with
+   the same shape: 60 s `cmContent.waitFor` timeout, zero signal
+   beyond `phase=1-cold-start:goto`. So the iter-343 hypothesis
+   (transient cold-reopen WS open-then-close → 5 s suspend
+   self-fire) was either wrong or only partially right.
 
-   Closing M20.3 still requires:
-   - (i) GT-9 GREEN on next gold pass post-iter-343 deploy.
-   - (ii) GT-6-stopped GREEN.
+   Iter 344 added a polling probe inside GT-9's phase-1
+   cmContent wait that, every ~5 s, records cm-content visibility,
+   `.editor` text length, editor lifecycle marks
+   (route-mounted / ws-open / yjs-hydrated / first-text-paint /
+   first-pdf-segment), and the wire-side counters
+   (wsOpenCount / wsCloseCount / wsFrameCount / lastWsCloseInfo /
+   pageErrors). Next gold pass either succeeds (probes are silent
+   noise) or fails with a transcript pinning whether the hang is
+   at the WS upgrade, the Yjs hydrate, or the CodeMirror mount.
+
+   Closing M20.3 requires:
+   - (i) iter-345 reads the iter-344 GT-9 probe transcript and
+     forms a fresh hypothesis based on which lifecycle mark is
+     missing.
+   - (ii) Eventual GT-9 + GT-6-stopped GREEN.
    - (iii) Prod cold-boot log capture confirming `restoreMs:0`
      and warmup overlap.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
@@ -62,11 +76,15 @@ routed to (decision deferred post-MVP).
 
 **Open red specs (gold):**
 
-- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 342
-  hypothesis (disconnect-arm path) addressed by iter 343 fix;
-  iter 344 reads first gold transcript on the deployed fix.
+- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 343
+  fix is live but spec stayed RED at the iter-344 gold pass with
+  zero signal beyond the goto phase. Iter 344 added a periodic
+  probe; iter 345 reads the transcript.
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — same
-  shape, same plan.
+  shape; carry the iter-344 diagnostic over once we know what to
+  pin.
+- `verifyLiveGt6LiveEditableState` (M13.2(b).3, suspended) —
+  same shape, also RED on iter-344 gold pass.
 - `verifyLiveFullPipelineReused` — intermittent, watch. May be
   exacerbated by stale per-project Machine images (see iter 342
   log "Per-project Machine image audit").

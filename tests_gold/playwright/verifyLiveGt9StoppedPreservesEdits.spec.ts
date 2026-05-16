@@ -189,8 +189,66 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    the daemon is ready to ingest user edits.
       phase("1-cold-start:goto");
       await authedPage.goto(`/editor/${project.id}`);
+      phase("1-cold-start:goto-done");
       const cmContent = authedPage.locator(".cm-content");
-      await cmContent.waitFor({ state: "visible", timeout: 60_000 });
+      // Iter 344: replace bare `waitFor` with a polling probe so a
+      // 60 s hang surfaces *why* — iter-343 fix is in production but
+      // GT-9 still RED, and the previous failure mode was zero
+      // signal beyond `phase=1-cold-start:goto`. Per-probe we record
+      // cm-content visibility, `.editor` text length, the editor
+      // lifecycle marks (route-mounted / ws-open / yjs-hydrated /
+      // first-text-paint / first-pdf-segment), and the wire-side
+      // counters tracked above (wsOpenCount / wsCloseCount /
+      // wsFrameCount / lastWsCloseInfo / pageErrors). The next gold
+      // pass either succeeds (and these probes are silent noise) or
+      // fails with a transcript pinning whether the hang is at the
+      // WS upgrade, the Yjs hydrate, the CodeMirror mount, or
+      // something else.
+      const cmDeadline = Date.now() + 60_000;
+      let cmVisible = false;
+      while (Date.now() < cmDeadline) {
+        cmVisible = await cmContent.isVisible().catch(() => false);
+        if (cmVisible) break;
+        const editorText = (await authedPage
+          .locator(".editor")
+          .textContent()
+          .catch(() => "")) ?? "";
+        const marks = (await authedPage
+          .evaluate(() => {
+            const names = [
+              "editor:route-mounted",
+              "editor:ws-open",
+              "editor:yjs-hydrated",
+              "editor:first-text-paint",
+              "editor:first-pdf-segment",
+            ];
+            const out: Record<string, number | null> = {};
+            for (const n of names) {
+              const entries = performance.getEntriesByName(n);
+              out[n] = entries.length > 0 ? entries[0]!.startTime : null;
+            }
+            return out;
+          })
+          .catch(() => ({}))) as Record<string, number | null>;
+        phase("1-cold-start:probe", {
+          cmCount: await cmContent.count().catch(() => -1),
+          editorTextLen: editorText.length,
+          wsOpenCount,
+          wsCloseCount,
+          wsFrameCount,
+          lastWsCloseInfo,
+          pageErrors: pageErrors.slice(-3),
+          marks,
+        });
+        await authedPage.waitForTimeout(4_000);
+      }
+      if (!cmVisible) {
+        throw new Error(
+          `phase 1 cold-start: .cm-content never became visible within 60 s ` +
+            `(wsOpenCount=${wsOpenCount} wsFrameCount=${wsFrameCount} ` +
+            `wsCloseCount=${wsCloseCount} lastWsClose=${lastWsCloseInfo})`,
+        );
+      }
       phase("1-cold-start:cm-visible");
       const coldDeadline = Date.now() + COLD_START_BUDGET_MS;
       while (pdfSegmentCount === 0 && Date.now() < coldDeadline) {
