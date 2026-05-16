@@ -25,6 +25,15 @@ export interface PdfSegment {
    * don't expose per-shipout structure leave it undefined.
    */
   shipoutPage?: number;
+  /**
+   * Engine end-of-document signal for this compile round: `true`
+   * when the upstream `[pdf-end]` daemon event was observed (the
+   * engine reached `\enddocument`), `false` when the round
+   * completed without it, `undefined` when the compiler does not
+   * expose the signal. Stamped by `SupertexDaemonCompiler` per
+   * round and forwarded to the wire via `encodePdfSegment`.
+   */
+  lastPage?: boolean;
 }
 
 export interface CompileRequest {
@@ -45,6 +54,14 @@ export interface CompileSuccess {
    * omit it (then the gate degrades to "doc-updates only").
    */
   shipoutPage?: number;
+  /**
+   * Mirrors `PdfSegment.lastPage` at the round level: `true` if the
+   * round observed `[pdf-end]`, `false` if it completed without it,
+   * `undefined` if the compiler doesn't expose the signal. Sidecar
+   * iter B will consume this on the FE to gate scroll-driven page
+   * demand-fetches.
+   */
+  lastPage?: boolean;
 }
 
 export interface CompileFailure {

@@ -14,17 +14,20 @@ routed to (decision deferred post-MVP).
 
 1. **`[pdf-end]` + `lastPage` wire-through + multipage demand-fetch
    (per 368_question / 368_answer).** Two iterations:
-   - **Iter A (next ordinary iteration).** Submodule pointer already
-     bumped to `aaa625a` on `vendor/supertex`. Sidecar
-     `supertexDaemon.ts` parses `[pdf-end]` into a
-     `lastPageReached: boolean` on the round-collection result;
-     compiler `Result` extends with `lastPage?: boolean`; protocol
-     `PdfSegment` extends with a `uint8` `lastPage` flag (header
-     17 B → 18 B); sidecar stamps `lastPage` on broadcast segment;
-     normal-test mock pin for 2-page (pdf-end → true) and
-     >2-page-stopped-short (no pdf-end → false). No FE / no
-     `targetPage` change. Forward-compatible.
-   - **Iter B.** FE consumes `lastPage` in `PdfViewer.svelte`:
+   - **Iter A (landed iter 370).** Submodule pointer at `aaa625a`
+     on `vendor/supertex`. `daemonProtocol.ts` parses `[pdf-end]`
+     into a `pdf-end` event; `supertexDaemon.collectRound` tracks
+     `lastPageReached: boolean` and stamps it on the assembled
+     segment + `CompileSuccess.lastPage`; protocol `PdfSegment`
+     extends with `lastPage?: boolean` encoded as a tri-state
+     uint8 (0=unset, 1=false, 2=true; header 17 B → 18 B,
+     roundtrip-safe). Normal-test pins:
+     `supertexDaemonCompiler.test.mjs` cases 16(a) 2-page
+     `pdf-end → true` and 16(b) 5-page-stopped-short-at-3
+     `no pdf-end → false`; `codec.test.mjs` covers the tri-state
+     wire and an out-of-range-byte rejection.
+   - **Iter B (next ordinary iteration).** FE consumes `lastPage` in
+     `PdfViewer.svelte`:
      reserve placeholder `.pdf-page` while `lastPage===false`;
      PageTracker viewport entry on placeholder triggers
      `maxViewingPage` update → sidecar `recompile,N+1`; placeholder

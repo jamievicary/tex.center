@@ -1,6 +1,6 @@
 // Stdout protocol parser for `supertex --daemon DIR` (M7.5.1).
 //
-// The daemon emits exactly four line types on stdout, each
+// The daemon emits exactly five line types on stdout, each
 // terminated by `\n`:
 //
 //   `[N.out]`         — a chunk file `<N>.out` is now ready in DIR
@@ -8,6 +8,11 @@
 //   `[error <reason>]`— recoverable error; `<reason>` is ASCII
 //                       printable (0x20..0x7e) minus `]`,
 //                       truncated to 120 chars upstream
+//   `[pdf-end]`       — optional, follows a `[N.out]` whose chunk
+//                       tail carried `%SUPERTEX-LAST-PAGE`. Signals
+//                       that the engine reached `\enddocument` and
+//                       no further shipouts will follow on this
+//                       source. Added in supertex `aaa625a`.
 //   `[round-done]`    — current round is complete
 //
 // `N` and `K` are non-negative decimal integers (`%lld` upstream).
@@ -22,6 +27,7 @@ export type DaemonEvent =
   | { kind: "shipout"; n: number }
   | { kind: "rollback"; k: number }
   | { kind: "error"; reason: string }
+  | { kind: "pdf-end" }
   | { kind: "round-done" }
   | { kind: "violation"; raw: string };
 
@@ -32,6 +38,9 @@ const ERROR_RE = /^\[error ([^\]]*)\]$/;
 export function parseDaemonLine(line: string): DaemonEvent {
   if (line === "[round-done]") {
     return { kind: "round-done" };
+  }
+  if (line === "[pdf-end]") {
+    return { kind: "pdf-end" };
   }
   const ship = SHIPOUT_RE.exec(line);
   if (ship) {

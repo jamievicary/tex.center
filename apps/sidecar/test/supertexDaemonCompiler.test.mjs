@@ -43,6 +43,13 @@ const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | e
 const exitOn = process.env.FAKE_EXIT_AFTER ?? ""; // count of rounds before exit
 const errorRounds = parseInt(process.env.FAKE_ERROR_ROUNDS ?? "1", 10);
 const rollbackK = parseInt(process.env.FAKE_ROLLBACK_K ?? "0", 10);
+// When "auto", emit "[pdf-end]\\n" after the final shipout line iff
+// the round shipped every chunk (target reached total). Mirrors
+// chunk_writer's behaviour in supertex \`aaa625a\`: the marker is
+// only present in the final chunk when the engine reached
+// \\enddocument naturally. Default unset → never emit, preserving
+// the pre-iter-A test behaviour.
+const pdfEndAtTarget = process.env.FAKE_PDF_END_AT_TARGET ?? "";
 
 let rounds = 0;
 const delayReadyMs = parseInt(process.env.FAKE_DELAY_READY_MS ?? "0", 10);
@@ -93,6 +100,9 @@ function handleLine(line) {
   for (let i = 1; i <= target; i++) {
     writeFileSync(join(dir, i + ".out"), "CHUNK-" + i + "\\n");
     process.stdout.write("[" + i + ".out]\\n");
+  }
+  if (pdfEndAtTarget === "auto" && target === total && target > 0) {
+    process.stdout.write("[pdf-end]\\n");
   }
   if (mode === "rollback") {
     // Unlink chunks > K from disk (the real daemon does this on
@@ -556,6 +566,95 @@ const require = createRequire(import.meta.url);
   await c.warmup();
   assert.equal(spawnCounts.n, 1, "post-ready warmup() does not respawn");
 
+  await c.close();
+}
+
+// 16. lastPage signal — iter-A [pdf-end] slice (PLAN priority #1).
+//     The upstream `aaa625a` daemon emits `[pdf-end]\n` after the
+//     final shipout's `[N.out]\n` when chunk_writer scanned that
+//     chunk's tail and found `%SUPERTEX-LAST-PAGE` (i.e. the engine
+//     reached \enddocument naturally). The compiler must parse this
+//     into a boolean `lastPage` on both the assembled segment and
+//     the round-level result, plus thread it through the
+//     `daemon-round-done` log.
+//
+//     Case (a): 2-page round reaching `\enddocument` → fake daemon
+//     emits `[pdf-end]` → result.lastPage===true, segment.lastPage
+//     ===true, doneLine.fields.lastPageReached===true.
+{
+  const workDir = await makeWorkDir("lastpage-true");
+  const logCalls = [];
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({
+      FAKE_TOTAL: "2",
+      FAKE_PDF_END_AT_TARGET: "auto",
+    }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
+  });
+  const r = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r.ok, true, "lastpage-true compile ok");
+  assert.equal(r.lastPage, true, "result carries lastPage=true");
+  assert.equal(r.segments.length, 1);
+  assert.equal(
+    r.segments[0].lastPage,
+    true,
+    "segment stamped with lastPage=true",
+  );
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted");
+  assert.equal(
+    doneLine.fields.lastPageReached,
+    true,
+    "daemon-round-done log carries lastPageReached=true",
+  );
+  await c.close();
+}
+
+// Case (b): 5-page document compiled with target=3 (i.e. stopped
+// short) → fake daemon does NOT emit `[pdf-end]` (target < total)
+// → result.lastPage===false, segment.lastPage===false,
+// doneLine.fields.lastPageReached===false. This is the case that
+// iter B will consume on the FE to gate scroll-driven demand-fetch
+// of pages > 3.
+{
+  const workDir = await makeWorkDir("lastpage-false");
+  const logCalls = [];
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: makeSpawnFn({
+      FAKE_TOTAL: "5",
+      FAKE_PDF_END_AT_TARGET: "auto",
+    }),
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
+  });
+  const r = await c.compile({ source: "x", targetPage: 3 });
+  assert.equal(r.ok, true, "lastpage-false compile ok");
+  assert.equal(r.lastPage, false, "result carries lastPage=false");
+  assert.equal(r.segments.length, 1);
+  assert.equal(
+    r.segments[0].lastPage,
+    false,
+    "segment stamped with lastPage=false (target<total)",
+  );
+  assert.equal(
+    r.segments[0].shipoutPage,
+    3,
+    "segment shipoutPage matches target",
+  );
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted");
+  assert.equal(
+    doneLine.fields.lastPageReached,
+    false,
+    "daemon-round-done log carries lastPageReached=false",
+  );
   await c.close();
 }
 

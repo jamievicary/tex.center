@@ -22,6 +22,20 @@
 //                        treat the segment as opaque w.r.t. paging.
 //                        Added M22.4b; header width 13 → 17 bytes
 //                        including the leading tag.
+//   u8  lastPage       — engine end-of-document signal. `0` = unset
+//                        (the compiler did not attach a value);
+//                        `1` = false (more pages may follow);
+//                        `2` = true (this round reached
+//                        `\enddocument` so no further shipouts will
+//                        come on this source). Sourced from the
+//                        upstream `[pdf-end]` daemon event added in
+//                        supertex `aaa625a`; full tri-state so
+//                        compilers that don't know (Fixture) are
+//                        distinguishable from compilers that
+//                        explicitly observed "not the last page".
+//                        Added iter A of the [pdf-end] slice;
+//                        header width 17 → 18 bytes including the
+//                        leading tag.
 //   bytes              — raw PDF bytes for this segment.
 
 export const PROTOCOL_VERSION = 1;
@@ -112,6 +126,17 @@ export interface PdfSegment {
    * as `shipoutPage` and a `0` as `undefined`. Added M22.4b.
    */
   shipoutPage?: number;
+  /**
+   * Engine end-of-document signal: `true` when the compile round
+   * observed the upstream `[pdf-end]` daemon event (the engine
+   * reached `\enddocument` and emitted `%SUPERTEX-LAST-PAGE` into
+   * the final chunk), `false` when the round completed without it
+   * (so more pages may follow on a re-compile with a higher
+   * target), `undefined` when the compiler doesn't expose the
+   * signal at all. Encoded on the wire as a tri-state uint8:
+   * `0` = unset, `1` = false, `2` = true. Roundtrip-safe.
+   */
+  lastPage?: boolean;
 }
 
 export type DecodedFrame =
@@ -158,13 +183,17 @@ export function encodePdfSegment(seg: PdfSegment): Uint8Array {
   if (shipoutPage < 0 || !Number.isInteger(shipoutPage)) {
     throw new Error("encodePdfSegment: shipoutPage must be a non-negative integer");
   }
-  const header = new Uint8Array(17);
+  // Tri-state encoding: undefined=0, false=1, true=2. Roundtrip-safe.
+  const lastPageByte =
+    seg.lastPage === undefined ? 0 : seg.lastPage ? 2 : 1;
+  const header = new Uint8Array(18);
   const view = new DataView(header.buffer);
   view.setUint8(0, TAG_PDF_SEGMENT);
   view.setUint32(1, seg.totalLength, false);
   view.setUint32(5, seg.offset, false);
   view.setUint32(9, seg.bytes.length, false);
   view.setUint32(13, shipoutPage, false);
+  view.setUint8(17, lastPageByte);
   return concat([header, seg.bytes]);
 }
 
@@ -183,20 +212,26 @@ export function decodeFrame(frame: Uint8Array): DecodedFrame {
       return { kind: "control", message: parsed };
     }
     case TAG_PDF_SEGMENT: {
-      if (body.length < 16) throw new Error("decodeFrame: pdf-segment header truncated");
+      if (body.length < 17) throw new Error("decodeFrame: pdf-segment header truncated");
       const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
       const totalLength = view.getUint32(0, false);
       const offset = view.getUint32(4, false);
       const segLen = view.getUint32(8, false);
       const shipoutPage = view.getUint32(12, false);
-      const bytes = body.subarray(16, 16 + segLen);
+      const lastPageByte = view.getUint8(16);
+      const bytes = body.subarray(17, 17 + segLen);
       if (bytes.length !== segLen) {
         throw new Error("decodeFrame: pdf-segment payload truncated");
       }
-      const segment: PdfSegment =
-        shipoutPage > 0
-          ? { totalLength, offset, bytes, shipoutPage }
-          : { totalLength, offset, bytes };
+      const segment: PdfSegment = { totalLength, offset, bytes };
+      if (shipoutPage > 0) segment.shipoutPage = shipoutPage;
+      if (lastPageByte === 1) segment.lastPage = false;
+      else if (lastPageByte === 2) segment.lastPage = true;
+      else if (lastPageByte !== 0) {
+        throw new Error(
+          `decodeFrame: pdf-segment lastPage byte out of range (${lastPageByte})`,
+        );
+      }
       return { kind: "pdf-segment", segment };
     }
     default:

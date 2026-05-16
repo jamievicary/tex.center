@@ -174,6 +174,7 @@ export class SupertexDaemonCompiler implements Compiler {
           round: this.roundSeq,
           maxShipout: events.maxShipout,
           errorReason: events.errorReason,
+          lastPageReached: events.lastPageReached,
           ...(events.violation !== undefined
             ? { violation: events.violation }
             : {}),
@@ -197,11 +198,17 @@ export class SupertexDaemonCompiler implements Compiler {
       // the upstream no-op behind a byte-identical "fresh" PDF and
       // is the iter 188 edit→preview regression. See 188_answer.md.
       if (events.maxShipout < 0) {
-        return { ok: true, segments: [] };
+        return { ok: true, segments: [], lastPage: events.lastPageReached };
       }
       const segment = await this.assembleSegment(events.maxShipout);
       segment.shipoutPage = events.maxShipout;
-      return { ok: true, segments: [segment], shipoutPage: events.maxShipout };
+      segment.lastPage = events.lastPageReached;
+      return {
+        ok: true,
+        segments: [segment],
+        shipoutPage: events.maxShipout,
+        lastPage: events.lastPageReached,
+      };
     } catch (e) {
       return { ok: false, error: errorMessage(e) };
     } finally {
@@ -366,9 +373,14 @@ export class SupertexDaemonCompiler implements Compiler {
     violation?: string;
     maxShipout: number;
     errorReason: string | null;
+    lastPageReached: boolean;
   }> {
     let maxShipout = -1;
     let errorReason: string | null = null;
+    // True once `[pdf-end]` is observed in the round. Resets per
+    // round; `[pdf-end]` may only follow a `[N.out]` and precedes
+    // `[round-done]`, so a single boolean is enough.
+    let lastPageReached = false;
     const deadline = Date.now() + this.roundTimeoutMs;
     while (true) {
       const remaining = deadline - Date.now();
@@ -377,6 +389,7 @@ export class SupertexDaemonCompiler implements Compiler {
           violation: `supertex-daemon: round timed out after ${this.roundTimeoutMs}ms`,
           maxShipout,
           errorReason,
+          lastPageReached,
         };
       }
       const ev = await this.nextEvent(remaining);
@@ -385,6 +398,7 @@ export class SupertexDaemonCompiler implements Compiler {
           violation: `supertex-daemon: round timed out after ${this.roundTimeoutMs}ms`,
           maxShipout,
           errorReason,
+          lastPageReached,
         };
       }
       switch (ev.kind) {
@@ -400,8 +414,11 @@ export class SupertexDaemonCompiler implements Compiler {
           // Latest error reason wins; round-done still ends the round.
           errorReason = ev.reason;
           break;
+        case "pdf-end":
+          lastPageReached = true;
+          break;
         case "round-done":
-          return { maxShipout, errorReason };
+          return { maxShipout, errorReason, lastPageReached };
         case "violation":
           // Protocol violation: terminate child, surface raw line.
           this.killChild();
@@ -409,6 +426,7 @@ export class SupertexDaemonCompiler implements Compiler {
             violation: `supertex-daemon: protocol violation: ${ev.raw}`,
             maxShipout,
             errorReason,
+            lastPageReached,
           };
       }
     }
@@ -534,6 +552,8 @@ function describeEvent(ev: DaemonEvent): string {
       return `rollback k=${ev.k}`;
     case "error":
       return `error reason=${ev.reason}`;
+    case "pdf-end":
+      return "pdf-end";
     case "round-done":
       return "round-done";
     case "violation":

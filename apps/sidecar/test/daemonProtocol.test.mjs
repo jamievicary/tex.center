@@ -39,6 +39,13 @@ import {
   );
 }
 
+// `[pdf-end]` — engine end-of-document signal, optionally follows
+// a `[N.out]` whose chunk tail carried `%SUPERTEX-LAST-PAGE`.
+// Added in supertex `aaa625a`.
+{
+  assert.deepEqual(parseDaemonLine("[pdf-end]"), { kind: "pdf-end" });
+}
+
 // --- parseDaemonLine: protocol violations -------------------------
 
 for (const raw of [
@@ -134,6 +141,23 @@ for (const raw of [
     buf.push("[error unknown command: noop]\n[round-done]\n"),
     [
       { kind: "error", reason: "unknown command: noop" },
+      { kind: "round-done" },
+    ],
+  );
+}
+
+// Mixed sequence with `[pdf-end]`: two shipouts, end-of-document
+// marker on the last chunk, then round-done. Mirrors the
+// `aaa625a` upstream wire shape for a 2-page compile that reached
+// \enddocument.
+{
+  const buf = new DaemonLineBuffer();
+  assert.deepEqual(
+    buf.push("[1.out]\n[2.out]\n[pdf-end]\n[round-done]\n"),
+    [
+      { kind: "shipout", n: 1 },
+      { kind: "shipout", n: 2 },
+      { kind: "pdf-end" },
       { kind: "round-done" },
     ],
   );
