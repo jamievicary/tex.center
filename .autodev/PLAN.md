@@ -75,7 +75,8 @@ routed to (decision deferred post-MVP).
    serialise wire) will do when it lands.
 
    **M20.3(b) preservation gold spec [landed iter 333, typing
-   strategy fixed iter 334].** `verifyLiveGt9StoppedPreservesEdits
+   strategy fixed iter 334, per-phase diagnostics + 8-min wall
+   added iter 335].** `verifyLiveGt9StoppedPreservesEdits
    .spec.ts` (GT-9). Cold-start a fresh project, type a unique
    ` preserve-<uuid>` sentinel as visible body text at the end of
    the `Hello, world!` line (same cursor choreography as GT-3),
@@ -94,7 +95,15 @@ routed to (decision deferred post-MVP).
    `\end{document}`; that's exactly the supertex "warm-doc body
    edit no-op" pattern — typeset unchanged ⇒ daemon skips
    reshipout ⇒ no `pdf-segment` ⇒ the wire-observable persistence
-   proof never arrives. Iter 334 switched to visible body text.)
+   proof never arrives. Iter 334 switched to visible body text.
+   Iter 335 added per-phase `[verifyLiveGt9...] elapsedMs=… phase=…`
+   diagnostic console logs at every boundary (entry + exit markers,
+   including inside the deadline-poll loops) and raised
+   `testInfo.setTimeout(5 * 60_000)` → `8 * 60_000` because the
+   worst-case sum of phase budgets (60 + 90 + 30 + 60 + 30 + 90
+   ≈ 365 s) sat above the 5-min wall — iter-334's gold pass timed
+   out at exactly 5.0 m with zero log output, leaving the failure
+   mode opaque. The behavioural assertions are unchanged.)
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.

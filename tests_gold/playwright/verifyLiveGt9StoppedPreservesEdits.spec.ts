@@ -89,9 +89,31 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    // Sum of the four internal phase budgets above (90 + 30 + 60
-    // + 90 = 270 s) plus 30 s for nav / Fly API / reaper buffer.
-    testInfo.setTimeout(5 * 60_000);
+    // Worst-case sum of internal phase budgets is ~365 s
+    // (cmContent.waitFor 60 + cold-start 90 + post-edit 30 +
+    // stop settle 60 + waitForURL 30 + sentinel visible 90, plus
+    // small navs). The 5-min wall used iter 333/334 was below that
+    // sum, so an unlucky phase could hit the test-level timeout
+    // before its own assertion fired. 8 min gives a single safety
+    // margin over legitimate worst case without hiding regressions.
+    testInfo.setTimeout(8 * 60_000);
+
+    // Per-phase diagnostic prefix. Logged at every phase boundary
+    // so a test-level timeout still tells us where the spec was
+    // stuck — without these markers, a 300/480 s wall produces zero
+    // signal (the iter-334 gold pass failed this way).
+    const t0 = Date.now();
+    const phase = (n: string, extra: Record<string, unknown> = {}) => {
+      const ms = Date.now() - t0;
+      const detail = Object.entries(extra)
+        .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+        .join(" ");
+      // eslint-disable-next-line no-console
+      console.log(
+        `[verifyLiveGt9StoppedPreservesEdits] elapsedMs=${ms} phase=${n}` +
+          (detail ? ` ${detail}` : ""),
+      );
+    };
 
     const token = process.env.FLY_API_TOKEN!;
     const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
@@ -109,6 +131,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       ownerId: db.userId,
       name: `pw-gt9-preserve-${Date.now()}`,
     });
+    phase("project-created", { projectId: project.id, sentinel });
 
     let pdfSegmentCount = 0;
     authedPage.on("websocket", (ws) => {
@@ -125,13 +148,16 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       // 1. Cold-start the per-project Machine. Wait for the first
       //    pdf-segment so we know the editor is fully hydrated and
       //    the daemon is ready to ingest user edits.
+      phase("1-cold-start:goto");
       await authedPage.goto(`/editor/${project.id}`);
       const cmContent = authedPage.locator(".cm-content");
       await cmContent.waitFor({ state: "visible", timeout: 60_000 });
+      phase("1-cold-start:cm-visible");
       const coldDeadline = Date.now() + COLD_START_BUDGET_MS;
       while (pdfSegmentCount === 0 && Date.now() < coldDeadline) {
         await authedPage.waitForTimeout(500);
       }
+      phase("1-cold-start:first-segment", { pdfSegmentCount });
       expect(
         pdfSegmentCount,
         "cold-start did not produce a first pdf-segment within the budget; " +
@@ -146,6 +172,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    template. Visible text means the daemon reshipouts
       //    (no-op detector doesn't trip) so a fresh pdf-segment
       //    follows.
+      phase("2-type-sentinel");
       await cmContent.click();
       await authedPage.keyboard.press("Control+End");
       await authedPage.keyboard.press("ArrowUp");
@@ -158,6 +185,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    `writeMain` and before `compiler.compile()` — so a
       //    fresh pdf-segment proves the source (sentinel included)
       //    has hit the blob store.
+      phase("3-post-edit:wait-segment", { segmentsAfterCold });
       const editDeadline = Date.now() + POST_EDIT_COMPILE_BUDGET_MS;
       while (
         pdfSegmentCount <= segmentsAfterCold &&
@@ -165,6 +193,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       ) {
         await authedPage.waitForTimeout(200);
       }
+      phase("3-post-edit:done", { pdfSegmentCount });
       expect(
         pdfSegmentCount,
         "no post-edit pdf-segment within budget — cannot guarantee " +
@@ -173,10 +202,12 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
 
       // 4. Leave the editor so the WS closes; this is the state a
       //    user would be in on the dashboard before clicking back.
+      phase("4-nav-to-dashboard");
       await authedPage.goto("/projects");
       await authedPage
         .locator(`a[href="/editor/${project.id}"]`)
         .waitFor({ state: "visible", timeout: 30_000 });
+      phase("4-nav-to-dashboard:link-visible");
 
       // 5. Force-stop the Machine via Fly Machines API. Fly's
       //    `/stop` fully tears down the runtime — no mapped-memory
@@ -192,6 +223,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         );
       }
       machineId = assignment.machineId;
+      phase("5-stop:post", { machineId });
       const base = `https://api.machines.dev/v1/apps/${appName}/machines/${machineId}`;
       const auth = { Authorization: `Bearer ${token}` };
 
@@ -204,6 +236,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         throw new Error(`Fly stop ${stopRes.status} ${base}/stop: ${body}`);
       }
 
+      phase("5-stop:settle-poll");
       const settleDeadline = Date.now() + STOP_SETTLE_TIMEOUT_MS;
       let lastState = "(unknown)";
       while (Date.now() < settleDeadline) {
@@ -215,6 +248,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         }
         await authedPage.waitForTimeout(500);
       }
+      phase("5-stop:settled", { lastState });
       expect(
         lastState,
         `Machine ${machineId} did not reach 'stopped' within ` +
@@ -225,15 +259,18 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    cold-start the Machine; the sidecar's persistence layer
       //    must hydrate the Y.Doc from the persisted `main.tex`
       //    blob; the client must receive the hydrated doc.
+      phase("6-reopen:click");
       await authedPage.locator(`a[href="/editor/${project.id}"]`).click();
       await authedPage.waitForURL(`**/editor/${project.id}`, {
         timeout: 30_000,
       });
+      phase("6-reopen:url-arrived");
 
       // 7. Poll `.cm-content` for the sentinel. `.cm-content`
       //    `textContent` concatenates each `.cm-line` without
       //    inserting separators, but the sentinel substring stays
       //    intact within whichever line it lands on.
+      phase("7-sentinel:poll");
       const sentinelDeadline = Date.now() + SENTINEL_VISIBLE_BUDGET_MS;
       while (Date.now() < sentinelDeadline) {
         cmTextAfterReopen =
@@ -244,6 +281,9 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         if (cmTextAfterReopen.includes(sentinel)) break;
         await authedPage.waitForTimeout(150);
       }
+      phase("7-sentinel:done", {
+        found: cmTextAfterReopen.includes(sentinel),
+      });
 
       // Diagnostic line — kept regardless of pass/fail so the gold
       // transcript carries the actual cmText prefix per run.
