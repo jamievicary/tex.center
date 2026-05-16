@@ -80,10 +80,20 @@ test.describe("live cold-from-stopped editable state (M13.2(b).4)", () => {
     let pdfSegmentCount = 0;
     let lastDocUpdateAt: number | null = null;
     let keystrokeSentAt: number | null = null;
+    let wsOpenCount = 0;
+    let wsCloseCount = 0;
+    let firstWsOpenAt: number | null = null;
+    let firstFrameAt: number | null = null;
     authedPage.on("websocket", (ws) => {
       if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      wsOpenCount += 1;
+      firstWsOpenAt = Date.now();
+      ws.on("close", () => {
+        wsCloseCount += 1;
+      });
       ws.on("framereceived", ({ payload }) => {
         if (typeof payload === "string" || payload.length === 0) return;
+        if (firstFrameAt === null) firstFrameAt = Date.now();
         if (payload[0] === TAG_PDF_SEGMENT) pdfSegmentCount += 1;
       });
       ws.on("framesent", ({ payload }) => {
@@ -170,7 +180,14 @@ test.describe("live cold-from-stopped editable state (M13.2(b).4)", () => {
       ).toBe("stopped");
 
       // 4. Click the dashboard link. The Fly proxy must cold-start
-      //    the Machine and the editor must hydrate.
+      //    the Machine and the editor must hydrate. Reset the
+      //    wire-side first-event trackers so the diagnostic at the
+      //    end reports only the post-click cold-resume cycle (the
+      //    step-1 cold-start populated them with its own values).
+      const wsOpenBeforeClick = wsOpenCount;
+      const wsCloseBeforeClick = wsCloseCount;
+      firstWsOpenAt = null;
+      firstFrameAt = null;
       const projectLink = authedPage.locator(
         `a[href="/editor/${project.id}"]`,
       );
@@ -215,12 +232,31 @@ test.describe("live cold-from-stopped editable state (M13.2(b).4)", () => {
         }
       }
 
+      // Post-click WS / first-frame timings split the 5.3 s
+      // cmContentReadyMs observed in iter 358 into:
+      //   click → WS open:    Fly start + driveToStarted
+      //                       (`startMachine` + waitForState started).
+      //                       Expected to dominate cold-from-stopped.
+      //   WS open → frame:    handshake + sidecar boot + hello/
+      //                       file-list.
+      //   frame → cmContent:  Yjs hydrate + CodeMirror render.
+      // `(none)` means the phase never completed — for stopped the
+      // most likely null is `clickToFirstFrameMs` if the sidecar
+      // hasn't sent hello before the test budget expires.
+      const clickToWsOpenMs =
+        firstWsOpenAt !== null ? firstWsOpenAt - clickAt : null;
+      const clickToFirstFrameMs =
+        firstFrameAt !== null ? firstFrameAt - clickAt : null;
       // eslint-disable-next-line no-console
       console.log(
         `[verifyLiveGt6LiveEditableStateStopped] project=${project.id} ` +
           `machine=${machineId} ` +
           `cmContentReadyMs=${cmContentReadyMs ?? "(>budget)"} ` +
           `keystrokeAckMs=${keystrokeAckMs ?? "(>budget)"} ` +
+          `clickToWsOpenMs=${clickToWsOpenMs ?? "(none)"} ` +
+          `clickToFirstFrameMs=${clickToFirstFrameMs ?? "(none)"} ` +
+          `wsPostClick=opens:${wsOpenCount - wsOpenBeforeClick}` +
+          `/closes:${wsCloseCount - wsCloseBeforeClick} ` +
           `cmTextPrefix=${JSON.stringify(cmText.slice(0, 80))}`,
       );
 

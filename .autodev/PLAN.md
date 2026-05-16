@@ -18,14 +18,22 @@ routed to (decision deferred post-MVP).
    `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`.
    Bug A narrative (mechanism, four sidecar edit sites): iter 345
    log and git history. **Remaining:**
-   `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) is still
-   RED in iter 347 — re-evaluate root cause now that the Bug A
-   confounder is removed. Most likely candidates: cold-start
-   budget overshoot on a stopped-Machine cold path, or the
-   warmup-fails-then-respawn pattern from iter 347 transcript
-   (≈5 s `compileMs` on first compile because warmup spawned
-   before `writeMain` materialised `main.tex` — see
-   FUTURE_IDEAS "M20.3(a)3").
+   `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) RED on
+   every gold pass since iter 347; iter 358 first pinned numbers
+   `cmContentReadyMs=5372 keystrokeAckMs=8`. Iter 359 extended the
+   spec diagnostic to emit `clickToWsOpenMs` /
+   `clickToFirstFrameMs` / `wsPostClick=opens:N/closes:M` so the
+   next pass shows the phase breakdown (Fly start +
+   `driveToStarted` vs. handshake + sidecar boot vs. Yjs hydrate +
+   CodeMirror render). Routing once the breakdown lands:
+   - `clickToWsOpenMs` ≫ everything else → architectural fix
+     M13.2(b).5 (widen SSR seed for non-fresh projects, or
+     eliminate `stopped` state).
+   - Big gap WS-open → first-frame → sidecar boot regression;
+     re-investigate iter-353 warmup-fails-then-respawn pattern
+     (FUTURE_IDEAS "M20.3(a)3").
+   - `cmContentReadyMs - clickToFirstFrameMs` ≫ small → Yjs /
+     CodeMirror render path needs attention.
 
 2. **Bug B / reused-spec compile-error failure (CI-reproducible iter
    357).** Originally framed as Bug B "zero pdf-segments on
@@ -143,11 +151,23 @@ AND root-cause the early WS close (the latter is more
 informative since WS close races segment delivery regardless
 of budget).
 
-**Open red specs (gold), per iter 347 pass:**
+**Open red specs (gold), per iter 358 pass:**
 
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
-  stopped-Machine cold-resume path; investigate independently of
-  the now-fixed Bug A (see priority #1).
+  stopped-Machine cold-resume path; see priority #1.
+- `verifyLiveGt6LiveEditableState` (M13.2(b).3, SUSPENDED) —
+  regressed in iter 358 (GREEN in 347/355/357). 40 s testTimeout
+  + browser `console.error: WebSocket ... 502 Bad Gateway` on
+  step-4 dashboard-click WS. Diagnostic line never fired because
+  the test timed out before reaching it. Iter 359 same diagnostic
+  enhancement applies here; next gold pass either reproduces
+  (then `wsPostClick=opens:0` confirms the WS never opened →
+  `upstreamResolver.driveToStarted` for `suspended` state at
+  `upstreamResolver.ts:293`) or it was a one-off Fly hiccup.
+  Budget note: `testInfo.setTimeout(40_000)` is tight given step-1
+  cold-start + step-3 suspend-settle; bump to 60 s if the 502
+  shape recurs to surface the underlying issue rather than
+  testInfo-timing it.
 - `verifyLiveFullPipelineReused` — RED iter 354/355, root cause
   pinned and Machine recreated iter 356. The reused-project
   Machine `e8201edb0d3d28` was on a pre-iter-317 sidecar image

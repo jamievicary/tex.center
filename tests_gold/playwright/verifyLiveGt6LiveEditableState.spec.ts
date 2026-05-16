@@ -93,10 +93,20 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     let pdfSegmentCount = 0;
     let lastDocUpdateAt: number | null = null;
     let keystrokeSentAt: number | null = null;
+    let wsOpenCount = 0;
+    let wsCloseCount = 0;
+    let firstWsOpenAt: number | null = null;
+    let firstFrameAt: number | null = null;
     authedPage.on("websocket", (ws) => {
       if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      wsOpenCount += 1;
+      firstWsOpenAt = Date.now();
+      ws.on("close", () => {
+        wsCloseCount += 1;
+      });
       ws.on("framereceived", ({ payload }) => {
         if (typeof payload === "string" || payload.length === 0) return;
+        if (firstFrameAt === null) firstFrameAt = Date.now();
         if (payload[0] === TAG_PDF_SEGMENT) pdfSegmentCount += 1;
       });
       ws.on("framesent", ({ payload }) => {
@@ -185,7 +195,14 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
       ).toBe("suspended");
 
       // 4. Click the dashboard link. From this moment the Fly proxy
-      //    must resume the Machine and the editor must hydrate.
+      //    must resume the Machine and the editor must hydrate. Reset
+      //    the wire-side first-event trackers so the diagnostic at
+      //    the end reports only the post-click resume cycle (the
+      //    step-1 cold-start populated them with its own values).
+      const wsOpenBeforeClick = wsOpenCount;
+      const wsCloseBeforeClick = wsCloseCount;
+      firstWsOpenAt = null;
+      firstFrameAt = null;
       const projectLink = authedPage.locator(
         `a[href="/editor/${project.id}"]`,
       );
@@ -231,13 +248,31 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
       }
 
       // Diagnostic line — kept regardless of pass/fail so the gold
-      // transcript carries the actual latency numbers per run.
+      // transcript carries the actual latency numbers per run. The
+      // post-click WS / first-frame timings split the 5.3 s observed
+      // in iter 358's stopped variant into phases:
+      //   click → WS open:    Fly proxy + driveToStarted (Machine
+      //                       cold-start cost).
+      //   WS open → frame:    handshake + sidecar hello/file-list.
+      //   frame → cmContent:  Yjs hydrate + CodeMirror render.
+      // A `null` opens/frame value means that phase never finished
+      // inside the test window — the most informative failure signal
+      // (e.g. iter 358 suspended got 502 on the dashboard-click WS,
+      // which would surface as opens:0).
+      const clickToWsOpenMs =
+        firstWsOpenAt !== null ? firstWsOpenAt - clickAt : null;
+      const clickToFirstFrameMs =
+        firstFrameAt !== null ? firstFrameAt - clickAt : null;
       // eslint-disable-next-line no-console
       console.log(
         `[verifyLiveGt6LiveEditableState] project=${project.id} ` +
           `machine=${machineId} ` +
           `cmContentReadyMs=${cmContentReadyMs ?? "(>budget)"} ` +
           `keystrokeAckMs=${keystrokeAckMs ?? "(>budget)"} ` +
+          `clickToWsOpenMs=${clickToWsOpenMs ?? "(none)"} ` +
+          `clickToFirstFrameMs=${clickToFirstFrameMs ?? "(none)"} ` +
+          `wsPostClick=opens:${wsOpenCount - wsOpenBeforeClick}` +
+          `/closes:${wsCloseCount - wsCloseBeforeClick} ` +
           `cmTextPrefix=${JSON.stringify(cmText.slice(0, 80))}`,
       );
 
