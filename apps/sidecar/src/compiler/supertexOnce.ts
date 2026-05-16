@@ -78,6 +78,10 @@ export class SupertexOnceCompiler implements Compiler {
 
   async close(): Promise<void> {}
 
+  // Once-compiler does a fresh spawn on every compile, so there
+  // is no startup cost to amortise.
+  async warmup(): Promise<void> {}
+
   // Checkpoints are meaningless for the once-compiler: every
   // compile is a clean spawn that rebuilds from the on-disk
   // source. The no-op impls satisfy the interface so the sidecar

@@ -24,6 +24,7 @@ import { SupertexDaemonCompiler } from "../src/compiler/supertexDaemon.ts";
 class StubCompiler {
   async compile() { return { ok: true, segments: [] }; }
   async close() {}
+  async warmup() {}
   async snapshot() { return null; }
   async restore() {}
 }

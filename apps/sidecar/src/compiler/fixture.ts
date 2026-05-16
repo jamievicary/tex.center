@@ -28,6 +28,8 @@ export class FixtureCompiler implements Compiler {
     this.cached = null;
   }
 
+  async warmup(): Promise<void> {}
+
   async snapshot(): Promise<Uint8Array | null> {
     return null;
   }

@@ -17,6 +17,7 @@ class StubNoopCompiler {
     return { ok: true, segments: [] };
   }
   async close() {}
+  async warmup() {}
 }
 
 const app = await startServer({

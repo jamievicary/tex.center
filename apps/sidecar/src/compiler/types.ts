@@ -58,6 +58,23 @@ export interface Compiler {
   compile(req: CompileRequest): Promise<CompileResult>;
   close(): Promise<void>;
   /**
+   * M20.3(a) cold-start hook. Called eagerly at project-state
+   * creation time so any one-shot startup work (e.g. spawning a
+   * supertex daemon child and waiting for its `.fmt` load to
+   * complete) overlaps with the WS handshake + Yjs hydration +
+   * checkpoint restore phases rather than serialising behind
+   * them inside the first `compile()`. Must be idempotent: a
+   * subsequent `compile()` (and a subsequent `warmup()`) must
+   * await the same in-flight promise and not re-do the work.
+   *
+   * Implementations with nothing to pre-do return a resolved
+   * promise (e.g. `FixtureCompiler`, `SupertexOnceCompiler`).
+   * Errors should surface from the caller-awaitable promise; the
+   * sidecar logs and ignores them — the next `compile()` will
+   * retry from scratch.
+   */
+  warmup(): Promise<void>;
+  /**
    * Serialise the compiler's current resumable state to an opaque
    * byte blob, or `null` if there is no resumable state to capture
    * (fresh compiler, or this implementation doesn't yet support

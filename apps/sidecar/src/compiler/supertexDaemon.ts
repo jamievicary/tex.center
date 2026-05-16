@@ -208,6 +208,24 @@ export class SupertexDaemonCompiler implements Compiler {
     }
   }
 
+  /**
+   * M20.3(a) cold-start hook. Spawns the daemon child and waits
+   * for its `.fmt` load (`supertex: daemon ready` stderr marker)
+   * outside the first `compile()` so the startup cost overlaps
+   * with the sidecar's pre-compile setup. Delegates to
+   * `ensureReady()`, which caches `readyPromise` for the lifetime
+   * of the current child — a subsequent `compile()` (or a second
+   * `warmup()`) awaits the same promise rather than re-spawning.
+   * Errors are surfaced via the returned promise; the caller
+   * (sidecar) logs them and the next `compile()` retries via the
+   * existing dead-child detect/respawn path.
+   */
+  async warmup(): Promise<void> {
+    if (this.closing) return;
+    if (this.isChildDead()) this.resetForRespawn();
+    await this.ensureReady();
+  }
+
   async close(): Promise<void> {
     if (this.closing) return;
     this.closing = true;

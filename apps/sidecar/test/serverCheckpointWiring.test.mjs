@@ -26,12 +26,16 @@ class RecordingCompiler {
     this.compileCalls = 0;
     this.snapshotBytes = snapshotBytes;
     this.snapshotCalls = 0;
+    this.warmupCalls = 0;
   }
   async compile() {
     this.compileCalls += 1;
     return { ok: true, segments: [] };
   }
   async close() {}
+  async warmup() {
+    this.warmupCalls += 1;
+  }
   async snapshot() {
     this.snapshotCalls += 1;
     return this.snapshotBytes;

@@ -93,6 +93,7 @@ class SlowFirstCompileCompiler {
     return this.inner.compile(req);
   }
   async close() { return this.inner.close(); }
+  async warmup() { return this.inner.warmup(); }
   async snapshot() { return this.inner.snapshot(); }
   async restore(b) { return this.inner.restore(b); }
 }

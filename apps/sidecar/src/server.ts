@@ -391,6 +391,23 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }
     state.coalescer = new CompileCoalescer(coalescerOpts);
     projects.set(id, state);
+    // M20.3(a) cold-start hook: kick the compiler's one-shot
+    // startup work (for the supertex daemon, spawn child +
+    // wait for `.fmt` load — ~4.3 s on cold boot) immediately,
+    // so it overlaps with the ~1 s of WS handshake + Yjs
+    // hydrate + checkpoint restore that `runCompile` would
+    // otherwise serialise behind it. Fire-and-forget: the
+    // first `compile()` re-awaits the same cached promise via
+    // `ensureReady()`. Errors here are non-fatal — log and
+    // continue; the dead-child detect/respawn path in
+    // `SupertexDaemonCompiler.compile()` recovers on the next
+    // round.
+    state.compiler.warmup().catch((err: unknown) => {
+      app.log.warn(
+        { err: errorMessage(err), projectId: id },
+        "compiler warmup failed; will retry on first compile",
+      );
+    });
     return state;
   }
 

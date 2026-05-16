@@ -34,6 +34,7 @@ class OneShotCompiler {
     return { ok: true, segments: [] };
   }
   async close() {}
+  async warmup() {}
   async snapshot() { return null; }
   async restore() {}
 }

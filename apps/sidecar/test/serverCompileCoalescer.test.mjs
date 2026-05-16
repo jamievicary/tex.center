@@ -58,6 +58,7 @@ class ManualCompiler {
     return d.promise;
   }
   async close() { this.closed = true; }
+  async warmup() {}
   async snapshot() { return null; }
   async restore() {}
 }

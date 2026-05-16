@@ -106,6 +106,7 @@ await blobStore.put(`projects/${projectId}/files/refs.bib`, new TextEncoder().en
       return { ok: false, error: "boom" };
     },
     async close() {},
+    async warmup() {},
   });
   const app = await buildServer({
     logger: false,

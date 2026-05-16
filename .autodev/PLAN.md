@@ -35,16 +35,24 @@ routed to (decision deferred post-MVP).
      non-comparable to the 10.9 s above. Worst-case true cold
      image-pull data point still missing.
 
-   **Next slice (M20.3(a)):** add an eager `Compiler.warmup()`
-   hook (`SupertexDaemonCompiler` implements by calling
-   `ensureReady`; `FixtureCompiler` / `SupertexOnceCompiler`
-   are no-ops). Call it from `getProject` immediately after
-   compiler construction so the 4.3 s daemon format-load runs
-   in parallel with WS handshake + hydrate + restore (currently
-   ~0.3 s combined). Expected: ~3 s shaved off cold-start
-   first-paint. Add a sidecar-side unit lock that asserts
-   `compile()`'s `compileMs` is < N when `warmup()` was
-   invoked > N ms earlier.
+   **M20.3(a) [landed iter 331].** `Compiler.warmup(): Promise<void>`
+   added to the interface. `SupertexDaemonCompiler.warmup()`
+   delegates to `ensureReady()` (idempotent — cached
+   `readyPromise`); `FixtureCompiler` / `SupertexOnceCompiler`
+   are no-ops. `server.ts getProject()` calls
+   `state.compiler.warmup().catch(log)` fire-and-forget right
+   after compiler construction so the daemon's 4.3 s
+   format-load runs in parallel with WS handshake + Yjs hydrate
+   + checkpoint restore. The existing `compile()` path keeps
+   calling `ensureReady()` and hits the cache. Unit-locked in
+   `apps/sidecar/test/supertexDaemonCompiler.test.mjs` case 15:
+   fake daemon delays `daemon ready` marker; two concurrent
+   warmups share one spawn; a subsequent `compile()` does NOT
+   respawn; a post-ready warmup is a no-op. Expected production
+   effect: roughly the WS-handshake + hydrate + restore latency
+   (~0.3 s today) shaved off cold-start first-paint; the worst
+   case (Tigris restore slower than 0.3 s) overlaps proportionally
+   more. Verify via next cold-boot log capture.
 
    **Free follow-up (M20.3(a)2):** today every cold-boot
    sidecar makes a wasted `loadCheckpoint` GET to Tigris that

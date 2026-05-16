@@ -45,7 +45,15 @@ const errorRounds = parseInt(process.env.FAKE_ERROR_ROUNDS ?? "1", 10);
 const rollbackK = parseInt(process.env.FAKE_ROLLBACK_K ?? "0", 10);
 
 let rounds = 0;
-process.stderr.write("supertex: daemon ready\\n");
+const delayReadyMs = parseInt(process.env.FAKE_DELAY_READY_MS ?? "0", 10);
+function announceReady() {
+  process.stderr.write("supertex: daemon ready\\n");
+}
+if (delayReadyMs > 0) {
+  setTimeout(announceReady, delayReadyMs);
+} else {
+  announceReady();
+}
 
 let buf = "";
 process.stdin.setEncoding("utf8");
@@ -492,6 +500,62 @@ const require = createRequire(import.meta.url);
   assert.match(text, /^CHUNK-1\nCHUNK-2\n$/);
   // Ensure a different child is now in place.
   assert.notEqual(c.child, child, "respawned a fresh child");
+  await c.close();
+}
+
+// 15. M20.3(a) warmup() hook: spawning the daemon + waiting for
+//     `daemon ready` is the dominant cold-start term (~4.3 s on
+//     prod, iter 330). `warmup()` lets the sidecar pay that cost
+//     in parallel with WS handshake / Yjs hydrate / checkpoint
+//     restore rather than serialising behind them inside the
+//     first `compile()`. The fake daemon's `FAKE_DELAY_READY_MS`
+//     makes the wait observable.
+//
+//     Contract locked here:
+//       (i)  `warmup()` spawns the daemon child and resolves once
+//            the `supertex: daemon ready` marker has been seen.
+//       (ii) After `warmup()` resolves, a subsequent `compile()`
+//            does NOT re-spawn the child — it reuses the same
+//            ready process (`ensureReady` cache hit).
+//      (iii) Concurrent and post-ready `warmup()` calls are
+//            idempotent: still exactly one spawn.
+{
+  const READY_DELAY_MS = 150;
+  const workDir = await makeWorkDir("warmup");
+  const spawnCounts = { n: 0 };
+  const baseSpawn = makeSpawnFn({
+    FAKE_TOTAL: "1",
+    FAKE_DELAY_READY_MS: String(READY_DELAY_MS),
+  });
+  const countingSpawn = (cmd, args, options) => {
+    spawnCounts.n += 1;
+    return baseSpawn(cmd, args, options);
+  };
+  const c = new SupertexDaemonCompiler({
+    workDir,
+    supertexBin: fakeBin,
+    spawnFn: countingSpawn,
+    readyTimeoutMs: 5_000,
+    roundTimeoutMs: 5_000,
+  });
+
+  // (i) Concurrent warmup() calls share one spawn; both await the
+  //     same readiness. Awaiting them both gives the daemon-ready
+  //     marker as a deterministic precondition for the next step.
+  await Promise.all([c.warmup(), c.warmup()]);
+  assert.equal(spawnCounts.n, 1, "two concurrent warmups → one spawn");
+  assert.ok(c.child, "warmup spawned the daemon child");
+
+  // (ii) After warmup resolves, compile() reuses the same child —
+  //      ensureReady() is a cache hit, no additional spawn.
+  const r = await c.compile({ source: "x", targetPage: 0 });
+  assert.equal(r.ok, true, "warmed compile ok");
+  assert.equal(spawnCounts.n, 1, "compile() after warmup() does not respawn");
+
+  // (iii) Post-ready warmup() is a no-op against the live child.
+  await c.warmup();
+  assert.equal(spawnCounts.n, 1, "post-ready warmup() does not respawn");
+
   await c.close();
 }
 

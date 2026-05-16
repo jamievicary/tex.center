@@ -17,6 +17,7 @@ class StubErrorCompiler {
     return { ok: false, error: "boom from stub" };
   }
   async close() {}
+  async warmup() {}
 }
 
 const app = await startServer({
