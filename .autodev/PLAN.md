@@ -74,10 +74,21 @@ routed to (decision deferred post-MVP).
    on `SupertexDaemonCompiler` is what M7.4.2 (upstream supertex
    serialise wire) will do when it lands.
 
-   After both M20.3(a) and (a)2 deploy: add a real preservation gold spec — create + edit
-   unique string + force-stop + reopen + assert bytes round-trip
-   (the existing GT-6-stopped only checks the seed placeholder,
-   which the hello-world fallback satisfies).
+   **M20.3(b) preservation gold spec [landed iter 333].**
+   `verifyLiveGt9StoppedPreservesEdits.spec.ts` (GT-9). Cold-start
+   a fresh project, type a unique `% preserve-<uuid>` LaTeX comment
+   at the end of `main.tex`, wait for the next `pdf-segment` (proof
+   `runCompile` ran end-to-end: `persistence.maybePersist()` is
+   called *before* the compile invocation, so a fresh segment
+   guarantees the source — sentinel included — has been written to
+   the blob store). Force-stop the Machine via Fly `POST
+   /machines/{id}/stop`, poll until `state === "stopped"`, reopen
+   via dashboard click, assert the sentinel appears in
+   `.cm-content`. Latency-agnostic by design (no 1000 ms budget
+   like GT-6-stopped); pins **byte preservation** through
+   sidecar→Tigris→sidecar round-trip. Gates `finished.md`. RED
+   today only if the preservation path is actually broken in
+   production.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -298,13 +309,17 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
   credentials mirrored to both apps because Tigris bucket names
   are globally unique and the second `storage create` fails
   with `Name has already been taken`). Saved to
-  `creds/tigris-tex-center.txt`. Outstanding M20.3 work:
-  (a) cold-start latency reduction — fresh-project first-segment
-  is ~89 s vs the 60 s test budget; (b) preservation gold spec —
-  create + edit unique source + force-stop + reopen + assert
-  byte round-trip. (a) is the gating term; (b) needs cold-start
-  fixed first or its preservation phase has no time budget.
-  Override stop timer via `SIDECAR_STOP_MS` env for the test.
+  `creds/tigris-tex-center.txt`. M20.3(a)+(a)2 landed iters
+  331/332; the preservation gold spec landed iter 333. Closing
+  M20.3 needs:
+  (i) prod cold-boot log capture validating that `restoreMs`
+  collapsed from 273 ms → 0 and the warmup overlap shaved the
+  pre-compile hydrate/restore window (verification only, no code);
+  (ii) GT-9 passing live — pins the sidecar→Tigris→sidecar
+  byte round-trip on a force-stop + cold reopen; today it boots
+  a fresh Machine itself rather than relying on a pre-existing
+  preserved blob, so it can run on every gold pass without
+  external state.
 
 Tuning: 5 s suspend is aggressive but suspend cost is ~300 ms
 reconnect. Adjust via env if live use shows thrash.
