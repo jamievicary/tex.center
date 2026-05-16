@@ -213,12 +213,35 @@ export const test = base.extend<
     // never open a project WS — the dump degrades to one uniform
     // "no project WS observed" line.
     const wireTimeline = captureFramesAuto(page);
+    // Iter 355 (`.autodev/discussion/354_answer.md`): the WS-frame
+    // timeline is blind to silent frontend rendering failures (the
+    // canonical case being PdfViewer.svelte's `render()` swallowing
+    // a PDF.js parse error). Capture `console.error` + `pageerror`
+    // events and dump under the same gold-only env flag, prefixed so
+    // they're greppable per-spec. Filtered to error-level only to
+    // keep the transcript readable; non-error console traffic stays
+    // out of the gold output unless a future probe needs it.
+    const browserDiagnostics: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      browserDiagnostics.push(`[browser:console.error] ${msg.text()}`);
+    });
+    page.on("pageerror", (err) => {
+      browserDiagnostics.push(`[browser:pageerror] ${err.message}`);
+    });
     try {
       await use(page);
     } finally {
       if (process.env.TEXCENTER_DUMP_WIRE_TIMELINE === "1") {
         // eslint-disable-next-line no-console
         console.log(wireTimeline.dumpTimeline(testInfo.title));
+        if (browserDiagnostics.length > 0) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[${testInfo.title}] browser diagnostics:\n` +
+              browserDiagnostics.map((line) => `    ${line}`).join("\n"),
+          );
+        }
       }
       await context.close().catch(() => {});
       await deleteSession(db.db.db, minted.sid).catch(() => {});

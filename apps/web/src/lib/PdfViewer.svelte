@@ -32,7 +32,24 @@
     if (!host || !src) return;
     const token = ++renderToken;
     const target = host;
-    void render(src, target, () => token === renderToken);
+    // Iter 355 (`.autodev/discussion/354_answer.md`): the rendering
+    // path used to throw silently — `void render(...)` discards a
+    // rejected promise, no UI signal, no log. The
+    // `verifyLiveFullPipelineReused` gold spec timed out waiting for
+    // `.preview canvas` to attach with no captured cause. Surface the
+    // error: console.error so Playwright's `page.on('console')`
+    // capture in `authedPage.ts` picks it up, plus a
+    // `data-pdf-error` attribute on the host so future specs can
+    // assert "no render error" rather than blindly waiting for a
+    // canvas that will never come. Clear on every fresh render so
+    // a recovered-from-transient failure doesn't leave stale state.
+    delete target.dataset.pdfError;
+    render(src, target, () => token === renderToken).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.error("[PdfViewer] render failed:", message);
+      target.dataset.pdfError = message;
+    });
   });
 
   function ensureObserver(): IntersectionObserver | null {
