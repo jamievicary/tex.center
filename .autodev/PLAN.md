@@ -61,15 +61,58 @@ routed to (decision deferred post-MVP).
    reopened; `compile-status running → idle` cycles for both the
    initial compile and an edit, but **no pdf-segment** is ever
    shipped. Distinct from Bug A (truncation): GT-9 does receive a
-   pdf-segment for the partial source. Iter 346 priority:
-   - Capture `compile-source` + `daemon-stdin` + `daemon-round-done`
-     transcript of a failing round from prod (push
-     `DEBUG_COMPILE_LOG=1` as Fly secret first if needed).
-   - Compare on-disk `main.tex` first/last 80 bytes against
-     `p.text.toString().slice(0,80)` at compile-time.
-   - Decide whether root-cause is daemon no-op detector,
-     writeMain path, or something in the cold-resume hydrate→
-     compile sequence.
+   pdf-segment for the partial source.
+
+   **Iter 347 investigation outcome.** Captured prod sidecar
+   transcript (DEBUG_COMPILE_LOG already on, default-true). Two
+   relevant cycles observed during the iter-346 gold pass:
+   - Cold-resume on a freshly-rebooted Machine (project `2efd808d`):
+     warmup fails ("main.tex: no such file") because warmup spawns
+     before hydrate writes main.tex; respawn at compile time sees
+     the file → daemon `emit_initial_chunks` ships pages → round=1
+     `maxShipout=2`, `segments=1`, `bytesShipped≈58 kB`,
+     `compileMs≈5 s`. **Cold-resume path is healthy.**
+   - Warm idle reconnect (project `494ddd51` round 19): viewer
+     reconnects after a quiet period; daemon sees on-disk source
+     unchanged from last shipped → `maxShipout=-1`, `segments=0`,
+     `compileMs=9 ms`. Expected daemon no-op. **The client cover
+     here is the `lastSegments` replay at `server.ts` WS-connect
+     path (line 733), NOT the compile output.**
+
+   Neither cycle in current prod logs reproduces the user's
+   transcript (both initial-compile 0.0s AND edit-compile 2.7s
+   shipping zero segments). Plausible causes still in scope:
+   (a) `lastSegments` empty at WS-connect on the user's repro
+       (project state freshly created on this sidecar boot AND
+       first compile after boot was itself a no-op — would need
+       `emit_initial_chunks` to silently emit zero chunks);
+   (b) replay loop bailed early (socket closed mid-replay);
+   (c) something specific to the user's project state (e.g.,
+       Bug-A truncated blob hydrating into a daemon that then
+       sees its own snapshot/pdf-real artefacts as already
+       sufficient).
+
+   **Iter 347 landed diagnostic-only instrumentation** in
+   `apps/sidecar/src/server.ts`:
+   - New `replay-segments` log line at the WS-connect replay path
+     (`{projectId, lastSegmentsLen, replaySent, replayBytes,
+     socketOpen}`) so the next user repro discriminates between
+     "lastSegments was empty" and "replay shipped but client saw
+     nothing else".
+   - Added `lastSegmentsLen` to every `compile ok` log line so we
+     can correlate whether `result.segments.length=0` left a
+     populated cache or wiped it.
+
+   **Iter 348+ Bug B follow-up.** Wait for a fresh user-driven
+   manual repro on the iter-347 build, then grep prod logs for
+   `replay-segments`. If `lastSegmentsLen=0` at connect time,
+   root-cause is the initial compile's `emit_initial_chunks`
+   not emitting chunks — open a vendored-supertex sub-investigation
+   (snap_path / pdf_real arg construction in
+   `supertex` CLI → `supertex_daemon`). If `lastSegmentsLen>0`
+   but `replaySent=0`, root-cause is a socket-state race; fix in
+   sidecar. If both shipped fine but client toast didn't fire,
+   it's a client-side WS-frame demux issue.
 3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.

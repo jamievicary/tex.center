@@ -632,6 +632,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         elapsedMs: Date.now() - compileStart,
         segments: result.segments.length,
         bytesShipped,
+        lastSegmentsLen: p.lastSegments.length,
         phases: {
           hydrateMs,
           restoreMs,
@@ -730,10 +731,33 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         // `{segments: []}`, so without this replay a fresh
         // subscriber on a quiescent project would never receive a
         // pdf-segment frame.
+        //
+        // Bug B diagnostic (iter 347). The user-reported "compile
+        // runs but emits zero pdf-segments on cold-resume" can be
+        // any of: (a) lastSegments empty at this point because no
+        // prior compile populated it, (b) lastSegments populated
+        // but the send loop bailed early, (c) replay shipped but
+        // the subsequent compile clobbered it. The log line below
+        // makes (a)/(b) discriminable on a single grep, paired with
+        // `lastSegmentsLen` on every `compile ok` line.
+        let replayBytes = 0;
+        let replaySent = 0;
         for (const seg of project.lastSegments) {
-          if (socket.readyState !== socket.OPEN) return;
+          if (socket.readyState !== socket.OPEN) break;
           client.send(encodePdfSegment(seg));
+          replayBytes += seg.bytes.byteLength;
+          replaySent += 1;
         }
+        app.log.info(
+          {
+            projectId: project.id,
+            lastSegmentsLen: project.lastSegments.length,
+            replaySent,
+            replayBytes,
+            socketOpen: socket.readyState === socket.OPEN,
+          },
+          "replay-segments",
+        );
         project.coalescer.kick();
       });
 
