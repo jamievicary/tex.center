@@ -12,22 +12,23 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 — cold-cycle gold spec + Tigris deploy wiring.**
-   M20.2(d) landed iter 325: `S3BlobStore` (path-style SigV4,
-   pure-Node) + `BLOB_STORE=s3` branch of
-   `defaultBlobStoreFromEnv`. Iter 326 extended each required
-   field to accept either `BLOB_STORE_S3_*` (explicit, wins) or
-   the AWS-SDK fallback that `flyctl storage create` auto-injects
-   (`AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `BUCKET_NAME`,
-   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). Adapter remains
-   dark code until production runs `flyctl storage create`.
-   Next: `flyctl storage create -a tex-center -n texcenter-blobs -y`
-   then `flyctl secrets set BLOB_STORE=s3 -a tex-center`; repeat
-   for `tex-center-sidecar` (second invocation against the same
-   bucket name mints app-scoped credentials). Then build M20.3
-   gold spec — open project, idle 6 s (suspended), edit → 300 ms
-   ack; idle 6 min (stopped), edit → cold-start budget; content
-   preserved. Unblocks `verifyLiveGt6LiveEditableStateStopped`.
+1. **M20.3 — cold-start latency + cold-cycle gold spec.**
+   Tigris bucket `texcenter-blobs` provisioned iter 327;
+   `BLOB_STORE=s3` + AWS_* secrets live on both `tex-center` and
+   `tex-center-sidecar` (same credential pair, since `flyctl
+   storage create` rejects same-name re-creation; saved to
+   `creds/tigris-tex-center.txt`). Both deploys healthy.
+   `verifyLiveGt6LiveEditableStateStopped` is now blocked on
+   **cold-start latency**, not architecture: globalSetup warmup
+   measured first-pdf-segment-on-fresh-project at ~89 s, but the
+   test's own 60 s budget targets ~12.5 s. Next slice: instrument
+   per-stage cold-boot timings (Machine create / image pull /
+   sidecar start / `maybeRehydrate` / first compile / first
+   segment ship) on a fresh cold start, find the dominant term,
+   close it. After that, add a real preservation gold spec —
+   create + edit unique string + force-stop + reopen + assert
+   bytes round-trip (the existing GT-6-stopped only checks the
+   seed placeholder, which the hello-world fallback satisfies).
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -241,10 +242,20 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
     server that emulates the PUT/GET/DELETE/HEAD/list-type=2
     subset we use (paginated via base64 `NextContinuationToken`).
     Dark code until production wires Tigris secrets — see M20.3.
-- **M20.3 (open).** Gold spec: open project, idle 6 s
-  (suspended), edit → 300 ms ack; idle 6 min (stopped), edit →
-  cold-start budget; content preserved. Override stop timer via
-  `SIDECAR_STOP_MS` env for the test.
+- **M20.3 (open).** Tigris provisioning landed iter 327
+  (`flyctl storage create -a tex-center -n texcenter-blobs -y`
+  followed by `flyctl secrets set BLOB_STORE=s3 -a <app>` on
+  both `tex-center` and `tex-center-sidecar`; same AWS_*
+  credentials mirrored to both apps because Tigris bucket names
+  are globally unique and the second `storage create` fails
+  with `Name has already been taken`). Saved to
+  `creds/tigris-tex-center.txt`. Outstanding M20.3 work:
+  (a) cold-start latency reduction — fresh-project first-segment
+  is ~89 s vs the 60 s test budget; (b) preservation gold spec —
+  create + edit unique source + force-stop + reopen + assert
+  byte round-trip. (a) is the gating term; (b) needs cold-start
+  fixed first or its preservation phase has no time budget.
+  Override stop timer via `SIDECAR_STOP_MS` env for the test.
 
 Tuning: 5 s suspend is aggressive but suspend cost is ~300 ms
 reconnect. Adjust via env if live use shows thrash.
