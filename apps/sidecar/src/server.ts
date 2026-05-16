@@ -250,102 +250,84 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   const projects = new Map<string, ProjectState>();
 
   // M20.1 two-stage idle bookkeeping. `viewerCount` aggregates
-  // across every project; both timers arm only when it transitions
+  // across every project; both stages arm only when it transitions
   // to zero (or on cold boot until the first viewer arrives) and
   // are cancelled on the first re-connection.
   let viewerCount = 0;
-  let suspendTimer: NodeJS.Timeout | null = null;
-  let stopTimer: NodeJS.Timeout | null = null;
-  const suspendTimeoutMs = opts.suspendTimeoutMs;
-  const onSuspend = opts.onSuspend;
-  const suspendEnabled =
-    typeof suspendTimeoutMs === "number"
-    && suspendTimeoutMs > 0
-    && typeof onSuspend === "function";
-  const stopTimeoutMs = opts.stopTimeoutMs;
-  const onStop = opts.onStop;
-  const stopEnabled =
-    typeof stopTimeoutMs === "number"
-    && stopTimeoutMs > 0
-    && typeof onStop === "function";
 
-  function clearSuspendTimer(): void {
-    if (suspendTimer) {
-      clearTimeout(suspendTimer);
-      suspendTimer = null;
+  // A single idle stage owns its timer + `setTimeout` plumbing and
+  // exposes `arm` / `clear`. On fire it persists checkpoints
+  // (production suspend freezes RAM mid-response, and stop closes
+  // the app — the snapshot must be durable before either) then
+  // invokes the handler with a `rearm` callback that re-arms only
+  // while still idle. A disabled stage (no timeout or no handler)
+  // collapses arm/clear to no-ops so callers don't need to branch.
+  function createIdleStage(
+    name: "Suspend" | "Stop",
+    timeoutMs: number | undefined,
+    handler:
+      | ((ctx: { rearm: () => void }) => void)
+      | undefined,
+  ): { arm: () => void; clear: () => void } {
+    const enabled =
+      typeof timeoutMs === "number"
+      && timeoutMs > 0
+      && typeof handler === "function";
+    if (!enabled) {
+      return { arm: () => {}, clear: () => {} };
     }
+    let timer: NodeJS.Timeout | null = null;
+    function clear(): void {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
+    function arm(): void {
+      clear();
+      timer = setTimeout(() => {
+        timer = null;
+        void (async () => {
+          await persistAllCheckpoints();
+          try {
+            handler!({
+              rearm: () => {
+                if (viewerCount === 0) arm();
+              },
+            });
+          } catch (e) {
+            app.log.error(
+              { err: errorMessage(e) },
+              `on${name} threw`,
+            );
+          }
+        })();
+      }, timeoutMs!);
+      // Don't pin the event loop just to fire idle handlers.
+      timer.unref?.();
+    }
+    return { arm, clear };
   }
 
-  function clearStopTimer(): void {
-    if (stopTimer) {
-      clearTimeout(stopTimer);
-      stopTimer = null;
-    }
-  }
+  const suspendStage = createIdleStage(
+    "Suspend",
+    opts.suspendTimeoutMs,
+    opts.onSuspend,
+  );
+  const stopStage = createIdleStage(
+    "Stop",
+    opts.stopTimeoutMs,
+    opts.onStop,
+  );
 
   function clearIdleTimers(): void {
-    clearSuspendTimer();
-    clearStopTimer();
-  }
-
-  function armSuspendTimer(): void {
-    if (!suspendEnabled) return;
-    clearSuspendTimer();
-    suspendTimer = setTimeout(() => {
-      suspendTimer = null;
-      // Persist checkpoints before invoking onSuspend. Production
-      // suspend freezes RAM mid-response; the snapshot must be
-      // durable in the blob store before the freeze.
-      void (async () => {
-        await persistAllCheckpoints();
-        try {
-          onSuspend!({
-            rearm: () => {
-              if (viewerCount === 0) armSuspendTimer();
-            },
-          });
-        } catch (e) {
-          app.log.error(
-            { err: errorMessage(e) },
-            "onSuspend threw",
-          );
-        }
-      })();
-    }, suspendTimeoutMs!);
-    // Don't pin the event loop just to fire idle-suspend.
-    suspendTimer.unref?.();
-  }
-
-  function armStopTimer(): void {
-    if (!stopEnabled) return;
-    clearStopTimer();
-    stopTimer = setTimeout(() => {
-      stopTimer = null;
-      // Persist checkpoints before onStop closes the app. State
-      // may have drifted since the last suspend (if any) — the
-      // user may have edited, then walked away without re-suspend.
-      void (async () => {
-        await persistAllCheckpoints();
-        try {
-          onStop!({
-            rearm: () => {
-              if (viewerCount === 0) armStopTimer();
-            },
-          });
-        } catch (e) {
-          app.log.error(
-            { err: errorMessage(e) },
-            "onStop threw",
-          );
-        }
-      })();
-    }, stopTimeoutMs!);
-    stopTimer.unref?.();
+    suspendStage.clear();
+    stopStage.clear();
   }
 
   function armIdleTimers(): void {
-    armSuspendTimer();
-    armStopTimer();
+    suspendStage.arm();
+    stopStage.arm();
   }
 
   // Arm at startup: a Fly Machine that boots without ever
