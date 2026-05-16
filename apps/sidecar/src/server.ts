@@ -433,6 +433,12 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   // fallback for the compiler's `restore()` contract.
   function ensureRestored(p: ProjectState): Promise<void> {
     if (!blobStore) return Promise.resolve();
+    // M20.3(a)2: skip the cold-boot checkpoint GET entirely when
+    // the compiler has nothing to restore. Saves ~0.27 s wallclock
+    // per cold boot against Tigris/`fra`; flip the flag to `true`
+    // on the compiler once upstream supertex exposes a serialise
+    // wire (M7.4.2).
+    if (!p.compiler.supportsCheckpoint) return Promise.resolve();
     if (!p.restorePromise) {
       p.restorePromise = (async () => {
         try {
@@ -459,6 +465,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   async function persistAllCheckpoints(): Promise<void> {
     if (!blobStore) return;
     for (const p of projects.values()) {
+      // M20.3(a)2: skip the snapshot + PUT entirely when the
+      // compiler has no resumable state. Mirrors the
+      // `ensureRestored` short-circuit so a non-snapshotting
+      // compiler pays zero round-trips on idle-stop either.
+      if (!p.compiler.supportsCheckpoint) continue;
       try {
         const bytes = await p.compiler.snapshot();
         await persistCheckpoint(blobStore, p.id, bytes);

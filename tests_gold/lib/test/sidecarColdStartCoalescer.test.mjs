@@ -82,6 +82,7 @@ class SlowFirstCompileCompiler {
     this.inner = inner;
     this.delayMs = delayMs;
     this.firstCompileDone = false;
+    this.supportsCheckpoint = inner.supportsCheckpoint;
   }
   async compile(req) {
     if (!this.firstCompileDone && this.delayMs > 0) {

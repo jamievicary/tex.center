@@ -55,6 +55,23 @@ export interface CompileFailure {
 export type CompileResult = CompileSuccess | CompileFailure;
 
 export interface Compiler {
+  /**
+   * M20.3(a)2 cold-start gate. When `false`, the sidecar skips
+   * the cold-boot checkpoint blob GET in `ensureRestored` and the
+   * idle-stop `snapshot()`+PUT in `persistAllCheckpoints`. All
+   * three current implementations return `null` from `snapshot()`
+   * (and accept any blob in `restore()` as a no-op) because
+   * upstream supertex does not yet expose a serialise wire on the
+   * daemon protocol (M7.4.2), so on every cold boot the GET costs
+   * wallclock (~0.27 s against Tigris/`fra` per iter-330 capture)
+   * for guaranteed-null bytes.
+   *
+   * Flip to `true` once the implementation produces real snapshot
+   * bytes the next `restore()` will consume; the wiring is
+   * otherwise unchanged and remains pinned by
+   * `serverCheckpointWiring.test.mjs`.
+   */
+  readonly supportsCheckpoint: boolean;
   compile(req: CompileRequest): Promise<CompileResult>;
   close(): Promise<void>;
   /**

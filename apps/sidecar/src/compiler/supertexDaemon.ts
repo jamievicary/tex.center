@@ -81,6 +81,7 @@ export interface SupertexDaemonOptions {
 }
 
 export class SupertexDaemonCompiler implements Compiler {
+  readonly supportsCheckpoint = false;
   private readonly workDir: string;
   private readonly supertexBin: string;
   private readonly sourceName: string;

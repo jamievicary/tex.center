@@ -54,14 +54,27 @@ routed to (decision deferred post-MVP).
    case (Tigris restore slower than 0.3 s) overlaps proportionally
    more. Verify via next cold-boot log capture.
 
-   **Free follow-up (M20.3(a)2):** today every cold-boot
-   sidecar makes a wasted `loadCheckpoint` GET to Tigris that
-   always returns null (all compiler `snapshot()` return null
-   pre-upstream-supertex-serialise). Gate the GET on a future
-   flag or simply skip it until upstream supertex exposes the
-   serialise wire; saves ~0.27 s per cold start.
+   **M20.3(a)2 [landed iter 332].** Added
+   `Compiler.supportsCheckpoint: readonly boolean` to the
+   interface; all three impls (`Fixture`, `SupertexOnce`,
+   `SupertexDaemon`) set `false`. `server.ts ensureRestored`
+   short-circuits before calling `loadCheckpoint` when the flag
+   is false; `persistAllCheckpoints` skips the per-project
+   `snapshot() + persistCheckpoint` body symmetrically. Expected
+   prod effect: `restoreMs:273` term in cold-start `phases`
+   collapses to 0; net cold-start wallclock saving ≈ 0.27 s on
+   top of the iter-331 warmup overlap. Pinned by
+   `serverCheckpointWiring.test.mjs` case 4: `RecordingCompiler`
+   with `supportsCheckpoint:false` and a pre-seeded blob —
+   `restore` not called, blobStore.get for the checkpoint key
+   never observed (counted via `GetCountingBlobStore`),
+   `snapshot` not called on idle-stop, pre-seeded blob untouched.
+   Cases 1–3 still pin the live wiring path with the flag set
+   `true` (the new opt-in in `RecordingCompiler`). Flip to `true`
+   on `SupertexDaemonCompiler` is what M7.4.2 (upstream supertex
+   serialise wire) will do when it lands.
 
-   After both: add a real preservation gold spec — create + edit
+   After both M20.3(a) and (a)2 deploy: add a real preservation gold spec — create + edit
    unique string + force-stop + reopen + assert bytes round-trip
    (the existing GT-6-stopped only checks the seed placeholder,
    which the hello-world fallback satisfies).

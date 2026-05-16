@@ -21,7 +21,8 @@ import {
 } from "../src/persistence.ts";
 
 class RecordingCompiler {
-  constructor(snapshotBytes) {
+  constructor(snapshotBytes, { supportsCheckpoint = true } = {}) {
+    this.supportsCheckpoint = supportsCheckpoint;
     this.restoreCalls = [];
     this.compileCalls = 0;
     this.snapshotBytes = snapshotBytes;
@@ -42,6 +43,29 @@ class RecordingCompiler {
   }
   async restore(blob) {
     this.restoreCalls.push(Array.from(blob));
+  }
+}
+
+// Wraps a `LocalFsBlobStore` and counts `get(projectCheckpointKey)`
+// reads so case 4 can assert the cold-boot path skips the Tigris
+// GET entirely when `supportsCheckpoint = false`.
+class GetCountingBlobStore {
+  constructor(inner) {
+    this.inner = inner;
+    this.getCalls = [];
+  }
+  get(key) {
+    this.getCalls.push(key);
+    return this.inner.get(key);
+  }
+  put(key, bytes) {
+    return this.inner.put(key, bytes);
+  }
+  delete(key) {
+    return this.inner.delete(key);
+  }
+  list(prefix) {
+    return this.inner.list(prefix);
   }
 }
 
@@ -191,6 +215,87 @@ async function closeAndWait(ws) {
     await loadCheckpoint(blobStore, "p3"),
     null,
     "no blob should be written when snapshot returns null",
+  );
+
+  await app.close();
+}
+
+// Case 4 (M20.3(a)2): when the compiler reports
+// `supportsCheckpoint = false`, the sidecar must skip the cold-boot
+// `loadCheckpoint` GET entirely (no read of the checkpoint key) AND
+// must NOT call snapshot/restore on the compiler, even if a
+// checkpoint blob is already present at the project's key. The
+// idle-stop persist path is symmetric: snapshot is not consulted.
+{
+  const blobRoot = mkdtempSync(join(tmpdir(), "checkpoint-wiring-nosupport-"));
+  const scratchRoot = mkdtempSync(
+    join(tmpdir(), "checkpoint-wiring-nosupport-scratch-"),
+  );
+  const inner = new LocalFsBlobStore({ rootDir: blobRoot });
+  const blobStore = new GetCountingBlobStore(inner);
+
+  // Pre-seed a checkpoint blob at the project's checkpoint key. A
+  // checkpoint-supporting compiler (case 1) would consume this on
+  // cold boot; a non-supporting compiler must ignore it.
+  const seed = new Uint8Array([7, 7, 7, 7]);
+  await persistCheckpoint(blobStore, "p4", seed);
+  const checkpointKey = "projects/p4/checkpoint.bin";
+  // Drop the `put` made by persistCheckpoint so we measure only
+  // get-traffic during the cold boot.
+  blobStore.getCalls.length = 0;
+
+  const compiler = new RecordingCompiler(new Uint8Array([1, 2]), {
+    supportsCheckpoint: false,
+  });
+  let idleResolve;
+  const idleDone = new Promise((r) => {
+    idleResolve = r;
+  });
+
+  const app = await buildServer({
+    logger: false,
+    scratchRoot,
+    blobStore,
+    compilerFactory: () => compiler,
+    suspendTimeoutMs: 30,
+    onSuspend: () => idleResolve(),
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const port = app.server.address().port;
+
+  const ws = await open(`ws://127.0.0.1:${port}/ws/project/p4`);
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline && compiler.compileCalls === 0) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.equal(compiler.compileCalls > 0, true, "compile must have run");
+  assert.deepEqual(
+    compiler.restoreCalls,
+    [],
+    "supportsCheckpoint=false: restore must NOT be called even with a seeded blob",
+  );
+  assert.equal(
+    blobStore.getCalls.includes(checkpointKey),
+    false,
+    `supportsCheckpoint=false: blobStore.get must not be called with ${checkpointKey}; ` +
+      `observed gets: ${JSON.stringify(blobStore.getCalls)}`,
+  );
+
+  await closeAndWait(ws);
+  await idleDone;
+
+  assert.equal(
+    compiler.snapshotCalls,
+    0,
+    "supportsCheckpoint=false: snapshot must NOT be called on idle-stop",
+  );
+  // And the pre-seeded blob is untouched (proof we did not
+  // overwrite or delete it during the idle cycle).
+  const stillThere = await loadCheckpoint(blobStore, "p4");
+  assert.deepEqual(
+    stillThere ? Array.from(stillThere) : null,
+    Array.from(seed),
+    "supportsCheckpoint=false: pre-seeded blob must remain intact",
   );
 
   await app.close();

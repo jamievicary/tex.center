@@ -8,6 +8,7 @@ import { errorMessage } from "../errors.js";
 import type { Compiler, CompileRequest, CompileResult } from "./types.js";
 
 export class FixtureCompiler implements Compiler {
+  readonly supportsCheckpoint = false;
   private cached: Uint8Array | null = null;
 
   constructor(private readonly fixturePath: string) {}
