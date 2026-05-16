@@ -1,5 +1,24 @@
 # Future ideas
 
+- **M20.3(a)3 — gate `compiler.warmup()` on workspace `main.tex`
+  existing.** Iter 331's warmup hook in `apps/sidecar/src/server.ts`
+  `getProject()` spawns the supertex daemon fire-and-forget right
+  after the compiler is constructed. On a fresh-project cold start
+  `runCompile.writeMain` hasn't materialised `main.tex` on disk yet,
+  so the daemon child errors out with
+  `supertex: /tmp/.../main.tex: no such file`, the warmup `.catch`
+  swallows it, and the iter-331 overlap savings (~4 s of `.fmt`
+  load) are forfeit — the first `compile()` then detect-dead-child
+  → respawn → wait for ready. Observed in tex-center-sidecar prod
+  logs 2026-05-16 (iter 337 investigation). Fix candidates: have
+  `ProjectWorkspace.init()` lay down an empty `main.tex` so the
+  daemon spawn always finds a file; OR delay warmup until the
+  persistence layer's hydration completes (defeats overlap purpose
+  unless hydration is fast); OR write a placeholder inside
+  `spawnAndWaitReady` itself before `spawnFn`. The
+  no-such-file→respawn fallback works, so this is a perf slice, not
+  correctness. On stopped→start of a Machine with prior persisted
+  state on disk it's a no-op (the file is already there).
 - **`--cold` gold flag to exercise the cold-start path explicitly.**
   Once M9.gold-restructure (iter 197) separates warm-up from
   per-spec assertions, the warm path becomes the default and

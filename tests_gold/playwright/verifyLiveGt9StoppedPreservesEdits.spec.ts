@@ -270,19 +270,48 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    `textContent` concatenates each `.cm-line` without
       //    inserting separators, but the sentinel substring stays
       //    intact within whichever line it lands on.
+      //
+      //    Per-call `timeout: 1000` on `textContent` is load-bearing.
+      //    Default behaviour retries until `actionTimeout` (unset →
+      //    no limit), so the very first iteration can block
+      //    indefinitely when `.cm-content` isn't on the page yet —
+      //    e.g., cold-restart hasn't hydrated the editor. Iter 336's
+      //    GT-9 ran the full 480 s wall stuck in this loop with
+      //    zero per-iteration output. A 1 s per-call cap converts a
+      //    missing-element wait into a tight loop; every 20th
+      //    iteration logs the current cm-content state so a
+      //    timeout-fired run still tells us whether the editor
+      //    rendered at all and what its text was.
       phase("7-sentinel:poll");
       const sentinelDeadline = Date.now() + SENTINEL_VISIBLE_BUDGET_MS;
+      let pollIter = 0;
+      let lastLoggedIter = -1;
       while (Date.now() < sentinelDeadline) {
+        pollIter += 1;
         cmTextAfterReopen =
           (await authedPage
             .locator(".cm-content")
-            .textContent()
+            .textContent({ timeout: 1000 })
             .catch(() => "")) ?? "";
-        if (cmTextAfterReopen.includes(sentinel)) break;
+        const found = cmTextAfterReopen.includes(sentinel);
+        if (
+          (pollIter === 1 || pollIter - lastLoggedIter >= 20) &&
+          !found
+        ) {
+          phase("7-sentinel:probe", {
+            iter: pollIter,
+            cmLen: cmTextAfterReopen.length,
+            cmPrefix: cmTextAfterReopen.slice(0, 80),
+          });
+          lastLoggedIter = pollIter;
+        }
+        if (found) break;
         await authedPage.waitForTimeout(150);
       }
       phase("7-sentinel:done", {
+        iter: pollIter,
         found: cmTextAfterReopen.includes(sentinel),
+        cmLen: cmTextAfterReopen.length,
       });
 
       // Diagnostic line — kept regardless of pass/fail so the gold
