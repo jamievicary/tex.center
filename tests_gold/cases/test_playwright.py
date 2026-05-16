@@ -165,21 +165,47 @@ class TestPlaywright(unittest.TestCase):
 
         _setup_playwright()
 
-        result = subprocess.run(
-            [
-                "pnpm",
-                "exec",
-                "playwright",
-                "test",
-                "--config",
-                str(CONFIG),
-            ],
-            cwd=ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=900,
-        )
+        # Outer timeout sized to absorb globalSetup (~240 s budget)
+        # + ~25 live specs + local specs + GT-9's per-test 8-min wall
+        # if it actually fires. 1200 s = 20 min: a real regression
+        # surfaces, but a single slow spec doesn't truncate the rest.
+        try:
+            result = subprocess.run(
+                [
+                    "pnpm",
+                    "exec",
+                    "playwright",
+                    "test",
+                    "--config",
+                    str(CONFIG),
+                ],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=1200,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # subprocess.run with capture_output=True attaches whatever
+            # was captured before the timeout to the exception's
+            # stdout/stderr attributes. Without this dump every outer
+            # timeout produces zero diagnostic output — every per-spec
+            # ✓ / ✘ line and every test-side console.log (e.g. GT-9's
+            # `[verifyLiveGt9StoppedPreservesEdits] elapsedMs=…
+            # phase=…` markers) is lost. Iter-335's phase-marker
+            # diagnostic was effectively invisible until this lands.
+            if exc.stdout:
+                sys.stdout.write(exc.stdout)
+            if exc.stderr:
+                sys.stderr.write(exc.stderr)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            raise AssertionError(
+                f"playwright timed out after {exc.timeout}s "
+                "— see captured output above (which may be partial); "
+                "the last logged phase from any in-progress spec "
+                "names where it was stuck"
+            ) from exc
         # Always echo the Playwright list-reporter output so its
         # per-spec ✓ / ✘ lines reach $GOLD_OUT and surface as
         # individual pass/fail entries in the iteration log
