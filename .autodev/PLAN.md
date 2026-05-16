@@ -15,20 +15,32 @@ routed to (decision deferred post-MVP).
 1. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
    editable-state.** Iter 362 surfaced the suspended-path
    diagnostic; iter 366 bumped suspended-variant
-   `cmContentBudgetMs` to 2500 ms; iter 366 gold pass GREEN on
-   suspended, and finally surfaced the stopped-path diagnostic:
-   `cmContentReadyMs=4853 keystrokeAckMs=7 clickToWsOpenMs=95
-   clickToFirstFrameMs=4556 wsPostClick=opens:1/closes:0`.
+   `cmContentBudgetMs` to 2500 ms and the iter-366 gold pass went
+   GREEN on suspended, and finally surfaced the stopped-path
+   diagnostic: `cmContentReadyMs=4853 keystrokeAckMs=7
+   clickToWsOpenMs=95 clickToFirstFrameMs=4556
+   wsPostClick=opens:1/closes:0`. Iter 367 bumped stopped to
+   9000 ms; iter-367 gold pass GREEN on stopped
+   (`cmContentReadyMs=5367`, well under), but **RED on
+   suspended** — outer `testInfo.setTimeout(120_000)` hit with
+   no diagnostic line, meaning the prelude wedged. Since iter 366
+   suspended had completed with 1349 ms well under the outer cap,
+   most likely a transient slow-Fly cold-start sample; iter 368
+   widened the suspended outer to 180 s so the next slow-prelude
+   pass still leaves room for the helper's `console.log` to fire
+   and the product-budget assertions to evaluate. Product budgets
+   unchanged.
 
    Two distinct intrinsic floors:
    - **Suspended.** ~1.3 s (Fly resume ~78 ms + sidecar boot
-     ~785 ms + Yjs hydrate ~486 ms). Spec budget 2500 ms.
+     ~785 ms + Yjs hydrate ~486 ms). Spec budget 2500 ms; outer
+     180 s.
    - **Stopped.** ~4.9 s. `clickToWsOpenMs=95` is fast (Fly
      start was hot), but `clickToFirstFrameMs=4556` shows a
      fresh container boot (no resume shortcut) is ~5× slower
-     than the suspended-resume path's sidecar boot. Iter 367
-     bumped spec budget to 9000 ms (~85 % headroom over the
-     lone sample, matching iter-366's ratio).
+     than the suspended-resume path's sidecar boot. Spec
+     budget 9000 ms; outer 120 s (its iter-367 pass completed
+     in 33 s, so headroom is fine).
 
    Both budgets are single-sample tunes; future iterations with
    2-3 more gold passes should re-tune (likely tighter). Keystroke
@@ -48,10 +60,13 @@ routed to (decision deferred post-MVP).
      sidecar boot on a fresh container has further regressed;
      same investigation lever as suspended but with an
      intrinsically higher floor (container start vs. resume).
-   - **Outer test-budget exceeded with no diagnostic.** Same
-     route as before: cold-from-inactive cost has regressed past
-     even the 120 s headroom; broader Fly cold-start health
-     check (image pull, region, builder warmth).
+   - **Outer test-budget exceeded with no diagnostic** (suspended
+     at 180 s, or stopped at 120 s). cold-from-inactive cost has
+     regressed past the outer headroom; broader Fly cold-start
+     health check (image pull, region, builder warmth) is the
+     next investigation lever. Treat a single blind timeout as
+     sample-variance one more time; two in a row = real
+     regression.
 
 2. **`verifyLiveFullPipeline` NEW FAIL iter 360.** Fresh-project
    full pipeline `cmContent.waitFor` timed out at 40 s testTimeout

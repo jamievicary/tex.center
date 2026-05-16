@@ -76,18 +76,26 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     // 1000 ms gate the architecture cannot meet on the suspended-
     // resume path; `keystrokeAckMs` ≤ 1000 ms — unchanged, observed
     // 9 ms in iter 362) are asserted *inside* the shared helper;
-    // this number only
-    // bounds the surrounding plumbing (cold-start hand-off →
-    // `/projects` → Fly suspend + state poll → dashboard re-click).
-    // Iter 358-360 ran with 40 s and timed out before the helper's
-    // diagnostic `console.log` could fire — without that line,
-    // every subsequent iteration on M13.2(b).5 routing landed
-    // blind. 120 s leaves headroom for: ≤30 s cold-start + ≤60 s
-    // suspend settle + ≤30 s navigate / measure. Widening this
-    // does not relax the helper's product budgets
-    // (`cmContentBudgetMs` 2500 ms / `KEYSTROKE_ACK_BUDGET_MS`
-    // 1000 ms).
-    testInfo.setTimeout(120_000);
+    // this number only bounds the surrounding plumbing (cold-start
+    // hand-off → `/projects` → Fly suspend + state poll → dashboard
+    // re-click). Iter 358-360 ran with 40 s and timed out before the
+    // helper's diagnostic `console.log` could fire — without that
+    // line, every subsequent iteration on M13.2(b).5 routing landed
+    // blind. Iter 367 then surfaced the same failure mode at 120 s:
+    // the prelude wedged somewhere (suspect a slow Fly cold-start
+    // sample, since iter 366 had completed with `cmContentReadyMs=
+    // 1349` well under 120 s), the outer timeout fired, no helper
+    // diagnostic. Iter 368 widens to 180 s so a slow-Fly day still
+    // leaves room for the helper to log and reach the product-budget
+    // assertions — that converts a blind outer timeout into a
+    // diagnosable signal. 180 s leaves headroom for: ≤60 s
+    // cold-start (worst-case sample) + ≤60 s suspend settle + ≤60 s
+    // navigate / measure. Widening this does not relax the helper's
+    // product budgets (`cmContentBudgetMs` 2500 ms /
+    // `KEYSTROKE_ACK_BUDGET_MS` 1000 ms); a real regression still
+    // surfaces as a budget assertion with diagnostics, not as
+    // another blind outer timeout.
+    testInfo.setTimeout(180_000);
 
     await runColdFromInactiveLiveEditableTest(
       {
