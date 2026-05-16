@@ -5,6 +5,7 @@
 
 import assert from "node:assert/strict";
 import { mkdtempSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,15 +15,34 @@ import { ProjectWorkspace } from "../src/workspace.ts";
 const root = mkdtempSync(join(tmpdir(), "ws-test-"));
 
 {
-  // init() is idempotent and creates the per-project dir under root.
+  // init() is idempotent, creates the per-project dir under root,
+  // and lays down an empty `main.tex` placeholder (M20.3(a)3) so the
+  // compiler warmup's daemon spawn finds a file even before any
+  // `writeMain` has run.
   const ws = new ProjectWorkspace({ rootDir: root, projectId: "abc" });
   assert.equal(ws.dir, join(root, "abc"));
   assert.equal(existsSync(ws.dir), false);
   await ws.init();
   await ws.init();
   assert.equal(existsSync(ws.dir), true);
+  assert.equal(existsSync(ws.mainTexPath()), true);
+  assert.equal(readFileSync(ws.mainTexPath(), "utf8"), "");
   await ws.dispose();
   assert.equal(existsSync(ws.dir), false);
+}
+
+{
+  // init() must NEVER clobber pre-existing main.tex (the stopped-
+  // Machine cold-restart case: the prior session's persisted source
+  // is already on disk, and the placeholder write would overwrite
+  // committed user work).
+  const ws = new ProjectWorkspace({ rootDir: root, projectId: "preserved" });
+  await mkdir(ws.dir, { recursive: true });
+  const priorSource = "\\documentclass{article}\\begin{document}prior\\end{document}";
+  await writeFile(ws.mainTexPath(), priorSource, "utf8");
+  await ws.init();
+  assert.equal(readFileSync(ws.mainTexPath(), "utf8"), priorSource);
+  await ws.dispose();
 }
 
 {
@@ -65,8 +85,9 @@ const root = mkdtempSync(join(tmpdir(), "ws-test-"));
   await ws.writeFile("sec1.tex", "section one v2\n");
   assert.equal(readFileSync(join(ws.dir, "sec1.tex"), "utf8"), "section one v2\n");
 
-  // No leftover .tmp file after a successful write.
-  assert.deepEqual(readdirSync(ws.dir).sort(), ["sec1.tex"]);
+  // No leftover .tmp file after a successful write. (`main.tex` is
+  // the init()-time placeholder; M20.3(a)3.)
+  assert.deepEqual(readdirSync(ws.dir).sort(), ["main.tex", "sec1.tex"]);
 
   await ws.dispose();
 }

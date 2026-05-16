@@ -246,11 +246,14 @@ iter 327; `BLOB_STORE=s3` + AWS_* secrets live on both apps.
 Iter 328–330 instrumentation pinned ≈4.3 s `compileMs` as
 dominant cold-start term. Landed sub-slices: (a) iter 331
 `Compiler.warmup()` overlap; (a)2 iter 332 checkpoint short-
-circuit (`supportsCheckpoint:false`); (b) iter 333–335 GT-9
-preservation gold spec; (c) iter 340+343 suspend-race fix
-(see M20.1); (d) iter 345 persist-on-disconnect fix (pinned
-by `serverPersistOnViewerDisconnect.test.mjs`). GT-9 GREEN
-iter 347. **Open:** GT-6-stopped (see priority #1).
+circuit (`supportsCheckpoint:false`); (a)3 iter 353 empty
+`main.tex` placeholder in `ProjectWorkspace.init()` so the
+warmup spawn no longer dies on a fresh-project cold start
+(pinned by `apps/sidecar/test/workspace.test.mjs`); (b) iter
+333–335 GT-9 preservation gold spec; (c) iter 340+343 suspend-
+race fix (see M20.1); (d) iter 345 persist-on-disconnect fix
+(pinned by `serverPersistOnViewerDisconnect.test.mjs`). GT-9
+GREEN iter 347. **Open:** GT-6-stopped (see priority #1).
 
 Tuning: `SIDECAR_SUSPEND_MS` is currently inert in production
 (no arm site after iter 343). `SIDECAR_STOP_MS` (5 min default)

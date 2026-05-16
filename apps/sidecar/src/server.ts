@@ -424,12 +424,22 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // continue; the dead-child detect/respawn path in
     // `SupertexDaemonCompiler.compile()` recovers on the next
     // round.
-    state.compiler.warmup().catch((err: unknown) => {
-      app.log.warn(
-        { err: errorMessage(err), projectId: id },
-        "compiler warmup failed; will retry on first compile",
-      );
-    });
+    //
+    // M20.3(a)3: `workspace.init()` lays down an empty `main.tex`
+    // placeholder so the daemon's spawn doesn't immediately error
+    // on a missing source file. Without this gate, on a fresh-
+    // project cold start the warmup child died, the iter-331
+    // overlap was forfeit, and the first `runCompile` paid full
+    // `.fmt`-load latency through the respawn fallback.
+    state.workspace
+      .init()
+      .then(() => state.compiler.warmup())
+      .catch((err: unknown) => {
+        app.log.warn(
+          { err: errorMessage(err), projectId: id },
+          "compiler warmup failed; will retry on first compile",
+        );
+      });
     return state;
   }
 

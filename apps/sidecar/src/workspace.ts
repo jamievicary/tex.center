@@ -36,6 +36,25 @@ export class ProjectWorkspace {
   async init(): Promise<void> {
     if (this.initialised) return;
     await mkdir(this.dir, { recursive: true });
+    // M20.3(a)3: ensure `main.tex` exists before the compiler's
+    // warmup spawn reads it. The supertex daemon's `--daemon DIR
+    // SOURCE` spawn errors out immediately when `SOURCE` is missing,
+    // forfeiting the ~4 s `.fmt`-load overlap that iter 331's
+    // pre-`runCompile` warmup was designed to win. An empty
+    // placeholder is sufficient: the daemon's startup parses only
+    // the format, then waits on stdin until the first `recompile,…`,
+    // at which point `writeMain`'s tmp+rename has long since
+    // materialised real content (and `persistence` hydration may
+    // have written it through `writeMain` even earlier). `flag: 'wx'`
+    // (O_CREAT|O_EXCL) never clobbers prior content — EEXIST is the
+    // expected no-op path for any future regime in which
+    // `scratchRoot` outlives a single process boot.
+    try {
+      await writeFile(this.mainTexPath(), "", { flag: "wx" });
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST") throw err;
+    }
     this.initialised = true;
   }
 
