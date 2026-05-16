@@ -156,6 +156,11 @@ export function createStopHandler(deps: StopHandlerDeps): IdleHandler {
 }
 
 export async function main(): Promise<void> {
+  // M20.3 cold-start instrumentation. Bracket "module load" → "Fastify
+  // listening" so a fresh-cold flyctl-logs scrape can separate the
+  // Fly Machine-create / image-pull window (visible only in the proxy
+  // logs) from the in-process boot phase.
+  const bootStart = performance.now();
   const port = Number(process.env.PORT ?? 3001);
   const host = resolveBindHost(process.env);
   // M20.1 two-stage idle cascade.
@@ -180,6 +185,14 @@ export async function main(): Promise<void> {
     onStop,
   });
   await app.listen({ port, host });
+  app.log.info(
+    {
+      port,
+      host,
+      bootElapsedMs: Math.round(performance.now() - bootStart),
+    },
+    "sidecar-listening",
+  );
 }
 
 const isEntry =

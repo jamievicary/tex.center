@@ -21,11 +21,13 @@ routed to (decision deferred post-MVP).
    `verifyLiveGt6LiveEditableStateStopped` is now blocked on
    **cold-start latency**, not architecture: globalSetup warmup
    measured first-pdf-segment-on-fresh-project at ~89 s, but the
-   test's own 60 s budget targets ~12.5 s. Next slice: instrument
-   per-stage cold-boot timings (Machine create / image pull /
-   sidecar start / `maybeRehydrate` / first compile / first
-   segment ship) on a fresh cold start, find the dominant term,
-   close it. After that, add a real preservation gold spec —
+   test's own 60 s budget targets ~12.5 s. Per-stage cold-boot
+   instrumentation landed iter 328: `sidecar-listening` log line
+   carries `bootElapsedMs`, and the `compile ok` record carries
+   `phases: { hydrateMs, restoreMs, writeMainMs, persistMs,
+   compileMs }`. Next slice: scrape `flyctl logs -a
+   tex-center-sidecar` on a fresh cold start (`fly machine stop`
+   first), find the dominant phase, close it. After that, add a real preservation gold spec —
    create + edit unique string + force-stop + reopen + assert
    bytes round-trip (the existing GT-6-stopped only checks the
    seed placeholder, which the hello-world fallback satisfies).

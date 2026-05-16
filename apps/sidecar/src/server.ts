@@ -455,8 +455,18 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   }
 
   async function runCompile(p: ProjectState): Promise<void> {
+    // M20.3 cold-start instrumentation. Bookend every awaited phase
+    // so the success-path log line carries per-phase ms. The hydrate
+    // and restore promises are one-shot per project, so the first
+    // compile shows their real cold-boot cost and subsequent compiles
+    // show ~0 — exactly the slicing needed to identify the dominant
+    // term.
+    const tHydrateStart = Date.now();
     await p.persistence.awaitHydrated();
+    const hydrateMs = Date.now() - tHydrateStart;
+    const tRestoreStart = Date.now();
     await ensureRestored(p);
+    const restoreMs = Date.now() - tRestoreStart;
     const compileStart = Date.now();
     app.log.info({ projectId: p.id, sourceLen: p.text.length }, "compile start");
     broadcast(p, encodeControl({ type: "compile-status", state: "running" }));
@@ -489,6 +499,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // / cold-boot rehydrate; in-place client `Y.Text` edits flow via
     // per-file `Y.Text.observe` subscriptions (M23.5) that schedule
     // a coalesced workspace `writeFile` on every remote update.
+    const tWriteMainStart = Date.now();
     try {
       await p.workspace.writeMain(source);
     } catch (e) {
@@ -502,10 +513,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       );
       return;
     }
+    const writeMainMs = Date.now() - tWriteMainStart;
     // Persist source before invoking the compiler. A failed compile
     // must not lose the user's edits — once the source is on the
     // workspace disk it is also durable in the blob store.
+    const tPersistStart = Date.now();
     await p.persistence.maybePersist();
+    const persistMs = Date.now() - tPersistStart;
     // targetPage = 0 ⇒ `recompile,end` (every page shipped). The
     // earlier `maxViewingPage(p)` default clamped every compile to
     // page 1 (no viewer ever sets a higher viewingPage until a page-2
@@ -513,10 +527,12 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     // chicken-and-egg). With "end" the user sees the full document
     // on every compile; the per-page targetPage gate is layered back
     // on later if a long-document perf optimisation is justified.
+    const tCompileStart = Date.now();
     const result = await p.compiler.compile({
       source,
       targetPage: 0,
     });
+    const compileMs = Date.now() - tCompileStart;
     if (!result.ok) {
       app.log.warn(
         { projectId: p.id, elapsedMs: Date.now() - compileStart, error: result.error },
@@ -548,6 +564,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         elapsedMs: Date.now() - compileStart,
         segments: result.segments.length,
         bytesShipped,
+        phases: {
+          hydrateMs,
+          restoreMs,
+          writeMainMs,
+          persistMs,
+          compileMs,
+        },
       },
       "compile ok",
     );
