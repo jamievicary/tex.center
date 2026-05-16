@@ -352,16 +352,19 @@ try {
     assert.ok(got instanceof S3BlobStore);
   }
 
-  // envSelect: missing fields are named in the error.
+  // envSelect: missing fields are named in the error. Each missing-
+  // field error names BOTH the primary `BLOB_STORE_S3_*` key and the
+  // AWS-SDK fallback (so a deploy missing both prefixes for a field
+  // sees both candidate names).
   {
     const cases = [
-      "BLOB_STORE_S3_ENDPOINT",
-      "BLOB_STORE_S3_REGION",
-      "BLOB_STORE_S3_BUCKET",
-      "BLOB_STORE_S3_ACCESS_KEY_ID",
-      "BLOB_STORE_S3_SECRET_ACCESS_KEY",
+      ["BLOB_STORE_S3_ENDPOINT", "AWS_ENDPOINT_URL_S3"],
+      ["BLOB_STORE_S3_REGION", "AWS_REGION"],
+      ["BLOB_STORE_S3_BUCKET", "BUCKET_NAME"],
+      ["BLOB_STORE_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"],
+      ["BLOB_STORE_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"],
     ];
-    for (const missing of cases) {
+    for (const [missingPrimary, missingFallback] of cases) {
       const env = {
         BLOB_STORE: "s3",
         BLOB_STORE_S3_ENDPOINT: "https://example",
@@ -370,13 +373,84 @@ try {
         BLOB_STORE_S3_ACCESS_KEY_ID: "k",
         BLOB_STORE_S3_SECRET_ACCESS_KEY: "s",
       };
-      delete env[missing];
+      delete env[missingPrimary];
       assert.throws(
         () => defaultBlobStoreFromEnv(env),
-        new RegExp(`requires ${missing}`),
-        `expected error naming ${missing}`,
+        new RegExp(
+          `requires ${missingPrimary} or ${missingFallback}`,
+        ),
+        `expected error naming ${missingPrimary} and ${missingFallback}`,
       );
     }
+  }
+
+  // envSelect: AWS-SDK env names alone (no BLOB_STORE_S3_*) wire up
+  // an S3BlobStore. This is the shape `flyctl storage create -a <app>`
+  // auto-injects.
+  {
+    const got = defaultBlobStoreFromEnv({
+      BLOB_STORE: "s3",
+      AWS_ENDPOINT_URL_S3: "https://fly.storage.tigris.dev",
+      AWS_REGION: "auto",
+      BUCKET_NAME: "tex-center-blobs",
+      AWS_ACCESS_KEY_ID: "k",
+      AWS_SECRET_ACCESS_KEY: "s",
+    });
+    assert.ok(got instanceof S3BlobStore);
+  }
+
+  // envSelect: mixed prefixes (some BLOB_STORE_S3_*, some AWS_*)
+  // wire up cleanly.
+  {
+    const got = defaultBlobStoreFromEnv({
+      BLOB_STORE: "s3",
+      BLOB_STORE_S3_ENDPOINT: "https://fly.storage.tigris.dev",
+      AWS_REGION: "auto",
+      BLOB_STORE_S3_BUCKET: "tex-center-blobs",
+      AWS_ACCESS_KEY_ID: "k",
+      BLOB_STORE_S3_SECRET_ACCESS_KEY: "s",
+    });
+    assert.ok(got instanceof S3BlobStore);
+  }
+
+  // envSelect: BLOB_STORE_S3_BUCKET takes precedence over BUCKET_NAME
+  // when both are set. Verified by routing a put through the stub —
+  // the stub only honors `test-bucket`, so a precedence flip would
+  // reject with 400. Symmetric case: drop BLOB_STORE_S3_BUCKET and
+  // keep only the (incorrect) BUCKET_NAME → the put rejects.
+  {
+    const storeWithOverride = defaultBlobStoreFromEnv({
+      BLOB_STORE: "s3",
+      BLOB_STORE_S3_ENDPOINT: endpoint,
+      BLOB_STORE_S3_REGION: "auto",
+      BLOB_STORE_S3_BUCKET: "test-bucket",
+      BUCKET_NAME: "wrong-bucket",
+      BLOB_STORE_S3_ACCESS_KEY_ID: "k",
+      BLOB_STORE_S3_SECRET_ACCESS_KEY: "s",
+    });
+    // BLOB_STORE_S3_BUCKET wins → put succeeds.
+    await storeWithOverride.put(
+      "projects/precedence/files/main.tex",
+      new Uint8Array([42]),
+    );
+
+    const storeAwsOnly = defaultBlobStoreFromEnv({
+      BLOB_STORE: "s3",
+      AWS_ENDPOINT_URL_S3: endpoint,
+      AWS_REGION: "auto",
+      BUCKET_NAME: "wrong-bucket",
+      AWS_ACCESS_KEY_ID: "k",
+      AWS_SECRET_ACCESS_KEY: "s",
+    });
+    // BUCKET_NAME used → stub rejects with 400.
+    await assert.rejects(
+      () =>
+        storeAwsOnly.put(
+          "projects/precedence/files/main.tex",
+          new Uint8Array([42]),
+        ),
+      /s3 PUT .* → 400/,
+    );
   }
 
   // Make sure unused locals aren't accidental:

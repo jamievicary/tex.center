@@ -15,14 +15,19 @@ routed to (decision deferred post-MVP).
 1. **M20.3 — cold-cycle gold spec + Tigris deploy wiring.**
    M20.2(d) landed iter 325: `S3BlobStore` (path-style SigV4,
    pure-Node) + `BLOB_STORE=s3` branch of
-   `defaultBlobStoreFromEnv` requiring
-   `BLOB_STORE_S3_{ENDPOINT,REGION,BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}`.
-   Adapter is dark code until production sets those env vars.
-   Next: bind a Tigris bucket via Fly's S3-compatible offering on
-   both `web` and `sidecar` apps, then build M20.3 gold spec —
-   open project, idle 6 s (suspended), edit → 300 ms ack; idle
-   6 min (stopped), edit → cold-start budget; content preserved.
-   Unblocks `verifyLiveGt6LiveEditableStateStopped`.
+   `defaultBlobStoreFromEnv`. Iter 326 extended each required
+   field to accept either `BLOB_STORE_S3_*` (explicit, wins) or
+   the AWS-SDK fallback that `flyctl storage create` auto-injects
+   (`AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `BUCKET_NAME`,
+   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). Adapter remains
+   dark code until production runs `flyctl storage create`.
+   Next: `flyctl storage create -a tex-center -n texcenter-blobs -y`
+   then `flyctl secrets set BLOB_STORE=s3 -a tex-center`; repeat
+   for `tex-center-sidecar` (second invocation against the same
+   bucket name mints app-scoped credentials). Then build M20.3
+   gold spec — open project, idle 6 s (suspended), edit → 300 ms
+   ack; idle 6 min (stopped), edit → cold-start budget; content
+   preserved. Unblocks `verifyLiveGt6LiveEditableStateStopped`.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -220,18 +225,22 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
     (blob-wins / empty-blob fallthrough / null-store / transport
     error → reported and falls through to db). Real cross-Machine
     cold storage still needs the S3/Tigris adapter (next slice).
-  - **(d) [landed iter 325].** `packages/blobs/src/s3.ts`
+  - **(d) [landed iter 325/326].** `packages/blobs/src/s3.ts`
     (`S3BlobStore implements BlobStore`, path-style SigV4 over
     `fetch`, no external deps) + `packages/blobs/src/sigv4.ts`
     (pure-Node signing, locked against the AWS docs
     GetObject-with-Range known-answer signature). `envSelect`
-    wires `BLOB_STORE=s3` to require five `BLOB_STORE_S3_*` env
-    vars, each named in its missing-field error. Round-trip +
-    canonical-shape unit-locked in `packages/blobs/test/s3.test.mjs`
-    against an in-process stub server that emulates the
-    PUT/GET/DELETE/HEAD/list-type=2 subset we use (paginated via
-    base64 `NextContinuationToken`). Dark code until production
-    wires Tigris secrets — see M20.3.
+    wires `BLOB_STORE=s3` to require five fields, each accepting
+    either an explicit `BLOB_STORE_S3_*` name (wins) or the
+    AWS-SDK fallback that `flyctl storage create` auto-injects
+    (`AWS_ENDPOINT_URL_S3` / `AWS_REGION` / `BUCKET_NAME` /
+    `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). Missing-field
+    errors name both prefixes. Round-trip + canonical-shape +
+    per-field precedence unit-locked in
+    `packages/blobs/test/s3.test.mjs` against an in-process stub
+    server that emulates the PUT/GET/DELETE/HEAD/list-type=2
+    subset we use (paginated via base64 `NextContinuationToken`).
+    Dark code until production wires Tigris secrets — see M20.3.
 - **M20.3 (open).** Gold spec: open project, idle 6 s
   (suspended), edit → 300 ms ack; idle 6 min (stopped), edit →
   cold-start budget; content preserved. Override stop timer via
