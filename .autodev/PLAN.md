@@ -12,193 +12,98 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — final RED spec.** Iter-345 Bug A fix
-   (persist-on-disconnect data-loss) deployed; GT-9 flipped GREEN
-   iter 347 gold pass; pinned by normal test
-   `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`.
-   Bug A narrative (mechanism, four sidecar edit sites): iter 345
-   log and git history. **Remaining:**
-   `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) RED on
-   every gold pass since iter 347; iter 358 first pinned numbers
-   `cmContentReadyMs=5372 keystrokeAckMs=8`. Iter 359 extended the
-   spec diagnostic to emit `clickToWsOpenMs` /
-   `clickToFirstFrameMs` / `wsPostClick=opens:N/closes:M` so the
-   next pass shows the phase breakdown (Fly start +
-   `driveToStarted` vs. handshake + sidecar boot vs. Yjs hydrate +
-   CodeMirror render). Routing once the breakdown lands:
-   - `clickToWsOpenMs` ≫ everything else → architectural fix
-     M13.2(b).5 (widen SSR seed for non-fresh projects, or
-     eliminate `stopped` state).
+1. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
+   editable-state.** RED on every gold pass since iter 347. Iter
+   358 first pinned numbers `cmContentReadyMs=5372
+   keystrokeAckMs=8` — the 5.3 s end-to-end is essentially all
+   pre-first-frame (Fly start + WS handshake + sidecar boot).
+   Iter 359 added `clickToWsOpenMs` / `clickToFirstFrameMs` /
+   `wsPostClick=opens:N/closes:M` to the diagnostic.
+
+   **Outstanding observability problem (iter 358-360):** the
+   diagnostic still hasn't been observed in production. Every
+   gold pass since iter 358 has hit `testTimeout` (40 s for
+   suspended, 60 s for stopped) before the spec's
+   `console.log` line could fire. **First move next iteration:
+   bump testTimeout to ≥90 s on `verifyLiveGt6LiveEditableState
+   Stopped.spec.ts` (currently 60 s)** and ≥90 s on the
+   suspended variant (currently 40 s), so the diagnostic fires
+   even when the resume is slow. Without that, iterations
+   N+1…N+k all read the same "timeout, no diagnostic" line.
+
+   Once the breakdown lands, routing:
+   - `clickToWsOpenMs` ≫ everything else → M13.2(b).5
+     architectural (widen SSR seed for non-fresh projects, or
+     eliminate `stopped` state — see FUTURE_IDEAS "Explicit
+     tab-close wire signal" for the latter).
    - Big gap WS-open → first-frame → sidecar boot regression;
-     re-investigate iter-353 warmup-fails-then-respawn pattern
-     (FUTURE_IDEAS "M20.3(a)3").
+     cross-check iter-353 warmup-fails-then-respawn pattern.
    - `cmContentReadyMs - clickToFirstFrameMs` ≫ small → Yjs /
-     CodeMirror render path needs attention.
+     CodeMirror render path.
+   - `wsPostClick=opens:0` (suspended variant) → confirms WS
+     never opens; investigate `upstreamResolver.driveToStarted`
+     for `suspended` state at `upstreamResolver.ts:293`.
 
-2. **Bug B / reused-spec compile-error failure (CI-reproducible iter
-   357).** Originally framed as Bug B "zero pdf-segments on
-   cold-resume edit" (`.autodev/discussion/344_question.md`); iter
-   357's gold gave us a concrete shape — the reused-fixture project
-   `00000000-…-000000000001` ran `compile-cycles=2 zero-segment-
-   cycles=2 pdf-segment-bytes=0`, BUT the timeline shows both
-   cycles end in `state=error`, not `idle`. So the failure mode is
-   "two back-to-back compile errors on reused-project cold open",
-   not the silent zero-segment shape originally hypothesised.
+2. **`verifyLiveFullPipeline` NEW FAIL iter 360.** Fresh-project
+   full pipeline `cmContent.waitFor` timed out at 40 s testTimeout
+   waiting for `.cm-content` visible (locator gave 120 s but the
+   test gave only 40 s — same testTimeout-vs-cold-start mismatch as
+   #1). Was GREEN in iter 357-359. Same Fly-cold-start-cost shape;
+   probably same Fly-region variability that caused iter 356's
+   bootstrap warmup overshoot. Fix path: bump
+   `verifyLiveFullPipeline.spec.ts` testTimeout to ≥90 s, then read
+   the wire-timeline tail (the in-band detail rendering from iter
+   358 is already in place). If recurrence isolates to fresh-
+   project cold-start latency on a specific Fly host, file as a
+   FUTURE_IDEAS observability item rather than chasing per-spec
+   budgets.
 
-   **Iter 358 landed diagnostic:** the wire-timeline formatter now
-   surfaces the sidecar's `detail` field on `compile-status
-   state=error` lines (`wireTimelineFormat.ts` +
-   `wireFrames.ts` + 3 new lock cases in
-   `tests_normal/cases/wireTimelineFormat.test.mjs`). The sidecar
-   already broadcasts `detail` on every error (server.ts:587, 621)
-   — the gold transcript just wasn't carrying it.
+3. **Bug B / reused-spec follow-up (defensive only).** Iter 358
+   landed the in-band `state=error detail=<reason>` rendering in
+   `wireTimelineFormat.ts` / `wireFrames.ts`. The reused spec was
+   GREEN in iter 359 AND iter 360, so the original two-back-to-
+   back-compile-errors shape has not recurred. **Action if the
+   spec re-reds:** read `detail=…` in the timeline tail and route
+   by error class — `"supertex daemon error: …"` → blob/persisted-
+   source issue; `"another compile already in flight"` →
+   coalescer race in `compileCoalescer.ts`; `"compiler is
+   closing"` → shutdown race in `runCompile`'s `awaitHydrated`/
+   `ensureRestored`. No proactive work needed until then.
 
-   **Next-iteration trigger:** read
-   `verifyLiveFullPipelineReused`'s `state=error detail=…` line in
-   the next gold pass. Routing by error class:
-   - `"supertex daemon error: <reason>"` → real LaTeX/daemon
-     error on the restored source; root cause is either stale
-     persisted blob or a daemon-state carry-over. Fix: either
-     reset the reused project's blob (one-shot script, iter-357
-     template) or harden the cold-reopen path in `persistence.ts`.
-   - `"supertex-daemon: another compile already in flight"` →
-     coalescer/busy race; investigate in `compileCoalescer.ts`.
-   - `"supertex-daemon: compiler is closing"` → shutdown race;
-     investigate in `runCompile`'s `awaitHydrated`/`ensureRestored`
-     ordering.
-   - workspace-write exception → fs/disk issue; likely transient.
-
-   The 43 ms duration of cycle 2 (vs 2.49 s for cycle 1) is the
-   load-bearing clue — too fast for a real LaTeX compile, so
-   cycle 2 is almost certainly a fast-fail guard. The detail
-   field will say which.
-
-   The legacy "fresh user-driven repro + flyctl logs decision
-   tree" approach (replay-segments / lastSegmentsLen / replaySent)
-   is superseded by the in-band detail rendering; flyctl logs are
-   still useful for cross-checking but no longer the only path.
-
-3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+4. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
-4. **M21.3c — page-prefetch off-by-one (final slice).** Capture
-   sidecar `daemon-stdin` + `daemon-round-done` transcript of
-   user-reported "edit on hidden page N+2 ships nothing" repro;
-   fix front-end if `target` is non-`"end"` (contradicts
-   `server.ts:528` hardcode), else file upstream supertex repro
-   on `maxShipout=-1`.
-5. **WS-frame timeline as default fixture (iter 345 discussion).**
-   Steps 1–4 landed iter 352. `wireTimelineFormat.ts` (pure module)
-   + refactored `wireFrames.ts` produce per-project timeline +
-   summary including `compile-cycles=N`, `zero-segment-cycles=Z`
-   (the Bug B signal), `pdf-segment-bytes`, `doc-update-bytes`.
-   `authedPage` fixture attaches `captureFramesAuto(page)` on
-   every test (live + local) and dumps via `console.log` in the
-   fixture-teardown `finally` when
-   `TEXCENTER_DUMP_WIRE_TIMELINE=1`; default-on in
-   `tests_gold/cases/test_playwright.py`. Local-target specs emit
-   one uniform "no project WS observed" line. Formatter locked by
-   `tests_normal/cases/wireTimelineFormat.test.mjs`.
-   **Remaining (Step 5):** `verifyLiveGtNStoppedReopenEmitsSegment`
-   waits until Bug B root cause is known.
-6. **M9.editor-ux remaining slices.** GT-E (info/success/error
-   toast spawn + aggregation badge); GT-F wire-driven part
-   (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
-   `SyncStatus` indicator (blocked on a sidecar persistence-ack
-   wire signal that doesn't exist yet).
-7. **M18.2 / M18.3 preview-quality follow-ups.** ResizeObserver
-   re-render on `.preview` width change (coalesced trailing
-   100 ms); forced-DPR=2 visual snapshot. Deferred until reported
-   / Playwright stable-snapshot primitive exists.
-8. **M16.aesthetic.** Type pair + 4-colour palette retune for
-   chrome surfaces; visual snapshots on `/`, `/projects`, editor
-   topbar. Blocked on Playwright stable snapshot primitive (same
-   blocker as M18.3).
-9. **M11.2b right-click context menu landed iter 354.** Pure
-   policy helper at `apps/web/src/lib/fileTreeContextMenu.ts`
-   (items + key/focus rules); FileTree.svelte renders a
-   fixed-position menu on `contextmenu`, with click-outside (via
-   `<svelte:window onpointerdown>`) and Esc dismissal,
-   arrow-key + Enter/Space activation. Locks:
-   `tests_normal/.../fileTreeContextMenu.test.mjs` (pure module);
-   `tests_gold/playwright/editorFileTreeContextMenu.spec.ts`
-   (local, 3 cases: main-row guards, root New file… opens prompt,
-   click-outside dismiss). M11.3 (virtual-folder create) is the
-   next slice; then M11.4 (intra-tree DnD = rename), M11.5b
-   (binary upload, blocked on wire design), M11.5c (drag-out
-   download).
-10. **M15 user-bug.** Multi-page seeded GREEN; awaiting
-   user-supplied offending source via discussion mode.
 
-**Iter 356 gold blocker — bootstrap warm-up timeout.** Iter 356's
-gold run aborted at `globalSetup` because
-`liveProjectBootstrap` exceeded its 90s `WARMUP_TIMEOUT_MS`
-budget. Sidecar logs for the bootstrap Machine
-`08003d7c053648` (since destroyed) show: Machine created
-2026-05-16T11:49:46Z, `started` event fired 2026-05-16T11:51:09Z
-(83s for Fly create→started), sidecar listening at 11:51:12Z,
-WS opened then closed at 11:51:13Z (code 1001 "going away"
-from browser), supertex pdf-segment ready at 11:51:17Z — i.e.
-the WS closed BEFORE the segment was sent. Bootstrap loop
-threw at 11:51:16Z. Two unexplained items: (a) Fly cold-start
-of 83s vs documented 11-30s typical, (b) browser closing WS
-1s after open. Hypotheses: (a) image-pull cold cache for an
-older Fly host, (b) editor JS hitting an early error before
-the page settled. Iter 357 deliberately did NOT bump
-`WARMUP_TIMEOUT_MS`; the next gold pass tells us if this
-recurs. If it recurs, the right move is to bump to ~150-180s
-AND root-cause the early WS close (the latter is more
-informative since WS close races segment delivery regardless
-of budget).
+5. **M21.3c page-prefetch off-by-one.** Capture sidecar
+   `daemon-stdin` + `daemon-round-done` transcript of user-
+   reported "edit on hidden page N+2 ships nothing" repro; fix FE
+   if `target` is non-`"end"` (contradicts `server.ts:528`
+   hardcode), else file upstream supertex repro on
+   `maxShipout=-1`.
 
-**Open red specs (gold), per iter 358 pass:**
+6. **WS-frame timeline final slice.** Steps 1–4 of the iter-345
+   discussion landed iter 352. **Remaining (Step 5):**
+   `verifyLiveGtNStoppedReopenEmitsSegment` waits until Bug B
+   reproduces or is closed off as a never-recurring transient.
 
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
-  stopped-Machine cold-resume path; see priority #1.
-- `verifyLiveGt6LiveEditableState` (M13.2(b).3, SUSPENDED) —
-  regressed in iter 358 (GREEN in 347/355/357). 40 s testTimeout
-  + browser `console.error: WebSocket ... 502 Bad Gateway` on
-  step-4 dashboard-click WS. Diagnostic line never fired because
-  the test timed out before reaching it. Iter 359 same diagnostic
-  enhancement applies here; next gold pass either reproduces
-  (then `wsPostClick=opens:0` confirms the WS never opened →
-  `upstreamResolver.driveToStarted` for `suspended` state at
-  `upstreamResolver.ts:293`) or it was a one-off Fly hiccup.
-  Budget note: `testInfo.setTimeout(40_000)` is tight given step-1
-  cold-start + step-3 suspend-settle; bump to 60 s if the 502
-  shape recurs to surface the underlying issue rather than
-  testInfo-timing it.
-- `verifyLiveFullPipelineReused` — RED iter 354/355, root cause
-  pinned and Machine recreated iter 356. The reused-project
-  Machine `e8201edb0d3d28` was on a pre-iter-317 sidecar image
-  predating the M22.4b 17-byte pdf-segment header bump. The FE
-  decoder (`packages/protocol/src/index.ts:185-200`) read body
-  bytes 12..16 as `shipoutPage`; with an old-format frame those
-  bytes are the PDF magic `%PDF` (0x25504446 = 626017350, which
-  is exactly the value the iter-354 timeline reported). `bytes
-  .length !== segLen` then threw "pdf-segment payload truncated"
-  out of `decodeFrame`, the WS layer swallowed it into
-  `_lastError`, and PdfViewer never received a non-null `src`.
-  Iter 356 destroyed the stale Machine and deleted its
-  `machine_assignments` row; the next gold pass provisions a
-  fresh Machine on the current image. Defence-in-depth: iter 356
-  also added `console.error` on `decodeFrame` failure in
-  `apps/web/src/lib/wsClient.ts` so future wire-protocol drift
-  surfaces in the iter-355 fixture's browser-diagnostics capture.
+7. **M9.editor-ux remaining slices.** GT-E (toast spawn +
+   aggregation badge); GT-F wire-driven (typing→Yjs-op toast,
+   compile→pdf-segment toast); `SyncStatus` indicator (blocked on
+   a sidecar persistence-ack wire signal).
 
-**Iter 357 mass-destroy:** 12 long-lived per-project Machines
-created before 2026-05-16T00:00Z on pre-iter-317 images were
-destroyed via a one-shot script (`ops_destroy_stale_machines_357
-.mjs`, deleted after use). 9 corresponding
-`machine_assignments` rows deleted; 3 untagged Machines had no
-row. The leaked bootstrap Machine `08003d7c053648` (project row
-already deleted by `liveProjectBootstrap.ts`'s catch handler
-after the iter-356 90s warm-up timeout) was also destroyed.
-Result: 1 non-shared Machine remaining (`e829133c693438`,
-current image, real user project). `test_machine_count_under_
-threshold` should now pass.
+8. **M11 file-tree remaining.** M11.3 virtual-folder create
+   (next), M11.4 intra-tree DnD = rename, M11.5b OS-drop binary
+   upload (blocked on binary-asset wire design), M11.5c drag-out
+   download.
 
-(GT-9, GT-6-suspended both GREEN in iter 347.)
+9. **M18.2 / M18.3 / M16.aesthetic.** All blocked or deferred —
+   M18.2 ResizeObserver re-render (deferred until reported);
+   M18.3 forced-DPR=2 visual snapshot AND M16.aesthetic chrome
+   retune both blocked on the Playwright stable-snapshot
+   primitive.
+
+10. **M15 user-bug.** Multi-page seeded GREEN; awaiting user-
+    supplied offending source via discussion mode.
 
 ## 2. Milestones
 
@@ -237,15 +142,6 @@ threshold` should now pass.
 
 **Remaining sub-slices:**
 
-- **M11.2b** CRUD via right-click context menu — **landed iter
-  354.** `apps/web/src/lib/fileTreeContextMenu.ts` (pure) +
-  `FileTree.svelte` render; `<svelte:window>` click-outside +
-  Esc dismissal; arrow-key + Enter/Space activation; same
-  imperative flows as existing buttons (`promptCreate`,
-  `promptRename`, `confirmDelete`). main.tex menu items are
-  greyed (mirrors `✎` / `×` button guards). Locks:
-  `apps/web/test/fileTreeContextMenu.test.mjs` + local
-  Playwright `editorFileTreeContextMenu.spec.ts`.
 - **M11.3** create folder via virtual-folder model.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5b** OS drop-upload — binary assets. Blocked by
@@ -326,33 +222,22 @@ production), `SIDECAR_STOP_MS` (default 300_000). Locks:
 `serverIdleStop.test.mjs`, `serverCheckpointWiring.test.mjs`.
 
 **M20.2 (closed iter 322–326).** Shared `BLOB_STORE` on web tier
-*and* sidecar via `@tex-center/blobs`. Sidecar persists source +
-latex compilation artefacts on every `runCompile`
-(`persistence.maybePersist()` before compile invocation) and on
+*and* sidecar via `@tex-center/blobs`. Sidecar persists on every
+`runCompile` (`persistence.maybePersist()` before compile) and on
 suspend/stop. Cold-storage seed cutover in
-`apps/web/src/server.ts` (`createSeedDocFor`) and editor SSR
-placeholder. `packages/blobs/src/s3.ts` + `sigv4.ts` (pure-Node
-SigV4 over `fetch`, no external deps); `envSelect` accepts
-explicit `BLOB_STORE_S3_*` or AWS SDK fallback names.
+`apps/web/src/server.ts` (`createSeedDocFor`). `packages/blobs/
+src/s3.ts` + `sigv4.ts` (pure-Node SigV4 over `fetch`).
 
 **M20.3 (largely closed).** Tigris `texcenter-blobs` provisioned
-iter 327; `BLOB_STORE=s3` + AWS_* secrets live on both apps.
-Iter 328–330 instrumentation pinned ≈4.3 s `compileMs` as
-dominant cold-start term. Landed sub-slices: (a) iter 331
-`Compiler.warmup()` overlap; (a)2 iter 332 checkpoint short-
-circuit (`supportsCheckpoint:false`); (a)3 iter 353 empty
-`main.tex` placeholder in `ProjectWorkspace.init()` so the
-warmup spawn no longer dies on a fresh-project cold start
-(pinned by `apps/sidecar/test/workspace.test.mjs`); (b) iter
-333–335 GT-9 preservation gold spec; (c) iter 340+343 suspend-
-race fix (see M20.1); (d) iter 345 persist-on-disconnect fix
-(pinned by `serverPersistOnViewerDisconnect.test.mjs`). GT-9
-GREEN iter 347. **Open:** GT-6-stopped (see priority #1).
+iter 327. Landed sub-slices: warmup overlap (iter 331),
+checkpoint short-circuit (332), fresh-project `main.tex`
+placeholder (353), GT-9 preservation spec (333–335), suspend-
+race fix (340/343), persist-on-disconnect fix (345). GT-9 GREEN
+iter 347. **Open:** GT-6-stopped (see priority #1).
 
-Tuning: `SIDECAR_SUSPEND_MS` is currently inert in production
-(no arm site after iter 343). `SIDECAR_STOP_MS` (5 min default)
-is the sole idle cleanup path until the explicit tab-close wire
-lands.
+Tuning: `SIDECAR_SUSPEND_MS` inert in production (no arm site
+after iter 343); `SIDECAR_STOP_MS` (5 min) is the sole idle
+cleanup path until the explicit tab-close wire lands.
 
 ### M21.target-page — max-visible-page wire signal
 
@@ -438,7 +323,7 @@ Rate limits, observability surface, narrower deploy tokens.
 
 M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
-M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
+M10.branding; M11.1/1b/1c/2a/2b/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
 M17; M17.b; M18.1; M19; M20.1; M20.2; M20.3 (bar GT-6-stopped);
 M21.1; M21.3a/b; M22.1/2-local/3/4a/4b/5; M23.1/2/4/5.
