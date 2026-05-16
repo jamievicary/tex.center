@@ -26,20 +26,42 @@ routed to (decision deferred post-MVP).
      `pdf-end → true` and 16(b) 5-page-stopped-short-at-3
      `no pdf-end → false`; `codec.test.mjs` covers the tri-state
      wire and an out-of-range-byte rejection.
-   - **Iter B (next ordinary iteration).** FE consumes `lastPage` in
-     `PdfViewer.svelte`:
-     reserve placeholder `.pdf-page` while `lastPage===false`;
-     PageTracker viewport entry on placeholder triggers
-     `maxViewingPage` update → sidecar `recompile,N+1`; placeholder
-     removed on segment arrival. Swap `server.ts` `targetPage: 0`
-     → `maxViewingPage(p)`. Before any sidecar change for
-     "all-`.out`-files-on-edit" (368_question §2c), capture a
-     `daemon-round-done` log transcript from the user's repro and
-     route: `maxShipout=N` ≥ viewer-page-number ⇒ FE rendering bug,
-     fold fix into iter B; `maxShipout` < expected ⇒ upstream
-     supertex elision bug, file repro & close (c) here. Gold spec
-     extends `verifyLivePdfMultiPage.spec.ts` (or new
-     `verifyLivePdfDemandFetch.spec.ts`).
+   - **Iter B (next ordinary iteration).** Single coherent slice
+     (per 369b_answer): swap `server.ts:611` `targetPage: 0` →
+     `maxViewingPage(p)` (clamped ≥1) **early** in the iteration;
+     FE consumes `lastPage` in `PdfViewer.svelte` to reserve a
+     placeholder `.pdf-page` while `lastPage===false` (height =
+     most-recently-rendered-page height; A4 fallback);
+     PageTracker viewport entry on the placeholder triggers
+     `maxViewingPage` bump → sidecar `recompile,N+1`; placeholder
+     replaced by real canvas on segment arrival without remount
+     (in-place DOM swap, not `{#key}` remount — see 369b_answer's
+     risk note about spurious `maxViewingPage` bumps during the
+     placeholder→real transition). Bootstrap: cold open
+     `maxViewingPage` defaults to 1 → `recompile,1` → cascade. The
+     iter-368 (c) routing ("daemon-round-done capture for
+     all-`.out`-on-edit") is **closed-no-op** per 369_question and
+     369_answer — sidecar's `assembleSegment(maxShipout)` already
+     concatenates chunks 1..maxShipout (load-bearing read below);
+     the user-observed "page 1 updated when I scrolled back" with
+     `shipoutPage=4` is exactly the expected behaviour. Gold spec
+     extends `verifyLivePdfMultiPage.spec.ts` with a 2-page
+     bootstrap case (page 1 renders → placeholder for page 2 →
+     scroll → second segment with `shipoutPage=2 lastPage=true`
+     → no further placeholder); this also closes M21.2 (folded
+     in — see #5 removed).
+   - **Iter B′ — toast-text format slice.** Post-iter-B
+     micro-iteration (or piggy-back if iter B finishes with
+     budget). `apps/web/src/lib/debugToasts.ts` pdf-segment
+     branch: `shipoutPage > 1` → `[1..N.out] ${bytes} bytes`
+     (range, makes chunks-1..N concatenation visible);
+     `shipoutPage === 1` → `[1.out] ${bytes} bytes`;
+     `shipoutPage` undefined/0 → `${bytes} bytes` (unchanged).
+     `lastPage` deliberately NOT in the toast (placeholder slot
+     is the user-visible signal; `flyctl logs` already carries
+     `lastPageReached`). New unit case in
+     `debugToastsToggle.test.mjs` (or sibling) pinning both
+     branches.
    - **Load-bearing read of current sidecar segment assembly.**
      `assembleSegment(maxShipout)` (sidecar) concatenates chunks
      `1.out…maxShipout.out` from disk into ONE `PdfSegment` with
@@ -128,9 +150,12 @@ routed to (decision deferred post-MVP).
    closing"` → shutdown race in `runCompile`'s `awaitHydrated`/
    `ensureRestored`. No proactive work needed until then.
 
-5. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
-   introspection hook; scroll so page 2 fully visible and page 3
-   intrudes → assert sidecar receives `target=3`.
+5. **M21.2 max-visible gold pin.** Folded into priority #1 iter B
+   (per 369b_answer): the bootstrap-cascade case extending
+   `verifyLivePdfMultiPage.spec.ts` exercises max-visible →
+   sidecar target on each placeholder→real transition, giving
+   the same coverage as a separate 3-page introspection-hook
+   spec. Close when iter B's gold lands.
 
 6. **M21.3c page-prefetch off-by-one.** Capture sidecar
    `daemon-stdin` + `daemon-round-done` transcript of user-
@@ -310,9 +335,13 @@ Sidecar log surfaces both pre-round (`daemon-stdin`:
 (`daemon-round-done`: `{ round, maxShipout, errorReason,
 violation? }`).
 
-- **M21.2 (open).** Gold spec: 3-page PDF, scroll page 2 fully
-  + page 3 intrusion → sidecar receives target=3. Needs real
-  3-page Playwright source + sidecar introspection hook.
+- **M21.2 (folded into priority #1 iter B).** Per 369b_answer
+  the iter-B bootstrap-cascade gold case in
+  `verifyLivePdfMultiPage.spec.ts` (placeholder → scroll →
+  segment with `shipoutPage=2 lastPage=true`) covers the same
+  max-visible→target invariant without a separate 3-page spec
+  or sidecar introspection hook. Close when iter B's gold
+  lands.
 - **M21.3c (open).** Capture sidecar log transcript of the
   user-reported "edit on hidden page N+2 ships no segment" repro.
   Fix front-end if `daemon-stdin` shows non-`end` target
