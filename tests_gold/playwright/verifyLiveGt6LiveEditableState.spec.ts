@@ -39,23 +39,17 @@
 // spec is expected to go RED on the `cmContentReadyMs` budget
 // (currently ~11.5 s per `logs/236.md` and PLAN §M13.2(b) known
 // follow-ups).
+//
+// Test body lives in `./fixtures/coldFromInactiveLiveEditableTest.ts`,
+// shared with the M13.2(b).4 `Stopped` variant.
 
-import { getMachineAssignmentByProjectId, createProject } from "@tex-center/db";
-
-import { expect, test } from "./fixtures/authedPage.js";
-import { cleanupLiveProjectMachine } from "./fixtures/cleanupLiveProjectMachine.js";
-import { TAG_DOC_UPDATE, TAG_PDF_SEGMENT } from "./fixtures/wireFrames.js";
-
-const CM_CONTENT_BUDGET_MS = 1000;
-const KEYSTROKE_ACK_BUDGET_MS = 1000;
+import { test } from "./fixtures/authedPage.js";
+import { runColdFromInactiveLiveEditableTest } from "./fixtures/coldFromInactiveLiveEditableTest.js";
 
 // Maximum wait for Fly to transition the Machine into `suspended`
 // after the suspend API call. Empirically Fly settles within a few
 // seconds; this is the outer bound before we give up.
 const SUSPEND_SETTLE_TIMEOUT_MS = 60_000;
-// Maximum wait for the first pdf-segment during cold-start. Same
-// budget the cleanup tests use.
-const COLD_START_BUDGET_MS = 180_000;
 
 test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -82,225 +76,16 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     // cycle will trip this before the diagnostic assertions below.
     testInfo.setTimeout(40_000);
 
-    const token = process.env.FLY_API_TOKEN!;
-    const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
-
-    const project = await createProject(db.db.db, {
-      ownerId: db.userId,
-      name: `pw-gt6-live-${Date.now()}`,
-    });
-
-    let pdfSegmentCount = 0;
-    let lastDocUpdateAt: number | null = null;
-    let keystrokeSentAt: number | null = null;
-    let wsOpenCount = 0;
-    let wsCloseCount = 0;
-    let firstWsOpenAt: number | null = null;
-    let firstFrameAt: number | null = null;
-    authedPage.on("websocket", (ws) => {
-      if (!ws.url().includes(`/ws/project/${project.id}`)) return;
-      wsOpenCount += 1;
-      firstWsOpenAt = Date.now();
-      ws.on("close", () => {
-        wsCloseCount += 1;
-      });
-      ws.on("framereceived", ({ payload }) => {
-        if (typeof payload === "string" || payload.length === 0) return;
-        if (firstFrameAt === null) firstFrameAt = Date.now();
-        if (payload[0] === TAG_PDF_SEGMENT) pdfSegmentCount += 1;
-      });
-      ws.on("framesent", ({ payload }) => {
-        if (typeof payload === "string" || payload.length === 0) return;
-        if (payload[0] === TAG_DOC_UPDATE) {
-          const now = Date.now();
-          if (
-            keystrokeSentAt !== null &&
-            now >= keystrokeSentAt &&
-            lastDocUpdateAt === null
-          ) {
-            lastDocUpdateAt = now;
-          }
-        }
-      });
-    });
-
-    try {
-      // 1. Cold-start the per-project Machine and let it serve a
-      //    first compile. This guarantees a `machine_assignments`
-      //    row + a started Machine.
-      await authedPage.goto(`/editor/${project.id}`);
-      const cmContent = authedPage.locator(".cm-content");
-      await cmContent.waitFor({ state: "visible", timeout: 60_000 });
-      const coldDeadline = Date.now() + COLD_START_BUDGET_MS;
-      while (pdfSegmentCount === 0 && Date.now() < coldDeadline) {
-        await authedPage.waitForTimeout(500);
-      }
-      expect(
-        pdfSegmentCount,
-        "cold-start did not produce a first pdf-segment within the budget; " +
-          "cannot proceed to suspend phase",
-      ).toBeGreaterThan(0);
-
-      // 2. Leave the editor so the WS closes; this is the state the
-      //    user would be in on the dashboard before clicking back.
-      await authedPage.goto("/projects");
-      await authedPage
-        .locator(`a[href="/editor/${project.id}"]`)
-        .waitFor({ state: "visible", timeout: 30_000 });
-
-      // 3. Force-suspend the Machine via Fly Machines API. Looking
-      //    up the assignment AFTER cold-start so the row is
-      //    guaranteed present.
-      const assignment = await getMachineAssignmentByProjectId(
-        db.db.db,
-        project.id,
-      );
-      if (assignment === null) {
-        throw new Error(
-          `no machine_assignments row for project ${project.id} after cold start`,
-        );
-      }
-      const machineId = assignment.machineId;
-      const base = `https://api.machines.dev/v1/apps/${appName}/machines/${machineId}`;
-      const auth = { Authorization: `Bearer ${token}` };
-
-      const suspendRes = await fetch(`${base}/suspend`, {
-        method: "POST",
-        headers: auth,
-      });
-      if (!suspendRes.ok && suspendRes.status !== 200) {
-        const body = await suspendRes.text();
-        throw new Error(
-          `Fly suspend ${suspendRes.status} ${base}/suspend: ${body}`,
-        );
-      }
-
-      // Poll state until suspended (or bounded timeout). Fly returns
-      // a JSON document with `state` at the top level.
-      const settleDeadline = Date.now() + SUSPEND_SETTLE_TIMEOUT_MS;
-      let lastState = "(unknown)";
-      while (Date.now() < settleDeadline) {
-        const r = await fetch(base, { headers: auth });
-        if (r.ok) {
-          const j = (await r.json()) as { state?: string };
-          lastState = j.state ?? "(missing)";
-          if (lastState === "suspended") break;
-        }
-        await authedPage.waitForTimeout(500);
-      }
-      expect(
-        lastState,
-        `Machine ${machineId} did not reach 'suspended' within ` +
-          `${SUSPEND_SETTLE_TIMEOUT_MS}ms (last observed state '${lastState}')`,
-      ).toBe("suspended");
-
-      // 4. Click the dashboard link. From this moment the Fly proxy
-      //    must resume the Machine and the editor must hydrate. Reset
-      //    the wire-side first-event trackers so the diagnostic at
-      //    the end reports only the post-click resume cycle (the
-      //    step-1 cold-start populated them with its own values).
-      const wsOpenBeforeClick = wsOpenCount;
-      const wsCloseBeforeClick = wsCloseCount;
-      firstWsOpenAt = null;
-      firstFrameAt = null;
-      const projectLink = authedPage.locator(
-        `a[href="/editor/${project.id}"]`,
-      );
-      const clickAt = Date.now();
-      await projectLink.click();
-      await authedPage.waitForURL(`**/editor/${project.id}`, {
-        timeout: 30_000,
-      });
-
-      // 4a. `.cm-content` populated with the seed sentinel.
-      let cmContentReadyMs: number | null = null;
-      let cmText = "";
-      const cmDeadline = clickAt + CM_CONTENT_BUDGET_MS;
-      while (Date.now() < cmDeadline) {
-        cmText =
-          (await authedPage
-            .locator(".cm-content")
-            .textContent()
-            .catch(() => "")) ?? "";
-        if (cmText.includes("documentclass")) {
-          cmContentReadyMs = Date.now() - clickAt;
-          break;
-        }
-        await authedPage.waitForTimeout(25);
-      }
-
-      // 4b. Keystroke → next DOC_UPDATE frame.
-      let keystrokeAckMs: number | null = null;
-      if (cmContentReadyMs !== null) {
-        await authedPage.locator(".cm-content").click();
-        keystrokeSentAt = Date.now();
-        await authedPage.keyboard.type("x", { delay: 0 });
-        const ackDeadline = keystrokeSentAt + KEYSTROKE_ACK_BUDGET_MS;
-        while (
-          lastDocUpdateAt === null &&
-          Date.now() < ackDeadline
-        ) {
-          await authedPage.waitForTimeout(20);
-        }
-        if (lastDocUpdateAt !== null) {
-          keystrokeAckMs = lastDocUpdateAt - keystrokeSentAt;
-        }
-      }
-
-      // Diagnostic line — kept regardless of pass/fail so the gold
-      // transcript carries the actual latency numbers per run. The
-      // post-click WS / first-frame timings split the 5.3 s observed
-      // in iter 358's stopped variant into phases:
-      //   click → WS open:    Fly proxy + driveToStarted (Machine
-      //                       cold-start cost).
-      //   WS open → frame:    handshake + sidecar hello/file-list.
-      //   frame → cmContent:  Yjs hydrate + CodeMirror render.
-      // A `null` opens/frame value means that phase never finished
-      // inside the test window — the most informative failure signal
-      // (e.g. iter 358 suspended got 502 on the dashboard-click WS,
-      // which would surface as opens:0).
-      const clickToWsOpenMs =
-        firstWsOpenAt !== null ? firstWsOpenAt - clickAt : null;
-      const clickToFirstFrameMs =
-        firstFrameAt !== null ? firstFrameAt - clickAt : null;
-      // eslint-disable-next-line no-console
-      console.log(
-        `[verifyLiveGt6LiveEditableState] project=${project.id} ` +
-          `machine=${machineId} ` +
-          `cmContentReadyMs=${cmContentReadyMs ?? "(>budget)"} ` +
-          `keystrokeAckMs=${keystrokeAckMs ?? "(>budget)"} ` +
-          `clickToWsOpenMs=${clickToWsOpenMs ?? "(none)"} ` +
-          `clickToFirstFrameMs=${clickToFirstFrameMs ?? "(none)"} ` +
-          `wsPostClick=opens:${wsOpenCount - wsOpenBeforeClick}` +
-          `/closes:${wsCloseCount - wsCloseBeforeClick} ` +
-          `cmTextPrefix=${JSON.stringify(cmText.slice(0, 80))}`,
-      );
-
-      expect(
-        cmContentReadyMs,
-        `.cm-content did not contain the seeded documentclass sentinel ` +
-          `within ${CM_CONTENT_BUDGET_MS}ms of dashboard click on a ` +
-          `suspended Machine. last cmText prefix: ` +
-          `${JSON.stringify(cmText.slice(0, 80))}`,
-      ).not.toBeNull();
-      expect(
-        cmContentReadyMs!,
-        `.cm-content ready time exceeded ${CM_CONTENT_BUDGET_MS}ms`,
-      ).toBeLessThanOrEqual(CM_CONTENT_BUDGET_MS);
-      expect(
-        keystrokeAckMs,
-        `keystroke did not produce a DOC_UPDATE wire frame within ` +
-          `${KEYSTROKE_ACK_BUDGET_MS}ms`,
-      ).not.toBeNull();
-      expect(
-        keystrokeAckMs!,
-        `keystroke ack time exceeded ${KEYSTROKE_ACK_BUDGET_MS}ms`,
-      ).toBeLessThanOrEqual(KEYSTROKE_ACK_BUDGET_MS);
-    } finally {
-      await cleanupLiveProjectMachine({
-        projectId: project.id,
-        drizzle: db.db.db,
-      });
-    }
+    await runColdFromInactiveLiveEditableTest(
+      {
+        label: "verifyLiveGt6LiveEditableState",
+        flyAction: "suspend",
+        flyState: "suspended",
+        settleTimeoutMs: SUSPEND_SETTLE_TIMEOUT_MS,
+        projectNamePrefix: "pw-gt6-live",
+      },
+      { authedPage, db, testInfo },
+    );
   });
 });
+
