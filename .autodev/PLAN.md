@@ -140,13 +140,30 @@ routed to (decision deferred post-MVP).
    landed the in-band `state=error detail=<reason>` rendering in
    `wireTimelineFormat.ts` / `wireFrames.ts`. The reused spec was
    GREEN in iter 359 AND iter 360, so the original two-back-to-
-   back-compile-errors shape has not recurred. **Action if the
-   spec re-reds:** read `detail=…` in the timeline tail and route
+   back-compile-errors shape has not recurred. **Iter 373
+   recurrence (different root cause).** Reused-spec re-red after
+   iter 370's wire-shape change (17→18 byte `PdfSegment` header
+   with `lastPage` tri-state byte). The reused project's per-
+   project Machine `d8d3e90a001ee8` was created 2026-05-16T12:09Z,
+   long before iter 370's deploy at 21:08Z, so it served 17-byte
+   headers to a now-18-byte-aware FE decoder → browser console
+   `decodeFrame: pdf-segment payload truncated`, `.preview canvas`
+   never paints. Same shape as iter-356 wire-drift, same fix —
+   `flyctl machine destroy --force d8d3e90a001ee8 -a
+   tex-center-sidecar` applied iter 373; resolver recreates on
+   next access against current `SIDECAR_IMAGE` (iter-372 digest
+   per `deploy-sidecar.yml` "Pin SIDECAR_IMAGE" step). Wire-
+   version smoke gold case logged in `FUTURE_IDEAS.md`; land it on
+   the third recurrence. **Action if the spec re-reds with the
+   Bug-B shape:** read `detail=…` in the timeline tail and route
    by error class — `"supertex daemon error: …"` → blob/persisted-
    source issue; `"another compile already in flight"` →
    coalescer race in `compileCoalescer.ts`; `"compiler is
    closing"` → shutdown race in `runCompile`'s `awaitHydrated`/
-   `ensureRestored`. No proactive work needed until then.
+   `ensureRestored`. **Action if it re-reds with `payload
+   truncated` again:** verify `SIDECAR_IMAGE` digest matches the
+   most recent `deploy-sidecar.yml` success, then targeted-destroy
+   the reused project's Machine.
 
 5. **M21.2 max-visible gold pin.** Folded into priority #1
    iter-B-gold (per 369b_answer): the bootstrap-cascade case

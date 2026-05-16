@@ -1,5 +1,20 @@
 # Future ideas
 
+- **Wire-version smoke gold test for the reused project.** Iter
+  356-357 and iter 373 both saw the same failure mode: the reused
+  project's per-project Machine outlives a wire-format change
+  (M22.4b shipoutPage in iter 355-ish; `lastPage` tri-state byte
+  in iter 370), serving stale-format frames to a now-strict FE
+  decoder; the only signal is `[WsClient] decodeFrame failed:
+  pdf-segment payload truncated` in the browser console, with the
+  fixture's shape-tolerant decoder showing a healthy timeline.
+  A dedicated case — open the reused project, send a `view`
+  frame, wait one pdf-segment, assert `browserDiagnostics` is
+  clean of `payload truncated` / `header truncated` — would fail
+  loudly on day-of-deploy rather than silently breaking only the
+  reused spec via the canvas-paint timeout. Land on the third
+  recurrence; remediation is one `flyctl machine destroy --force
+  <reused-project-machine>` either way.
 - **`--cold` gold flag to exercise the cold-start path explicitly.**
   Once M9.gold-restructure (iter 197) separates warm-up from
   per-spec assertions, the warm path becomes the default and
