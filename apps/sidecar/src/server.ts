@@ -332,34 +332,28 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     stopStage.clear();
   }
 
-  function armIdleTimers(): void {
-    suspendStage.arm();
-    stopStage.arm();
-  }
-
-  // Arm ONLY the stop stage at startup. A Fly Machine that boots
-  // without ever receiving a viewer (control-plane wake-probe with
-  // no WS handshake, or user navigates away mid-cold-start) would
-  // otherwise never transition 1→0 and never idle-stop; the stop
-  // stage's longer timer (default 5 min) is the orphan-cleanup
-  // failsafe.
+  // Arm ONLY the stop stage on every idle entry (cold boot AND
+  // viewer-disconnect 1→0). Iter 340 forbade suspend-on-cold-boot
+  // because the 5 s suspend timer raced the web proxy's 20–60 s
+  // worst-case drive-to-started + tcpProbe + WS upgrade chain;
+  // iter 343 generalises that invariant after iter 341/342 confirmed
+  // GT-9 + GT-6-stopped still RED with the *disconnect* arm intact.
+  // The disconnect-arm path is structurally identical: a transient
+  // cold-reopen WS open-then-close cycle (proxy retry, brief
+  // upstream blip) fires `noteViewerRemoved` before any frame is
+  // delivered, the 5 s suspend timer wins the race against the
+  // real reconnect, the Machine self-suspends, and the next 6PN
+  // dial from the web proxy can't auto-resume a Fly-suspended
+  // Machine. The stop stage's longer timer (default 5 min) is the
+  // single failsafe for both orphan cold boot and real abandonment.
   //
-  // The suspend stage is deliberately NOT armed on cold boot.
-  // Production wires it to `SIDECAR_SUSPEND_MS=5_000`, which is
-  // shorter than the upstream resolver's worst-case cold-start
-  // drive-to-started + tcpProbe + WS upgrade forwarding chain
-  // (20–60 s on a stopped→started transition). If we armed
-  // suspend at boot, the sidecar would `POST /machines/{self}/
-  // suspend` mid-handshake; the web proxy's direct 6PN TCP dial
-  // to port 3001 cannot auto-resume a Fly-suspended Machine
-  // (only HTTP via Fly's edge does), so the in-flight WS upgrade
-  // would stall indefinitely. iter 340 traced GT-9
-  // (preserve-edits) + GT-6-stopped failures to exactly this
-  // race via per-probe Fly-state diagnostic (stopped → starting
-  // → suspended within 25 s of dashboard click). The 5 s suspend
-  // timeout is correct for "user closed tab" (its design
-  // motivation) — `noteViewerRemoved` continues to arm both
-  // stages when `viewerCount` transitions 1→0.
+  // Cost of removing fast-suspend-on-tab-close: a closed-tab
+  // Machine stays `started` (RAM allocated) until the stop timer
+  // fires instead of the suspend timer. Future work (`tab-close
+  // wire signal` in FUTURE_IDEAS) will re-introduce fast suspend
+  // gated on an explicit client→server "leaving for good" frame —
+  // until then the proxy cannot distinguish "tab closed" from
+  // "cold-reopen WS race", so neither can we.
   stopStage.arm();
 
   function noteViewerAdded(): void {
@@ -373,7 +367,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     if (viewerCount < 0) viewerCount = 0;
     app.log.info({ viewerCount }, "viewer-removed");
     if (viewerCount === 0) {
-      armIdleTimers();
+      stopStage.arm();
     }
   }
 

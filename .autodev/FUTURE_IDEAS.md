@@ -80,6 +80,20 @@
   still wants a real local stack. Spin Postgres + MinIO behind a
   compose file with a CI host that has Docker; gold cases gate
   on `which docker`.
+- **Explicit tab-close wire signal → re-enable fast suspend.**
+  Iter 343 disabled `suspendStage.arm()` on the viewer-disconnect
+  1→0 transition because the 5 s suspend timer raced transient
+  cold-reopen WS open-then-close cycles (proxy retry / brief
+  upstream blip), and a Fly-suspended Machine cannot be
+  auto-resumed by the web proxy's 6PN TCP dial. The cost: a
+  closed-tab Machine now stays `started` (RAM allocated) until
+  the 5-minute stop timer fires instead of suspending in 5 s.
+  Re-enable fast suspend once the client→server WS protocol
+  carries an explicit "leaving for good" frame (sent on
+  `window.beforeunload` / explicit close, NOT on transient blur
+  or network blip). On that frame the sidecar can confidently
+  arm `suspendStage`; a re-connection within 300 ms (the design
+  case for fast suspend) cancels it as today.
 - **File-tree collapse-to-zero chevron.** M12 landed three
   resizable panes with min widths; the original spec called for
   a collapse-to-zero affordance on the tree column with a re-open

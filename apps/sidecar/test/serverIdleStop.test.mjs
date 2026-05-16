@@ -1,10 +1,17 @@
-// M7.1.4 / M20.1 two-stage idle cascade. The sidecar arms two
-// independent timers when `viewerCount` is zero:
-//   - `suspendTimeoutMs` (short) invokes `onSuspend` then re-arms.
-//   - `stopTimeoutMs`    (long)  invokes `onStop` (cold-storage).
-// First viewer re-connection clears both. Either timer is
-// independently disabled by setting its `*-TimeoutMs` unset or 0,
-// or its `on*` handler missing.
+// M7.1.4 / M20.1 / M20.3 idle cascade. Iter 343 collapsed the
+// two-stage cascade in production wiring: the sidecar now arms ONLY
+// the stop stage on every idle entry (cold boot and viewer-disconnect
+// 1→0). The suspend stage primitive is still available via
+// `suspendTimeoutMs` / `onSuspend` (the `createIdleStage` plumbing
+// is symmetric) but `buildServer` never auto-arms it. The disconnect
+// arm of suspend was forbidden after iter 341/342 confirmed it raced
+// transient cold-reopen WS open-then-close cycles to suspend a
+// Machine mid-handshake (the 6PN dial after a suspend cannot
+// auto-resume). See `src/server.ts` `noteViewerRemoved` comment and
+// `.autodev/logs/343.md`.
+//
+// First viewer re-connection clears both stages. The stop handler
+// closes the app and exits 0 — the path to `stopped`.
 
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -28,42 +35,59 @@ async function closeAndWait(ws) {
   await new Promise((r) => ws.once("close", r));
 }
 
-// Case 1: suspend timer fires after last viewer disconnects.
+// Case 1 (iter 343): viewer disconnect 1→0 arms ONLY the stop stage.
+// The suspend stage is wired with a much shorter timeout — even so,
+// it must NOT fire, because `buildServer` no longer auto-arms it on
+// any path.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-1-"));
   let suspendCalls = 0;
+  let stopCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    suspendTimeoutMs: 300,
+    suspendTimeoutMs: 100,
     onSuspend: () => {
       suspendCalls += 1;
+    },
+    stopTimeoutMs: 300,
+    onStop: () => {
+      stopCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;
 
-  // Open the WS before the startup-armed timer can plausibly
-  // fire. Once viewerCount becomes 1, the startup timer is
-  // cleared; this case then measures the *disconnect-arm* path.
+  // Open the WS before the startup-armed stop timer can plausibly
+  // fire. Once viewerCount becomes 1, the startup timer is cleared;
+  // this case then measures the *disconnect-arm* path.
   const ws = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   await closeAndWait(ws);
   await new Promise((r) => setTimeout(r, 600));
-  assert.equal(suspendCalls, 1, "onSuspend should fire once after timeout");
+  assert.equal(
+    suspendCalls,
+    0,
+    "iter-343 invariant: viewer disconnect must NOT arm suspend stage",
+  );
+  assert.equal(
+    stopCalls,
+    1,
+    "viewer disconnect arms stop stage; onStop should fire once after timeout",
+  );
 
   await app.close();
 }
 
-// Case 2: re-connection before suspend-timeout cancels the timer.
+// Case 2: re-connection before stop-timeout cancels the timer.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-2-"));
-  let suspendCalls = 0;
+  let stopCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    suspendTimeoutMs: 400,
-    onSuspend: () => {
-      suspendCalls += 1;
+    stopTimeoutMs: 400,
+    onStop: () => {
+      stopCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -76,12 +100,12 @@ async function closeAndWait(ws) {
   const ws2 = await open(`ws://127.0.0.1:${port}/ws/project/p1`);
   // Wait past the original timeout — timer should have been cleared.
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(suspendCalls, 0, "re-connection should cancel suspend timer");
+  assert.equal(stopCalls, 0, "re-connection should cancel stop timer");
 
   await closeAndWait(ws2);
   // After this disconnect the timer arms again; verify it fires.
   await new Promise((r) => setTimeout(r, 700));
-  assert.equal(suspendCalls, 1, "onSuspend should fire after final disconnect");
+  assert.equal(stopCalls, 1, "onStop should fire after final disconnect");
 
   await app.close();
 }
@@ -114,16 +138,16 @@ async function closeAndWait(ws) {
   await app.close();
 }
 
-// Case 4: multi-viewer — suspend arms only when the *last* viewer leaves.
+// Case 4: multi-viewer — stop arms only when the *last* viewer leaves.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-4-"));
-  let suspendCalls = 0;
+  let stopCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
-    suspendTimeoutMs: 300,
-    onSuspend: () => {
-      suspendCalls += 1;
+    stopTimeoutMs: 300,
+    onStop: () => {
+      stopCalls += 1;
     },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -134,25 +158,23 @@ async function closeAndWait(ws) {
   await closeAndWait(a);
   // One viewer remains → timer must not fire.
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(suspendCalls, 0, "timer should not fire while viewers remain");
+  assert.equal(stopCalls, 0, "timer should not fire while viewers remain");
   await closeAndWait(b);
   await new Promise((r) => setTimeout(r, 600));
-  assert.equal(suspendCalls, 1, "timer should fire after the last viewer leaves");
+  assert.equal(stopCalls, 1, "timer should fire after the last viewer leaves");
 
   await app.close();
 }
 
 // Case 5 (regression for live-prod bug seen iter 176, refined
-// iter 340): if the server boots but no viewer ever connects, the
-// orphan must still be cleaned up — but via the STOP stage only,
-// not the suspend stage. iter 340 traced GT-9 + GT-6-stopped gold
-// failures to the cold-boot suspend timer firing mid-handshake
-// (5 s default suspend timeout < the web proxy's worst-case
-// cold-start drive-to-started + tcpProbe + WS upgrade chain). The
+// iter 340, generalised iter 343): if the server boots but no viewer
+// ever connects, the orphan must still be cleaned up via the STOP
+// stage. The suspend stage must NOT fire on cold boot (iter 340) and
+// must NOT fire on any code path from `buildServer` (iter 343). The
 // orphan rationale (no indefinite billing) still holds — the stop
-// stage's longer timer is the failsafe — but suspend on cold boot
-// is now forbidden because the 6PN dial that follows can't
-// auto-resume a Fly-suspended Machine.
+// stage's longer timer is the failsafe — but suspend is forbidden
+// because the 6PN dial that follows a Fly-suspended Machine can't
+// auto-resume it.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-5-"));
   let suspendCalls = 0;
@@ -187,9 +209,8 @@ async function closeAndWait(ws) {
   await app.close();
 }
 
-// Case 6 (M20.1): the stop timer fires independently of the suspend
-// timer. With a short stop timer and no suspend timer wired, the
-// stop handler fires after viewers leave.
+// Case 6 (M20.1): the stop timer fires independently when only it
+// is wired.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-6-"));
   let stopCalls = 0;
@@ -212,53 +233,11 @@ async function closeAndWait(ws) {
   await app.close();
 }
 
-// Case 7 (M20.1): with BOTH timers wired and the suspend handler
-// re-arming itself but never closing the listener, the stop timer
-// still fires at its (longer) boundary while the suspend timer can
-// fire repeatedly in the same idle window via rearm.
-{
-  const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-7-"));
-  let suspendCalls = 0;
-  let stopCalls = 0;
-  const app = await buildServer({
-    logger: false,
-    scratchRoot,
-    suspendTimeoutMs: 100,
-    onSuspend: (ctx) => {
-      suspendCalls += 1;
-      // Production semantics: suspend handler re-arms itself
-      // (post-resume or post-failure) but never closes the app.
-      ctx.rearm();
-    },
-    stopTimeoutMs: 500,
-    onStop: () => {
-      stopCalls += 1;
-    },
-  });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const port = app.server.address().port;
-
-  const ws = await open(`ws://127.0.0.1:${port}/ws/project/p7`);
-  await closeAndWait(ws);
-  // Wait long enough that the suspend timer can fire ~3 times and
-  // the single stop timer fires exactly once.
-  await new Promise((r) => setTimeout(r, 800));
-  assert.ok(
-    suspendCalls >= 2,
-    `suspend should re-fire multiple times via rearm (got ${suspendCalls})`,
-  );
-  assert.equal(stopCalls, 1, "stop fires exactly once at its boundary");
-
-  await app.close();
-}
-
-// Case 8 (M20.1, refined iter 340): viewer re-connection during
-// the cold-boot stop window clears BOTH timers, so neither
-// suspend nor stop fires until the next disconnect. (After
-// iter 340 only stop is armed on cold boot, but a viewer connect
-// is still a `noteViewerAdded` that calls `clearIdleTimers()` for
-// both stages, so this invariant — "active viewer ⇒ neither
-// fires" — is unchanged.)
+// Case 7 (iter 343): viewer re-connection during the cold-boot stop
+// window clears the timer, so it does not fire until the next
+// disconnect. With the iter-343 contract, `noteViewerAdded` calls
+// `clearIdleTimers()` for both stages (suspend stays cleared because
+// it was never armed; stop is cleared because it was startup-armed).
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-8-"));
   let suspendCalls = 0;
@@ -278,12 +257,12 @@ async function closeAndWait(ws) {
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;
 
-  // Connect inside the startup-armed suspend window so both timers
-  // are cleared before either fires.
+  // Connect inside the startup-armed stop window so the timer is
+  // cleared before it can fire.
   const ws = await open(`ws://127.0.0.1:${port}/ws/project/p8`);
   // Hold open well past both timeouts.
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(suspendCalls, 0, "active viewer cancels suspend timer");
+  assert.equal(suspendCalls, 0, "suspend must NEVER fire from buildServer");
   assert.equal(stopCalls, 0, "active viewer cancels stop timer");
 
   await closeAndWait(ws);

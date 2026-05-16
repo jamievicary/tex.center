@@ -12,24 +12,22 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — second suspend-race fix needed.**
-   Iter-340 removed the *startup* suspend arm; iter-341 gold
-   re-ran with that fix deployed and GT-9 + GT-6-stopped are
-   **still RED** with the same `flyState=starting → suspended`
-   shape. Hypothesis (iter 342): the residual cause is the
-   *disconnect-arm* path — a transient cold-reopen WS open-then-
-   close cycle drives `noteViewerRemoved` → 5 s suspend timer →
-   self-suspend; the client never sees frames on the new WS
-   (wsFrames stays at 11 across the entire 180 s probe). Iter 342
-   added sidecar `viewer-*` / `idle-*` / `ws-upgrade-*` logs to
-   pin the timing; iter 343 reads the next gold transcript paired
-   with prod logs and applies the targeted fix (likely: don't arm
-   `suspendStage` on the first 1→0 transition unless the viewer
-   was held >N seconds, or reserve `suspendStage` for an explicit
-   tab-close signal once the wire carries one).
+1. **M20.3 closeout — iter-343 disconnect-arm fix.**
+   Iter-340 removed the *startup* suspend arm but GT-9 +
+   GT-6-stopped stayed RED. Iter 342 traced the residual cause
+   to the *disconnect-arm* path: a transient cold-reopen WS
+   open-then-close cycle drives `noteViewerRemoved` → 5 s suspend
+   timer → self-suspend mid-handshake, after which the web proxy's
+   6PN TCP dial cannot auto-resume the Machine.
+
+   Iter 343 generalised the iter-340 invariant: `buildServer`
+   now arms ONLY the stop stage on every idle entry (cold boot
+   AND disconnect 1→0). The suspend primitive remains in the
+   API surface for a future explicit tab-close wire (see
+   `FUTURE_IDEAS.md` — "Explicit tab-close wire signal").
 
    Closing M20.3 still requires:
-   - (i) GT-9 GREEN.
+   - (i) GT-9 GREEN on next gold pass post-iter-343 deploy.
    - (ii) GT-6-stopped GREEN.
    - (iii) Prod cold-boot log capture confirming `restoreMs:0`
      and warmup overlap.
@@ -64,9 +62,9 @@ routed to (decision deferred post-MVP).
 
 **Open red specs (gold):**
 
-- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 341
-  confirmed still RED post-iter-340 deploy; iter 342 added
-  diagnostic logs for iter 343's root-cause pass.
+- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 342
+  hypothesis (disconnect-arm path) addressed by iter 343 fix;
+  iter 344 reads first gold transcript on the deployed fix.
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — same
   shape, same plan.
 - `verifyLiveFullPipelineReused` — intermittent, watch. May be
@@ -171,17 +169,24 @@ fewer-pages). Add a live-side pin if a regression surfaces.
 
 Two-tier idle cascade (per `293_answer.md` (4)).
 
-**M20.1 contract (load-bearing):** `SidecarOptions` exposes
-independent `suspendTimeoutMs`/`onSuspend` and
-`stopTimeoutMs`/`onStop`. **Cold boot arms ONLY the stop stage**
-(iter-340 fix: the 5 s suspend timer raced the web proxy's 20–60 s
-cold-handshake chain and self-suspended mid-upgrade; direct 6PN
-TCP dial can't auto-resume a suspended Machine). The suspend stage
-arms only on `viewerCount` 1→0 (its design use case: "user closed
-tab", ~300 ms reconnect). Stop closes the app and exits 0.
-Checkpoint persist runs before both handlers. Env vars:
-`SIDECAR_SUSPEND_MS` (default 5_000), `SIDECAR_STOP_MS`
-(default 300_000). Locks:
+**M20.1 contract (load-bearing, refined iter 343):**
+`SidecarOptions` exposes independent
+`suspendTimeoutMs`/`onSuspend` and `stopTimeoutMs`/`onStop`.
+**`buildServer` arms ONLY the stop stage on every idle entry**
+(cold boot AND `viewerCount` 1→0). Iter-340 forbade
+suspend-on-cold-boot (the 5 s suspend timer raced the web
+proxy's 20–60 s cold-handshake chain and self-suspended
+mid-upgrade; direct 6PN TCP dial can't auto-resume a suspended
+Machine). Iter-343 generalised that to the disconnect path: a
+transient cold-reopen WS open-then-close cycle would fire
+`noteViewerRemoved` before any frame was delivered, the 5 s
+suspend timer won the race against the real reconnect, and the
+same auto-resume problem returned. The suspend primitive is
+retained for a future explicit tab-close wire signal (see
+`FUTURE_IDEAS.md`). Stop closes the app and exits 0. Checkpoint
+persist runs before both handlers (when wired). Env vars:
+`SIDECAR_SUSPEND_MS` (default 5_000, currently inert in
+production), `SIDECAR_STOP_MS` (default 300_000). Locks:
 `apps/sidecar/test/idleSuspend.test.mjs`,
 `serverIdleStop.test.mjs`, `serverCheckpointWiring.test.mjs`.
 
@@ -209,15 +214,19 @@ Cold-start instrumentation (iter 328–330) pinned the 4.3 s
   body sentinel, waits for `pdf-segment` (proves persist), force-
   stops Machine, reopens, asserts sentinel in `.cm-content`.
   Per-phase diagnostic logs + 8-min wall.
-- **(c) suspend race fix [iter 340]** cold boot arms only the
-  stop stage; see M20.1 above.
+- **(c) suspend race fix [iter 340 + iter 343]** cold boot AND
+  viewer-disconnect 1→0 now arm only the stop stage. See M20.1
+  above and `FUTURE_IDEAS.md` for the explicit tab-close wire
+  signal that would re-enable fast suspend.
 
 **Closing M20.3:** GT-9 + GT-6-stopped GREEN on next gold pass
-post-iter-340 deploy; prod cold-boot log capture confirming
+post-iter-343 deploy; prod cold-boot log capture confirming
 `restoreMs:0` + warmup overlap.
 
-Tuning: 5 s suspend is aggressive but on-viewer-close suspend cost
-is ~300 ms reconnect. Adjust via env if live use shows thrash.
+Tuning: `SIDECAR_SUSPEND_MS` is currently inert in production
+(no arm site after iter 343). `SIDECAR_STOP_MS` (5 min default)
+is the sole idle cleanup path until the explicit tab-close wire
+lands.
 
 ### M21.target-page — max-visible-page wire signal
 
@@ -311,7 +320,7 @@ iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
 bump; iter-320 idle-stage factory refactor;
-iter-331/332/340 M20.3 cold-start sub-slices.
+iter-331/332/340/343 M20.3 cold-start sub-slices.
 
 See git log and `.autodev/logs/` for narrative detail.
 

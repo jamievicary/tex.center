@@ -99,7 +99,7 @@ async function closeAndWait(ws) {
 
   const snapshotBytes = new Uint8Array([9, 9, 9, 9, 9]);
   const compiler = new RecordingCompiler(snapshotBytes);
-  let onSuspendObservedSnapshotBytes = null;
+  let onStopObservedSnapshotBytes = null;
   let idleResolve;
   const idleDone = new Promise((r) => {
     idleResolve = r;
@@ -110,11 +110,11 @@ async function closeAndWait(ws) {
     scratchRoot,
     blobStore,
     compilerFactory: () => compiler,
-    suspendTimeoutMs: 40,
-    onSuspend: () => {
+    stopTimeoutMs: 40,
+    onStop: () => {
       // Inspect the blob the wrapper persisted before handing off.
       void loadCheckpoint(blobStore, "p1").then((bytes) => {
-        onSuspendObservedSnapshotBytes = bytes ? Array.from(bytes) : null;
+        onStopObservedSnapshotBytes = bytes ? Array.from(bytes) : null;
         idleResolve();
       });
     },
@@ -144,9 +144,9 @@ async function closeAndWait(ws) {
 
   assert.equal(compiler.snapshotCalls, 1, "snapshot should be called once on idle");
   assert.deepEqual(
-    onSuspendObservedSnapshotBytes,
+    onStopObservedSnapshotBytes,
     Array.from(snapshotBytes),
-    "blob at checkpoint key should hold the snapshot bytes BEFORE onSuspend is invoked",
+    "blob at checkpoint key should hold the snapshot bytes BEFORE onStop is invoked",
   );
 
   await app.close();
@@ -200,8 +200,8 @@ async function closeAndWait(ws) {
     scratchRoot,
     blobStore,
     compilerFactory: () => compiler,
-    suspendTimeoutMs: 30,
-    onSuspend: () => idleResolve(),
+    stopTimeoutMs: 30,
+    onStop: () => idleResolve(),
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;
@@ -257,8 +257,8 @@ async function closeAndWait(ws) {
     scratchRoot,
     blobStore,
     compilerFactory: () => compiler,
-    suspendTimeoutMs: 30,
-    onSuspend: () => idleResolve(),
+    stopTimeoutMs: 30,
+    onStop: () => idleResolve(),
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = app.server.address().port;
