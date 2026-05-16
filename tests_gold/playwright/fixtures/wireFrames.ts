@@ -154,6 +154,7 @@ function recordIncoming(
     };
     let controlType: string | undefined;
     let controlState: string | undefined;
+    let controlDetail: string | undefined;
     try {
       const obj = JSON.parse(json) as {
         type?: string;
@@ -167,6 +168,7 @@ function recordIncoming(
           typeof obj.state === "string"
         ) {
           controlState = obj.state;
+          if (typeof obj.detail === "string") controlDetail = obj.detail;
           const cs: { state: string; detail?: string } = {
             state: obj.state,
           };
@@ -191,6 +193,7 @@ function recordIncoming(
     };
     if (controlType !== undefined) entry.controlType = controlType;
     if (controlState !== undefined) entry.controlState = controlState;
+    if (controlDetail !== undefined) entry.controlDetail = controlDetail;
     state.entries.push(entry);
     return result;
   }

@@ -27,36 +27,48 @@ routed to (decision deferred post-MVP).
    before `writeMain` materialised `main.tex` — see
    FUTURE_IDEAS "M20.3(a)3").
 
-2. **Bug B — zero pdf-segments on cold-resume edit (user-reported,
-   iter 345 discussion).** Repro at
-   `.autodev/discussion/344_question.md`: existing stopped project
-   reopened; `compile-status running → idle` cycles for both initial
-   compile and edit, but **no pdf-segment** ever ships. Distinct
-   from Bug A: GT-9 does receive a pdf-segment for the partial
-   source. Iter 347 captured a prod transcript but did not
-   reproduce the user's symptom (see iter 347 log for the two
-   observed cycles); landed diagnostic-only instrumentation:
-   - `replay-segments` log line at WS-connect
-     (`{projectId, lastSegmentsLen, replaySent, replayBytes,
-     socketOpen}`).
-   - `lastSegmentsLen` appended to every `compile ok` log.
+2. **Bug B / reused-spec compile-error failure (CI-reproducible iter
+   357).** Originally framed as Bug B "zero pdf-segments on
+   cold-resume edit" (`.autodev/discussion/344_question.md`); iter
+   357's gold gave us a concrete shape — the reused-fixture project
+   `00000000-…-000000000001` ran `compile-cycles=2 zero-segment-
+   cycles=2 pdf-segment-bytes=0`, BUT the timeline shows both
+   cycles end in `state=error`, not `idle`. So the failure mode is
+   "two back-to-back compile errors on reused-project cold open",
+   not the silent zero-segment shape originally hypothesised.
 
-   **Next-iteration trigger:** fresh user-driven repro on the
-   iter-347 build. Then `flyctl logs | grep -E
-   "replay-segments|compile ok|round-done"` on the affected
-   project ID gives a one-screen view. Decision tree:
-   - `lastSegmentsLen=0` at connect → initial compile's
-     `emit_initial_chunks` shipped zero chunks; open vendored-
-     supertex sub-investigation (snap_path / pdf_real arg
-     construction in `supertex` CLI → `supertex_daemon`).
-   - `lastSegmentsLen>0` but `replaySent=0` → socket-state race;
-     fix in sidecar.
-   - Both shipped fine but client toast didn't fire → client-side
-     WS-frame demux issue.
+   **Iter 358 landed diagnostic:** the wire-timeline formatter now
+   surfaces the sidecar's `detail` field on `compile-status
+   state=error` lines (`wireTimelineFormat.ts` +
+   `wireFrames.ts` + 3 new lock cases in
+   `tests_normal/cases/wireTimelineFormat.test.mjs`). The sidecar
+   already broadcasts `detail` on every error (server.ts:587, 621)
+   — the gold transcript just wasn't carrying it.
 
-   If no organic repro arrives within a few iterations, consider
-   a synthetic gold spec that drives the "warm-reconnect with
-   first-compile-was-no-op" path explicitly.
+   **Next-iteration trigger:** read
+   `verifyLiveFullPipelineReused`'s `state=error detail=…` line in
+   the next gold pass. Routing by error class:
+   - `"supertex daemon error: <reason>"` → real LaTeX/daemon
+     error on the restored source; root cause is either stale
+     persisted blob or a daemon-state carry-over. Fix: either
+     reset the reused project's blob (one-shot script, iter-357
+     template) or harden the cold-reopen path in `persistence.ts`.
+   - `"supertex-daemon: another compile already in flight"` →
+     coalescer/busy race; investigate in `compileCoalescer.ts`.
+   - `"supertex-daemon: compiler is closing"` → shutdown race;
+     investigate in `runCompile`'s `awaitHydrated`/`ensureRestored`
+     ordering.
+   - workspace-write exception → fs/disk issue; likely transient.
+
+   The 43 ms duration of cycle 2 (vs 2.49 s for cycle 1) is the
+   load-bearing clue — too fast for a real LaTeX compile, so
+   cycle 2 is almost certainly a fast-fail guard. The detail
+   field will say which.
+
+   The legacy "fresh user-driven repro + flyctl logs decision
+   tree" approach (replay-segments / lastSegmentsLen / replaySent)
+   is superseded by the in-band detail rendering; flyctl logs are
+   still useful for cross-checking but no longer the only path.
 
 3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3

@@ -32,6 +32,16 @@ export interface TimelineEntry {
   controlType?: string;
   /** For `compile-status` only: the `state` field. */
   controlState?: string;
+  /**
+   * For `compile-status state=error` only: the sidecar's `detail`
+   * field carrying the underlying compile error (typically
+   * `"supertex daemon error: <reason>"`,
+   * `"supertex-daemon: another compile already in flight"`, or
+   * the workspace-write exception string). Surfaced in the
+   * timeline line so a failing gold spec pins the error class
+   * without a separate sidecar-log lookup — see iter 358 log.
+   */
+  controlDetail?: string;
   /** For pdf-segment only: the `shipoutPage` field (0 sentinel omitted). */
   shipoutPage?: number;
 }
@@ -158,7 +168,15 @@ function entryTerseSummary(e: TimelineEntry): string {
       return `bytes=${e.bytes}`;
     case "control":
       if (e.controlType === "compile-status") {
-        return `state=${e.controlState ?? "?"}`;
+        const base = `state=${e.controlState ?? "?"}`;
+        if (
+          e.controlState === "error" &&
+          e.controlDetail !== undefined &&
+          e.controlDetail !== ""
+        ) {
+          return `${base} detail=${e.controlDetail}`;
+        }
+        return base;
       }
       return e.controlType ?? "(unparsed)";
     default:

@@ -302,6 +302,102 @@ run("formatTimeline — multi-project output is sorted by id", () => {
   assert.ok(idxAaa < idxZzz, "aaa should come before zzz");
 });
 
+run("formatTimeline — compile-status error includes controlDetail in line", () => {
+  // Iter 358: the reused-spec gold failure shows `state=error` twice
+  // with no detail surfaced, blocking Bug B diagnosis. The formatter
+  // now folds the sidecar's `detail` field into the timeline line
+  // when present on an error event, so the next gold pass pins the
+  // actual error string (e.g. `supertex daemon error: <reason>`).
+  const out = formatTimeline({
+    specName: "ErrorDetail",
+    entries: [
+      {
+        tMs: 100,
+        dir: "in",
+        projectId: "p",
+        tag: "control",
+        bytes: 40,
+        controlType: "compile-status",
+        controlState: "running",
+      },
+      {
+        tMs: 250,
+        dir: "in",
+        projectId: "p",
+        tag: "control",
+        bytes: 88,
+        controlType: "compile-status",
+        controlState: "error",
+        controlDetail: "supertex daemon error: undefined control sequence",
+      },
+    ],
+    projectIds: ["p"],
+  });
+  // The error line surfaces both state and detail; the running line
+  // never carries a detail and renders as before.
+  assert.ok(
+    out.includes(
+      "state=error detail=supertex daemon error: undefined control sequence",
+    ),
+    `expected error detail rendered, got:\n${out}`,
+  );
+  // A `state=running` line MUST NOT carry a detail rider even if
+  // controlDetail were ever populated for it (defensive — server
+  // only sets detail on error today).
+  assert.ok(
+    out.includes("state=running\n") || out.includes("state=running"),
+    "running state still rendered",
+  );
+  assert.ok(
+    !out.includes("state=running detail="),
+    "running state must not surface a detail rider",
+  );
+});
+
+run("formatTimeline — error without controlDetail still renders just state=error", () => {
+  const out = formatTimeline({
+    specName: "ErrorNoDetail",
+    entries: [
+      {
+        tMs: 0,
+        dir: "in",
+        projectId: "p",
+        tag: "control",
+        bytes: 40,
+        controlType: "compile-status",
+        controlState: "error",
+      },
+    ],
+    projectIds: ["p"],
+  });
+  // No `detail=` rider when the field is absent.
+  assert.ok(out.includes("state=error"), "state=error appears");
+  assert.ok(!out.includes("detail="), "no detail= when controlDetail absent");
+});
+
+run("formatTimeline — empty controlDetail is treated as absent", () => {
+  // Defensive: the sidecar should always set a non-empty detail on
+  // error, but an empty-string round-trip MUST NOT produce
+  // `detail=` with nothing after it (would degrade grep-friendliness).
+  const out = formatTimeline({
+    specName: "ErrorEmptyDetail",
+    entries: [
+      {
+        tMs: 0,
+        dir: "in",
+        projectId: "p",
+        tag: "control",
+        bytes: 40,
+        controlType: "compile-status",
+        controlState: "error",
+        controlDetail: "",
+      },
+    ],
+    projectIds: ["p"],
+  });
+  assert.ok(!out.includes("detail="), "empty detail must not be rendered");
+});
+
 run("formatTimeline — zero-segment cycle surfaces in summary", () => {
   const out = formatTimeline({
     specName: "BugBRepro",
