@@ -12,17 +12,17 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.2(d) / M20.3 — S3/Tigris adapter + cold-cycle gold spec.**
-   With M20.2(a/b/c) landed (web tier sees the same `BlobStore`
-   protocol as sidecar; sidecar persists on every settle and
-   cold-boots from blob; seedDocFor + SSR seed both chain through
-   `coldSourceFor`), the remaining work is genuinely shared
-   backing storage. Build the `BLOB_STORE=s3` branch of
-   `defaultBlobStoreFromEnv` against a Tigris bucket (Fly's
-   S3-compatible offering). Bake a request-recording HTTP stub so
-   adapter tests are deterministic. Then M20.3 gold spec exercises
-   the full suspend→stop→cold cycle — unblocks
-   `verifyLiveGt6LiveEditableStateStopped`.
+1. **M20.3 — cold-cycle gold spec + Tigris deploy wiring.**
+   M20.2(d) landed iter 325: `S3BlobStore` (path-style SigV4,
+   pure-Node) + `BLOB_STORE=s3` branch of
+   `defaultBlobStoreFromEnv` requiring
+   `BLOB_STORE_S3_{ENDPOINT,REGION,BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}`.
+   Adapter is dark code until production sets those env vars.
+   Next: bind a Tigris bucket via Fly's S3-compatible offering on
+   both `web` and `sidecar` apps, then build M20.3 gold spec —
+   open project, idle 6 s (suspended), edit → 300 ms ack; idle
+   6 min (stopped), edit → cold-start budget; content preserved.
+   Unblocks `verifyLiveGt6LiveEditableStateStopped`.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -181,11 +181,12 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
 `apps/sidecar/test/idleSuspend.test.mjs`,
 `serverIdleStop.test.mjs`, `serverCheckpointWiring.test.mjs`.
 
-- **M20.2 (in-progress).** Shared `BLOB_STORE` on web tier *and*
-  sidecar. Sidecar persists source + latex compilation
+- **M20.2 (closed iter 325).** Shared `BLOB_STORE` on web tier
+  *and* sidecar. Sidecar persists source + latex compilation
   artefacts (NOT supertex outputs) on every settle. Rehydrate
   on cold boot. Unblocks
-  `verifyLiveGt6LiveEditableStateStopped`. Split:
+  `verifyLiveGt6LiveEditableStateStopped` once production wires
+  Tigris secrets (see M20.3). Split:
   - **(a) [landed iter 322].** Web tier wired to the same
     `BLOB_STORE` / `BLOB_STORE_LOCAL_DIR` env protocol as
     sidecar via `@tex-center/blobs`-hosted
@@ -219,6 +220,18 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
     (blob-wins / empty-blob fallthrough / null-store / transport
     error → reported and falls through to db). Real cross-Machine
     cold storage still needs the S3/Tigris adapter (next slice).
+  - **(d) [landed iter 325].** `packages/blobs/src/s3.ts`
+    (`S3BlobStore implements BlobStore`, path-style SigV4 over
+    `fetch`, no external deps) + `packages/blobs/src/sigv4.ts`
+    (pure-Node signing, locked against the AWS docs
+    GetObject-with-Range known-answer signature). `envSelect`
+    wires `BLOB_STORE=s3` to require five `BLOB_STORE_S3_*` env
+    vars, each named in its missing-field error. Round-trip +
+    canonical-shape unit-locked in `packages/blobs/test/s3.test.mjs`
+    against an in-process stub server that emulates the
+    PUT/GET/DELETE/HEAD/list-type=2 subset we use (paginated via
+    base64 `NextContinuationToken`). Dark code until production
+    wires Tigris secrets — see M20.3.
 - **M20.3 (open).** Gold spec: open project, idle 6 s
   (suspended), edit → 300 ms ack; idle 6 min (stopped), edit →
   cold-start budget; content preserved. Override stop timer via

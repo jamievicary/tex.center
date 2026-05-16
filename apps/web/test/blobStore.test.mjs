@@ -50,11 +50,13 @@ try {
     assert.deepEqual(Array.from(got), [1, 2, 3]);
     await store.delete("smoke");
   }
-  // env: "s3" → rejected (M20.2 cutover gate).
+  // env: "s3" with no further fields → rejected naming the first
+  // missing field (M20.2(d) landed the adapter; envSelect now wires
+  // it up when all BLOB_STORE_S3_* are present).
   {
     assert.throws(
       () => webBlobStoreFromEnv({ BLOB_STORE: "s3" }),
-      /s3 not implemented/,
+      /requires BLOB_STORE_S3_ENDPOINT/,
     );
   }
   // env: unknown → rejected.

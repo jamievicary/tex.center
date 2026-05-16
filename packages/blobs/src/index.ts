@@ -25,5 +25,9 @@ export interface BlobStore {
 }
 
 export { LocalFsBlobStore } from "./localFs.js";
+export { S3BlobStore } from "./s3.js";
+export type { S3BlobStoreOptions } from "./s3.js";
 export { validateKey } from "./key.js";
 export { defaultBlobStoreFromEnv } from "./envSelect.js";
+export { signRequest } from "./sigv4.js";
+export type { SignRequestInput } from "./sigv4.js";
