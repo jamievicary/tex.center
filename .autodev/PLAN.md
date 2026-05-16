@@ -12,7 +12,40 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
+1. **`[pdf-end]` + `lastPage` wire-through + multipage demand-fetch
+   (per 368_question / 368_answer).** Two iterations:
+   - **Iter A (next ordinary iteration).** Submodule pointer already
+     bumped to `aaa625a` on `vendor/supertex`. Sidecar
+     `supertexDaemon.ts` parses `[pdf-end]` into a
+     `lastPageReached: boolean` on the round-collection result;
+     compiler `Result` extends with `lastPage?: boolean`; protocol
+     `PdfSegment` extends with a `uint8` `lastPage` flag (header
+     17 B → 18 B); sidecar stamps `lastPage` on broadcast segment;
+     normal-test mock pin for 2-page (pdf-end → true) and
+     >2-page-stopped-short (no pdf-end → false). No FE / no
+     `targetPage` change. Forward-compatible.
+   - **Iter B.** FE consumes `lastPage` in `PdfViewer.svelte`:
+     reserve placeholder `.pdf-page` while `lastPage===false`;
+     PageTracker viewport entry on placeholder triggers
+     `maxViewingPage` update → sidecar `recompile,N+1`; placeholder
+     removed on segment arrival. Swap `server.ts` `targetPage: 0`
+     → `maxViewingPage(p)`. Before any sidecar change for
+     "all-`.out`-files-on-edit" (368_question §2c), capture a
+     `daemon-round-done` log transcript from the user's repro and
+     route: `maxShipout=N` ≥ viewer-page-number ⇒ FE rendering bug,
+     fold fix into iter B; `maxShipout` < expected ⇒ upstream
+     supertex elision bug, file repro & close (c) here. Gold spec
+     extends `verifyLivePdfMultiPage.spec.ts` (or new
+     `verifyLivePdfDemandFetch.spec.ts`).
+   - **Load-bearing read of current sidecar segment assembly.**
+     `assembleSegment(maxShipout)` (sidecar) concatenates chunks
+     `1.out…maxShipout.out` from disk into ONE `PdfSegment` with
+     `offset:0,totalLength:total`. So the sidecar already ships
+     all chunks 1..maxShipout each round; multi-segment-per-round
+     work would be a wire-shape change, not a bugfix on top of
+     current single-segment-per-round assembly.
+
+2. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
    editable-state.** Iter 362 surfaced the suspended-path
    diagnostic; iter 366 bumped suspended-variant
    `cmContentBudgetMs` to 2500 ms and the iter-366 gold pass went
@@ -68,7 +101,7 @@ routed to (decision deferred post-MVP).
      sample-variance one more time; two in a row = real
      regression.
 
-2. **`verifyLiveFullPipeline` NEW FAIL iter 360.** Fresh-project
+3. **`verifyLiveFullPipeline` NEW FAIL iter 360.** Fresh-project
    full pipeline `cmContent.waitFor` timed out at 40 s testTimeout
    waiting for `.cm-content` visible (locator gave 120 s but the
    test gave only 40 s — same testTimeout-vs-cold-start mismatch as
@@ -80,7 +113,7 @@ routed to (decision deferred post-MVP).
    timeline tail (the in-band `state=error detail=…` rendering
    from iter 358 is already in place) and route accordingly.
 
-3. **Bug B / reused-spec follow-up (defensive only).** Iter 358
+4. **Bug B / reused-spec follow-up (defensive only).** Iter 358
    landed the in-band `state=error detail=<reason>` rendering in
    `wireTimelineFormat.ts` / `wireFrames.ts`. The reused spec was
    GREEN in iter 359 AND iter 360, so the original two-back-to-
@@ -92,39 +125,39 @@ routed to (decision deferred post-MVP).
    closing"` → shutdown race in `runCompile`'s `awaitHydrated`/
    `ensureRestored`. No proactive work needed until then.
 
-4. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+5. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
 
-5. **M21.3c page-prefetch off-by-one.** Capture sidecar
+6. **M21.3c page-prefetch off-by-one.** Capture sidecar
    `daemon-stdin` + `daemon-round-done` transcript of user-
    reported "edit on hidden page N+2 ships nothing" repro; fix FE
    if `target` is non-`"end"` (contradicts `server.ts:528`
    hardcode), else file upstream supertex repro on
    `maxShipout=-1`.
 
-6. **WS-frame timeline final slice.** Steps 1–4 of the iter-345
+7. **WS-frame timeline final slice.** Steps 1–4 of the iter-345
    discussion landed iter 352. **Remaining (Step 5):**
    `verifyLiveGtNStoppedReopenEmitsSegment` waits until Bug B
    reproduces or is closed off as a never-recurring transient.
 
-7. **M9.editor-ux remaining slices.** GT-E (toast spawn +
+8. **M9.editor-ux remaining slices.** GT-E (toast spawn +
    aggregation badge); GT-F wire-driven (typing→Yjs-op toast,
    compile→pdf-segment toast); `SyncStatus` indicator (blocked on
    a sidecar persistence-ack wire signal).
 
-8. **M11 file-tree remaining.** M11.3 virtual-folder create
+9. **M11 file-tree remaining.** M11.3 virtual-folder create
    (next), M11.4 intra-tree DnD = rename, M11.5b OS-drop binary
    upload (blocked on binary-asset wire design), M11.5c drag-out
    download.
 
-9. **M18.2 / M18.3 / M16.aesthetic.** All blocked or deferred —
+10. **M18.2 / M18.3 / M16.aesthetic.** All blocked or deferred —
    M18.2 ResizeObserver re-render (deferred until reported);
    M18.3 forced-DPR=2 visual snapshot AND M16.aesthetic chrome
    retune both blocked on the Playwright stable-snapshot
    primitive.
 
-10. **M15 user-bug.** Multi-page seeded GREEN; awaiting user-
+11. **M15 user-bug.** Multi-page seeded GREEN; awaiting user-
     supplied offending source via discussion mode.
 
 ## 2. Milestones
