@@ -6,17 +6,26 @@
 // Two picks are exposed:
 // - `pickMostVisible`: page with highest visibility ratio (lower
 //   page wins on tie). Diagnostic; not used on the wire post-M21.
-// - `pickMaxVisible`: highest page index with any non-zero ratio.
-//   This is what the editor sends to the sidecar so every page the
-//   user can see — including one whose top edge intrudes from below
-//   the fold — is in scope for compilation.
-//
-// Pages with ratio <= 0 are treated as not visible by both picks.
+//   Strict `ratio > 0` predicate — any non-zero sliver counts so
+//   the dominant page is always discoverable even when the viewport
+//   is between pages.
+// - `pickMaxVisible`: highest page index with ratio above
+//   `MAX_VISIBLE_RATIO_THRESHOLD` (default 0.1). This is the
+//   compile-pacing signal: a 1-pixel sliver of page N+1 below the
+//   fold should not promote the wire `maxViewingPage` to N+1 (that
+//   was the off-by-one user-reported on iter 309 / M21.3a).
 
 export interface PageVisibility {
   page: number;
   ratio: number;
 }
+
+// Minimum intersectionRatio for a page to count as "visible" for
+// max-visible / compile-pacing purposes. Below this, the page is
+// considered an accidental sliver (e.g. the top edge of the page
+// after the last fully-visible one). Exported so call sites and
+// tests can reference the load-bearing value by name.
+export const MAX_VISIBLE_RATIO_THRESHOLD = 0.1;
 
 export function pickMostVisible(items: Iterable<PageVisibility>): number | null {
   let best: PageVisibility | null = null;
@@ -33,10 +42,13 @@ export function pickMostVisible(items: Iterable<PageVisibility>): number | null 
   return best ? best.page : null;
 }
 
-export function pickMaxVisible(items: Iterable<PageVisibility>): number | null {
+export function pickMaxVisible(
+  items: Iterable<PageVisibility>,
+  minRatio: number = MAX_VISIBLE_RATIO_THRESHOLD,
+): number | null {
   let max: number | null = null;
   for (const it of items) {
-    if (it.ratio <= 0) continue;
+    if (it.ratio <= minRatio) continue;
     if (max === null || it.page > max) max = it.page;
   }
   return max;

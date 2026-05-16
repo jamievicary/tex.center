@@ -3,10 +3,16 @@
 
 import assert from "node:assert/strict";
 import {
+  MAX_VISIBLE_RATIO_THRESHOLD,
   PageTracker,
   pickMaxVisible,
   pickMostVisible,
 } from "../src/lib/pageTracker.ts";
+
+// Load-bearing default: a 1-pixel sliver of a higher page must not
+// promote max-visible to that page (M21.3a). 0.1 = at least 10% of
+// the page area is in the viewport.
+assert.equal(MAX_VISIBLE_RATIO_THRESHOLD, 0.1);
 
 // pickMostVisible: highest ratio wins.
 assert.equal(
@@ -32,12 +38,13 @@ assert.equal(
 assert.equal(pickMostVisible([{ page: 1, ratio: 0 }]), null);
 assert.equal(pickMostVisible([]), null);
 
-// pickMaxVisible: highest page with any non-zero ratio wins; ratio
-// magnitude is irrelevant beyond the "> 0" predicate.
+// pickMaxVisible: highest page whose ratio exceeds the default
+// threshold (0.1) wins; ratio magnitude beyond the predicate is
+// irrelevant. Slivers below the threshold are ignored.
 assert.equal(
   pickMaxVisible([
     { page: 1, ratio: 0.9 },
-    { page: 2, ratio: 0.05 },
+    { page: 2, ratio: 0.4 },
     { page: 3, ratio: 0.0 },
   ]),
   2,
@@ -46,12 +53,65 @@ assert.equal(
   pickMaxVisible([
     { page: 1, ratio: 0.0 },
     { page: 2, ratio: 0.4 },
-    { page: 5, ratio: 0.01 },
+    { page: 5, ratio: 0.6 },
   ]),
   5,
 );
 assert.equal(pickMaxVisible([{ page: 1, ratio: 0 }]), null);
 assert.equal(pickMaxVisible([]), null);
+
+// Sliver suppression: a 5% intrusion of page 2 must not promote
+// max-visible to 2 — the user-reported off-by-one fix (M21.3a).
+assert.equal(
+  pickMaxVisible([
+    { page: 1, ratio: 0.9 },
+    { page: 2, ratio: 0.05 },
+  ]),
+  1,
+);
+// Sliver-only frame yields null even with a fully-visible-looking
+// ratio below threshold.
+assert.equal(
+  pickMaxVisible([
+    { page: 3, ratio: 0.08 },
+    { page: 4, ratio: 0.02 },
+  ]),
+  null,
+);
+// Boundary: ratio exactly equal to threshold doesn't count (strict
+// `>` predicate). Page 1 with 0.5 wins over page 2 sitting on the
+// 0.1 line.
+assert.equal(
+  pickMaxVisible([
+    { page: 1, ratio: 0.5 },
+    { page: 2, ratio: MAX_VISIBLE_RATIO_THRESHOLD },
+  ]),
+  1,
+);
+// Explicit threshold override: zero recovers the prior strict-`>0`
+// behaviour, useful for callers that genuinely want any-pixel
+// semantics.
+assert.equal(
+  pickMaxVisible(
+    [
+      { page: 1, ratio: 0.9 },
+      { page: 2, ratio: 0.05 },
+    ],
+    0,
+  ),
+  2,
+);
+// Custom threshold: 0.5 demands at least half the page in viewport.
+assert.equal(
+  pickMaxVisible(
+    [
+      { page: 1, ratio: 0.9 },
+      { page: 2, ratio: 0.4 },
+    ],
+    0.5,
+  ),
+  1,
+);
 
 // PageTracker.update returns transitions for both most- and
 // max-visible. A member is non-null iff that value changed.
@@ -76,6 +136,26 @@ assert.equal(pickMaxVisible([]), null);
   assert.deepEqual(t.update(2, 0.0), { mostVisible: 1, maxVisible: 1 });
   assert.equal(t.mostVisible, 1);
   assert.equal(t.maxVisible, 1);
+}
+
+// Tracker honours the max-visible threshold: a sliver intrusion
+// below 0.1 does not flip maxVisible (M21.3a). pickMostVisible
+// still tracks the sliver page as least-dominant since its
+// strict-`>0` predicate is unchanged.
+{
+  const t = new PageTracker();
+  t.update(1, 0.9);
+  assert.equal(t.maxVisible, 1);
+  // Page 2 enters as a 5% sliver — below threshold, max-visible
+  // must stay at 1, and no transition is reported.
+  assert.deepEqual(t.update(2, 0.05), { mostVisible: null, maxVisible: null });
+  assert.equal(t.maxVisible, 1);
+  // Once page 2 climbs above the threshold, max-visible flips.
+  assert.deepEqual(t.update(2, 0.4), { mostVisible: null, maxVisible: 2 });
+  assert.equal(t.maxVisible, 2);
+  // Page 2 retreats to a sliver again: max-visible falls back to
+  // page 1 (still 0.9, above threshold).
+  assert.deepEqual(t.update(2, 0.05), { mostVisible: null, maxVisible: 1 });
 }
 
 // Tracker preserves last-known when an update would leave the map

@@ -26,14 +26,14 @@ routed to (decision deferred post-MVP).
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
-3. **M21.3a / M21.3c — page-prefetch off-by-one.** M21.3b
-   (post-round daemon log) landed iter 319. M21.3a tightens
-   `pickMaxVisible` ratio threshold (pure front-end helper +
-   unit test). M21.3c: capture sidecar `daemon-stdin` +
-   `daemon-round-done` transcript of user-reported "edit on
-   hidden page N+2 ships nothing" repro; fix front-end if
-   `target` is non-`"end"` (contradicts `server.ts:528` hardcode),
-   else file upstream supertex repro on `maxShipout=-1`.
+3. **M21.3c — page-prefetch off-by-one (final slice).** M21.3b
+   (post-round daemon log) landed iter 319; M21.3a (tightened
+   `pickMaxVisible` threshold to 0.1 + unit test) landed iter 324.
+   M21.3c: capture sidecar `daemon-stdin` + `daemon-round-done`
+   transcript of user-reported "edit on hidden page N+2 ships
+   nothing" repro; fix front-end if `target` is non-`"end"`
+   (contradicts `server.ts:528` hardcode), else file upstream
+   supertex repro on `maxShipout=-1`.
 4. **M9.editor-ux remaining slices.** GT-E (info/success/error
    toast spawn + aggregation badge); GT-F wire-driven part
    (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
@@ -242,11 +242,16 @@ violation? }`).
 - **M21.2 (open).** Gold spec: 3-page PDF, scroll page 2 fully
   + page 3 intrusion → sidecar receives target=3. Needs real
   3-page Playwright source + sidecar introspection hook.
-- **M21.3a (open).** Tighten `pickMaxVisible` ratio > threshold
-  (today: > 0). Pure front-end helper + unit test. Today's
-  hardcoded `targetPage: 0` makes the wire effect a no-op, but
-  the fix keeps the `outgoing-viewing-page` debug toast honest
-  for any future iteration that re-wires the gate.
+- **M21.3a (landed iter 324).** `pickMaxVisible` predicate
+  tightened from strict `> 0` to `> MAX_VISIBLE_RATIO_THRESHOLD`
+  (0.1, i.e. ≥10% of page area in viewport). `PageTracker`
+  consumes the same default. Locked by
+  `apps/web/test/pageTracker.test.mjs`. No observable effect on
+  segment shipping today — `server.ts:528` still hardcodes
+  `targetPage: 0` — but the `outgoing-viewing-page` debug toast
+  now stops promoting to N+1 on a sliver intrusion, and the
+  default is in place for any future iteration that re-wires
+  the per-compile target-page gate.
 - **M21.3c (open).** With M21.3b in place: capture sidecar log
   transcript of the user-reported "edit on hidden page N+2
   ships no segment" repro. Fix front-end if `daemon-stdin`
