@@ -12,107 +12,52 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — iter-345 pinned root cause (data-loss on
-   viewer disconnect) and landed the fix.**
-   Iter 344's probe transcript proved the cold-start path is fine:
-   `.cm-content` mounts at 21 s, first pdf-segment at 23 s. The
-   real GT-9 failure is in phase 7: after typing the 46-char
-   sentinel, force-stop, reopen, the rehydrated source is
-   **truncated** — only the first ~12 typed chars survived the
-   round-trip (`preserve-45` instead of the full UUID sentinel).
-
-   Mechanism (server-side trace in `apps/sidecar/src/server.ts` +
-   `compileCoalescer.ts` + `persistence.ts`): the first ~12 Yjs
-   ops arrive, coalescer's 100 ms debounce fires `runCompile`,
-   which calls `maybePersist` and captures the doc state *as of
-   that moment* (`preserve-45`). Remaining 34 chars arrive during
-   the in-flight compile; coalescer sets `pending=true`. Compile
-   finishes; `.finally` schedules a second debounce. Test
-   immediately navigates away → WS closes → `coalescer.cancel()`
-   kills the pending timer → the second compile never runs → the
-   trailing 34 chars in the Y.Doc are never persisted → force-stop
-   destroys the in-memory doc → reopen reads the partial blob.
-
-   This is a real product bug (any user closing the tab during a
-   typing burst loses what they typed after the last debounce-fired
-   compile), not a test artefact.
-
-   **Fix landed iter 345 (`apps/sidecar/src/server.ts`):**
-   - WS-close (last viewer): fire `persistence.maybePersist()`
-     before `coalescer.cancel()`.
-   - Idle-fire (suspend/stop): `persistAllSources()` runs across
-     every project before the user handler, symmetric with
-     `persistAllCheckpoints`.
-   - Fastify `onClose`: `persistAllSources()` before doc destroy.
-   - Pinned by normal test
-     `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`
-     (drive an edit, close WS within the debounce window, poll
-     blob; before the fix the blob stays at the seeded value).
-
-   Closing M20.3 requires:
-   - (i) Deploy iter-345 sidecar image and verify GT-9 +
-     GT-6-stopped GREEN on the next gold pass.
-   - (ii) Prod cold-boot log capture confirming `restoreMs:0`
-     and warmup overlap.
+1. **M20.3 closeout — final RED spec.** Iter-345 Bug A fix
+   (persist-on-disconnect data-loss) deployed; GT-9 flipped GREEN
+   iter 347 gold pass; pinned by normal test
+   `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`.
+   Bug A narrative (mechanism, four sidecar edit sites): iter 345
+   log and git history. **Remaining:**
+   `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) is still
+   RED in iter 347 — re-evaluate root cause now that the Bug A
+   confounder is removed. Most likely candidates: cold-start
+   budget overshoot on a stopped-Machine cold path, or the
+   warmup-fails-then-respawn pattern from iter 347 transcript
+   (≈5 s `compileMs` on first compile because warmup spawned
+   before `writeMain` materialised `main.tex` — see
+   FUTURE_IDEAS "M20.3(a)3").
 
 2. **Bug B — zero pdf-segments on cold-resume edit (user-reported,
-   iter 345 discussion).** User manual repro at
+   iter 345 discussion).** Repro at
    `.autodev/discussion/344_question.md`: existing stopped project
-   reopened; `compile-status running → idle` cycles for both the
-   initial compile and an edit, but **no pdf-segment** is ever
-   shipped. Distinct from Bug A (truncation): GT-9 does receive a
-   pdf-segment for the partial source.
-
-   **Iter 347 investigation outcome.** Captured prod sidecar
-   transcript (DEBUG_COMPILE_LOG already on, default-true). Two
-   relevant cycles observed during the iter-346 gold pass:
-   - Cold-resume on a freshly-rebooted Machine (project `2efd808d`):
-     warmup fails ("main.tex: no such file") because warmup spawns
-     before hydrate writes main.tex; respawn at compile time sees
-     the file → daemon `emit_initial_chunks` ships pages → round=1
-     `maxShipout=2`, `segments=1`, `bytesShipped≈58 kB`,
-     `compileMs≈5 s`. **Cold-resume path is healthy.**
-   - Warm idle reconnect (project `494ddd51` round 19): viewer
-     reconnects after a quiet period; daemon sees on-disk source
-     unchanged from last shipped → `maxShipout=-1`, `segments=0`,
-     `compileMs=9 ms`. Expected daemon no-op. **The client cover
-     here is the `lastSegments` replay at `server.ts` WS-connect
-     path (line 733), NOT the compile output.**
-
-   Neither cycle in current prod logs reproduces the user's
-   transcript (both initial-compile 0.0s AND edit-compile 2.7s
-   shipping zero segments). Plausible causes still in scope:
-   (a) `lastSegments` empty at WS-connect on the user's repro
-       (project state freshly created on this sidecar boot AND
-       first compile after boot was itself a no-op — would need
-       `emit_initial_chunks` to silently emit zero chunks);
-   (b) replay loop bailed early (socket closed mid-replay);
-   (c) something specific to the user's project state (e.g.,
-       Bug-A truncated blob hydrating into a daemon that then
-       sees its own snapshot/pdf-real artefacts as already
-       sufficient).
-
-   **Iter 347 landed diagnostic-only instrumentation** in
-   `apps/sidecar/src/server.ts`:
-   - New `replay-segments` log line at the WS-connect replay path
+   reopened; `compile-status running → idle` cycles for both initial
+   compile and edit, but **no pdf-segment** ever ships. Distinct
+   from Bug A: GT-9 does receive a pdf-segment for the partial
+   source. Iter 347 captured a prod transcript but did not
+   reproduce the user's symptom (see iter 347 log for the two
+   observed cycles); landed diagnostic-only instrumentation:
+   - `replay-segments` log line at WS-connect
      (`{projectId, lastSegmentsLen, replaySent, replayBytes,
-     socketOpen}`) so the next user repro discriminates between
-     "lastSegments was empty" and "replay shipped but client saw
-     nothing else".
-   - Added `lastSegmentsLen` to every `compile ok` log line so we
-     can correlate whether `result.segments.length=0` left a
-     populated cache or wiped it.
+     socketOpen}`).
+   - `lastSegmentsLen` appended to every `compile ok` log.
 
-   **Iter 348+ Bug B follow-up.** Wait for a fresh user-driven
-   manual repro on the iter-347 build, then grep prod logs for
-   `replay-segments`. If `lastSegmentsLen=0` at connect time,
-   root-cause is the initial compile's `emit_initial_chunks`
-   not emitting chunks — open a vendored-supertex sub-investigation
-   (snap_path / pdf_real arg construction in
-   `supertex` CLI → `supertex_daemon`). If `lastSegmentsLen>0`
-   but `replaySent=0`, root-cause is a socket-state race; fix in
-   sidecar. If both shipped fine but client toast didn't fire,
-   it's a client-side WS-frame demux issue.
+   **Next-iteration trigger:** fresh user-driven repro on the
+   iter-347 build. Then `flyctl logs | grep -E
+   "replay-segments|compile ok|round-done"` on the affected
+   project ID gives a one-screen view. Decision tree:
+   - `lastSegmentsLen=0` at connect → initial compile's
+     `emit_initial_chunks` shipped zero chunks; open vendored-
+     supertex sub-investigation (snap_path / pdf_real arg
+     construction in `supertex` CLI → `supertex_daemon`).
+   - `lastSegmentsLen>0` but `replaySent=0` → socket-state race;
+     fix in sidecar.
+   - Both shipped fine but client toast didn't fire → client-side
+     WS-frame demux issue.
+
+   If no organic repro arrives within a few iterations, consider
+   a synthetic gold spec that drives the "warm-reconnect with
+   first-compile-was-no-op" path explicitly.
+
 3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -154,23 +99,16 @@ routed to (decision deferred post-MVP).
 10. **M15 user-bug.** Multi-page seeded GREEN; awaiting
    user-supplied offending source via discussion mode.
 
-**Open red specs (gold):**
+**Open red specs (gold), per iter 347 pass:**
 
-- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 345
-  landed the persist-on-viewer-disconnect fix
-  (`apps/sidecar/src/server.ts`). Expected to flip GREEN once the
-  iter-345 sidecar image is deployed.
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — iter-344
-  pass showed the test does not actually depend on the truncation
-  bug (it only checks the canonical `documentclass` sentinel that
-  the in-sidecar fallback `MAIN_DOC_HELLO_WORLD` also satisfies).
-  Re-evaluate post-deploy; may have been incidentally RED for a
-  different reason (e.g. cold-start budget overshoot).
-- `verifyLiveGt6LiveEditableState` (M13.2(b).3, suspended) —
-  same. Re-evaluate post-deploy.
-- `verifyLiveFullPipelineReused` — intermittent, watch. May be
-  exacerbated by stale per-project Machine images (see iter 342
-  log "Per-project Machine image audit").
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
+  stopped-Machine cold-resume path; investigate independently of
+  the now-fixed Bug A (see priority #1).
+- `verifyLiveFullPipelineReused` — intermittent. May be
+  exacerbated by stale per-project Machine images (iter 342 log
+  "Per-project Machine image audit").
+
+(GT-9, GT-6-suspended both GREEN in iter 347.)
 
 ## 2. Milestones
 
@@ -301,34 +239,16 @@ placeholder. `packages/blobs/src/s3.ts` + `sigv4.ts` (pure-Node
 SigV4 over `fetch`, no external deps); `envSelect` accepts
 explicit `BLOB_STORE_S3_*` or AWS SDK fallback names.
 
-**M20.3 (open).** Tigris bucket `texcenter-blobs` provisioned
+**M20.3 (largely closed).** Tigris `texcenter-blobs` provisioned
 iter 327; `BLOB_STORE=s3` + AWS_* secrets live on both apps.
-Cold-start instrumentation (iter 328–330) pinned the 4.3 s
-`compileMs` term as dominant. Optimisations landed:
-- **(a) [iter 331]** `Compiler.warmup()` overlaps daemon
-  format-load with WS handshake / hydrate / restore.
-- **(a)2 [iter 332]** `Compiler.supportsCheckpoint:false`
-  short-circuits `restore`/`snapshot` for all current
-  implementations (flip to `true` is M7.4.2's job).
-- **(b) preservation gold spec [iter 333–335]**
-  `verifyLiveGt9StoppedPreservesEdits.spec.ts` — types visible
-  body sentinel, waits for `pdf-segment` (proves persist), force-
-  stops Machine, reopens, asserts sentinel in `.cm-content`.
-  Per-phase diagnostic logs + 8-min wall.
-- **(c) suspend race fix [iter 340 + iter 343]** cold boot AND
-  viewer-disconnect 1→0 now arm only the stop stage. See M20.1
-  above and `FUTURE_IDEAS.md` for the explicit tab-close wire
-  signal that would re-enable fast suspend.
-- **(d) persist-on-disconnect [iter 345]** WS close (last viewer),
-  idle-fire, and Fastify `onClose` now all flush every project's
-  Y.Doc source via `persistence.maybePersist()`. Closes the
-  trailing-edits data-loss bug pinned by iter-345's reading of
-  the iter-344 probe transcript. Pinned by normal test
-  `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`.
-
-**Closing M20.3:** GT-9 + GT-6-stopped GREEN on next gold pass
-post-iter-345 deploy; prod cold-boot log capture confirming
-`restoreMs:0` + warmup overlap.
+Iter 328–330 instrumentation pinned ≈4.3 s `compileMs` as
+dominant cold-start term. Landed sub-slices: (a) iter 331
+`Compiler.warmup()` overlap; (a)2 iter 332 checkpoint short-
+circuit (`supportsCheckpoint:false`); (b) iter 333–335 GT-9
+preservation gold spec; (c) iter 340+343 suspend-race fix
+(see M20.1); (d) iter 345 persist-on-disconnect fix (pinned
+by `serverPersistOnViewerDisconnect.test.mjs`). GT-9 GREEN
+iter 347. **Open:** GT-6-stopped (see priority #1).
 
 Tuning: `SIDECAR_SUSPEND_MS` is currently inert in production
 (no arm site after iter 343). `SIDECAR_STOP_MS` (5 min default)
@@ -421,14 +341,8 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M20.2; M21.1; M21.3a/b;
-M22.1/2-local/3/4a/4b/5; M23.1/2/4/5;
-iter-200 coalescer extraction; iter-258/259 boot-time session
-sweep; iter-280 layout math extraction + iter-290 dead-branch
-removal; iter-293 startup `pw-*` sweep + machine-count threshold
-bump; iter-320 idle-stage factory refactor;
-iter-331/332/340/343 M20.3 cold-start sub-slices;
-iter-345 persist-on-disconnect data-loss fix (M20.3 GT-9 root cause).
+M17; M17.b; M18.1; M19; M20.1; M20.2; M20.3 (bar GT-6-stopped);
+M21.1; M21.3a/b; M22.1/2-local/3/4a/4b/5; M23.1/2/4/5.
 
 See git log and `.autodev/logs/` for narrative detail.
 
