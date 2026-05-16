@@ -78,11 +78,13 @@ function makeClock() {
   assert.equal(b.text, "0.5s — compile-status idle");
 }
 
-// Case 5 (M22.4b): pdf-segment toasts inside a cycle now carry the
-// elapsed-time prefix; non-prefixable events (outgoing-doc-update)
-// still pass through unchanged. The segment format also follows
-// M22.4b: stamped → `[N.out] <bytes> bytes`, unstamped → `<bytes>
-// bytes`.
+// Case 5 (M22.4b + iter-374 iter-B′): pdf-segment toasts inside a
+// cycle carry the elapsed-time prefix; non-prefixable events
+// (outgoing-doc-update) still pass through unchanged. The segment
+// format follows iter-B′: `shipoutPage>1` → `[1..N.out] <bytes>
+// bytes` (the range makes the sidecar's chunks-1..N concatenation
+// visible); `shipoutPage===1` → `[1.out] <bytes> bytes`; unstamped
+// → `<bytes> bytes`.
 {
   const c = makeClock();
   const tr = createCompileCycleTracker({ now: c.now });
@@ -94,7 +96,7 @@ function makeClock() {
     bytes: 1234,
     shipoutPage: 2,
   });
-  assert.equal(seg.text, "1.0s — [2.out] 1234 bytes");
+  assert.equal(seg.text, "1.0s — [1..2.out] 1234 bytes");
   assert.equal(seg.category, "debug-blue");
   const yjs = tr.observe({ kind: "outgoing-doc-update", bytes: 7 });
   assert.equal(yjs.text, "Yjs op 7B");

@@ -243,21 +243,31 @@ function newClient() {
   assert.equal(a.aggregateKey, c2.aggregateKey);
   assert.notEqual(a.aggregateKey, b.aggregateKey);
   // pdf-segment and yjs-op share a single key per kind (burst
-  // coalescing); file-op-error keyed by reason. M22.4b: a
-  // stamped-page segment formats as `[N.out] <bytes> bytes`; an
-  // unstamped one falls back to `<bytes> bytes`. Both kinds share
-  // the same aggregateKey so a burst still coalesces.
+  // coalescing); file-op-error keyed by reason. M22.4b + iter-374
+  // iter-B′: an unstamped segment is `<bytes> bytes`; a stamped
+  // `shipoutPage===1` is `[1.out] <bytes> bytes`; a stamped
+  // `shipoutPage>1` is `[1..N.out] <bytes> bytes` — the range form
+  // surfaces that the sidecar concatenates chunks `1..N.out` per
+  // round (per `assembleSegment(maxShipout)`). Both kinds share the
+  // same aggregateKey so a burst still coalesces.
   const seg1 = debugEventToToast({ kind: "pdf-segment", bytes: 1 });
   const seg2 = debugEventToToast({ kind: "pdf-segment", bytes: 99 });
   assert.equal(seg1.aggregateKey, seg2.aggregateKey);
   assert.equal(seg1.text, "1 bytes");
   assert.equal(seg2.text, "99 bytes");
+  const segPage1 = debugEventToToast({
+    kind: "pdf-segment",
+    bytes: 512,
+    shipoutPage: 1,
+  });
+  assert.equal(segPage1.text, "[1.out] 512 bytes");
+  assert.equal(segPage1.aggregateKey, seg1.aggregateKey);
   const seg3 = debugEventToToast({
     kind: "pdf-segment",
     bytes: 1024,
     shipoutPage: 4,
   });
-  assert.equal(seg3.text, "[4.out] 1024 bytes");
+  assert.equal(seg3.text, "[1..4.out] 1024 bytes");
   assert.equal(seg3.aggregateKey, seg1.aggregateKey);
   const e1 = debugEventToToast({
     kind: "file-op-error",

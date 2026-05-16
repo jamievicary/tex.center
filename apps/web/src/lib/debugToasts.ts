@@ -31,9 +31,11 @@ export function debugEventToToast(event: WsDebugEvent): ToastInput {
       return {
         category: "debug-blue",
         text:
-          event.shipoutPage !== undefined && event.shipoutPage > 0
-            ? `[${event.shipoutPage}.out] ${event.bytes} bytes`
-            : `${event.bytes} bytes`,
+          event.shipoutPage !== undefined && event.shipoutPage > 1
+            ? `[1..${event.shipoutPage}.out] ${event.bytes} bytes`
+            : event.shipoutPage === 1
+              ? `[1.out] ${event.bytes} bytes`
+              : `${event.bytes} bytes`,
         aggregateKey: "debug:pdf-segment",
       };
     case "outgoing-doc-update":

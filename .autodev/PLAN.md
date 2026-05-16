@@ -40,17 +40,18 @@ routed to (decision deferred post-MVP).
      (cold-open targetPage=1; view=4 promotes subsequent compiles)
      and `apps/web/test/wsClientLastPage.test.mjs` (tri-state
      mirror; cascade-end replace).
-   - **Iter B′ — toast-text format slice (open, queued).** Small
-     standalone slice. `apps/web/src/lib/debugToasts.ts`
-     pdf-segment branch: `shipoutPage > 1` → `[1..N.out] ${bytes}
-     bytes` (range, makes chunks-1..N concatenation visible);
+   - **Iter B′ — toast-text format slice (landed iter 374).**
+     `apps/web/src/lib/debugToasts.ts` pdf-segment branch:
+     `shipoutPage > 1` → `[1..N.out] ${bytes} bytes` (range,
+     makes chunks-1..N concatenation visible);
      `shipoutPage === 1` → `[1.out] ${bytes} bytes`;
      `shipoutPage` undefined/0 → `${bytes} bytes` (unchanged).
      `lastPage` deliberately NOT in the toast (placeholder slot
      is the user-visible signal; `flyctl logs` already carries
-     `lastPageReached`). New unit case in
-     `debugToastsToggle.test.mjs` (or sibling) pinning both
-     branches.
+     `lastPageReached`). Pins: `wsClientDebugEvents.test.mjs`
+     Case 7 (range form + page-1 form + unstamped fallback) and
+     `compileCycleTracker.test.mjs` Case 5 (range form with
+     elapsed-time prefix).
    - **Iter B-gold — bootstrap-cascade gold case (open, deferred).**
      Extend `verifyLivePdfMultiPage.spec.ts` with: fresh 2-page
      project, wait for page 1 render + placeholder for page 2,
