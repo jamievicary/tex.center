@@ -60,6 +60,51 @@ class TestWebDockerfile(unittest.TestCase):
             "`pnpm install --frozen-lockfile`, or extend pnpm-workspace.yaml.",
         )
 
+    def test_source_copy_covers_web_workspace_deps(self) -> None:
+        # The manifest-copy block above is necessary but not sufficient:
+        # `pnpm install` resolves a workspace symlink to an empty
+        # directory if only the package.json is copied, and the failure
+        # surfaces only at `vite build` time with a confusing
+        # `[commonjs--resolver] Failed to resolve entry for package`
+        # error (iter 323 -> 328 deploy regression; see logs/329.md).
+        # Every workspace:* dep of apps/web must be source-COPYed
+        # before the `pnpm --filter @tex-center/web build` line.
+        web_pkg = json.loads((ROOT / "apps" / "web" / "package.json").read_text())
+        ws_deps: set[str] = set()
+        for section in ("dependencies", "devDependencies"):
+            for name, spec in (web_pkg.get(section) or {}).items():
+                if isinstance(spec, str) and spec.startswith("workspace:"):
+                    ws_deps.add(name)
+        # Map @tex-center/<x> -> packages/<x> (or apps/<x>) by reading
+        # each workspace package's package.json name.
+        name_to_dir: dict[str, str] = {}
+        for rel in _workspace_package_dirs():
+            data = json.loads((ROOT / rel / "package.json").read_text())
+            name = data.get("name")
+            if isinstance(name, str):
+                name_to_dir[name] = rel
+        # Truncate the Dockerfile text at the first `pnpm ... build`
+        # invocation so only pre-build COPYs count.
+        m = re.search(r"(?m)^RUN\s+pnpm\s+.*build\b", self.text)
+        self.assertIsNotNone(m, "expected a `RUN pnpm ... build` line")
+        pre_build = self.text[: m.start()]
+        source_copied = set(re.findall(r"COPY\s+([\w./-]+)/\s+\S+/", pre_build))
+        missing: list[str] = []
+        for dep in sorted(ws_deps):
+            self.assertIn(
+                dep, name_to_dir,
+                f"apps/web workspace dep {dep} not found in pnpm-workspace.yaml",
+            )
+            dep_dir = name_to_dir[dep]
+            if dep_dir not in source_copied:
+                missing.append(f"{dep} ({dep_dir}/)")
+        self.assertEqual(
+            missing, [],
+            f"apps/web/Dockerfile is missing source COPY for workspace deps "
+            f"used by apps/web: {missing}. Add "
+            f"`COPY <pkg>/ <pkg>/` before the `pnpm ... build` step.",
+        )
+
     def test_install_runs_frozen(self) -> None:
         # Drift between lockfile and manifests should fail the
         # build, not silently re-resolve.

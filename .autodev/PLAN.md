@@ -25,9 +25,17 @@ routed to (decision deferred post-MVP).
    instrumentation landed iter 328: `sidecar-listening` log line
    carries `bootElapsedMs`, and the `compile ok` record carries
    `phases: { hydrateMs, restoreMs, writeMainMs, persistMs,
-   compileMs }`. Next slice: scrape `flyctl logs -a
-   tex-center-sidecar` on a fresh cold start (`fly machine stop`
-   first), find the dominant phase, close it. After that, add a real preservation gold spec —
+   compileMs }`.
+   **Iter 329 caveat:** every web-tier deploy 323→328 was
+   silently failing (`apps/web/Dockerfile` was not source-copying
+   the new `packages/blobs/` workspace dep). Iter 329 fixed the
+   Dockerfile and added
+   `test_source_copy_covers_web_workspace_deps` to pin the
+   regression class. The instrumentation is dark in prod until
+   the iter-329 deploy goes green. Next slice (waits on that):
+   scrape `flyctl logs -a tex-center-sidecar` on a fresh cold
+   start (`fly machine stop` first), find the dominant phase,
+   close it. After that, add a real preservation gold spec —
    create + edit unique string + force-stop + reopen + assert
    bytes round-trip (the existing GT-6-stopped only checks the
    seed placeholder, which the hello-world fallback satisfies).

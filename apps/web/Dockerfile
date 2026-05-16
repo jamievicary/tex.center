@@ -42,10 +42,14 @@ COPY packages/protocol/package.json packages/protocol/
 RUN pnpm install --frozen-lockfile
 
 # Source. Copy only what apps/web's build needs: the web app itself
-# plus its workspace deps (auth, db, protocol). The sidecar and
-# blobs package are not in apps/web's import graph.
+# plus its workspace deps (auth, blobs, db, protocol). `blobs`
+# became reachable from the web SSR graph in iter 323 when
+# `coldSourceFor` was wired into `+page.server.ts` and the
+# resolver's `seedDocFor`. The sidecar is still not in the import
+# graph.
 COPY apps/web/ apps/web/
 COPY packages/auth/ packages/auth/
+COPY packages/blobs/ packages/blobs/
 COPY packages/db/ packages/db/
 COPY packages/protocol/ packages/protocol/
 
