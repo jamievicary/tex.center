@@ -12,21 +12,27 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — verify cold-start fix + close GT-9/GT-6-stopped.**
-   All planned code work for M20.3 has landed (warmup overlap,
-   `supportsCheckpoint:false` short-circuit, cold-boot suspend race
-   fix). Closing the milestone needs:
-   - (i) GT-9 (`verifyLiveGt9StoppedPreservesEdits`) GREEN — pins
-     the sidecar→Tigris→sidecar byte round-trip on a force-stop +
-     cold reopen.
-   - (ii) GT-6-stopped (`verifyLiveGt6LiveEditableStateStopped`)
-     GREEN — pins the cold-boot editable-state latency.
-   - (iii) Prod cold-boot log capture confirming `restoreMs:0` and
-     warmup overlap. Verification only, no code.
+1. **M20.3 closeout — second suspend-race fix needed.**
+   Iter-340 removed the *startup* suspend arm; iter-341 gold
+   re-ran with that fix deployed and GT-9 + GT-6-stopped are
+   **still RED** with the same `flyState=starting → suspended`
+   shape. Hypothesis (iter 342): the residual cause is the
+   *disconnect-arm* path — a transient cold-reopen WS open-then-
+   close cycle drives `noteViewerRemoved` → 5 s suspend timer →
+   self-suspend; the client never sees frames on the new WS
+   (wsFrames stays at 11 across the entire 180 s probe). Iter 342
+   added sidecar `viewer-*` / `idle-*` / `ws-upgrade-*` logs to
+   pin the timing; iter 343 reads the next gold transcript paired
+   with prod logs and applies the targeted fix (likely: don't arm
+   `suspendStage` on the first 1→0 transition unless the viewer
+   was held >N seconds, or reserve `suspendStage` for an explicit
+   tab-close signal once the wire carries one).
 
-   Iter 340's suspend-race fix is the most likely cause of both
-   prior RED specs; verify on next gold pass once sidecar redeploy
-   completes.
+   Closing M20.3 still requires:
+   - (i) GT-9 GREEN.
+   - (ii) GT-6-stopped GREEN.
+   - (iii) Prod cold-boot log capture confirming `restoreMs:0`
+     and warmup overlap.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -58,11 +64,14 @@ routed to (decision deferred post-MVP).
 
 **Open red specs (gold):**
 
-- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — expected
-  GREEN on next pass post-iter-340-fix deploy.
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
-  expected GREEN on next pass post-iter-340-fix deploy.
-- `verifyLiveFullPipelineReused` — intermittent, watch.
+- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 341
+  confirmed still RED post-iter-340 deploy; iter 342 added
+  diagnostic logs for iter 343's root-cause pass.
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — same
+  shape, same plan.
+- `verifyLiveFullPipelineReused` — intermittent, watch. May be
+  exacerbated by stale per-project Machine images (see iter 342
+  log "Per-project Machine image audit").
 
 ## 2. Milestones
 

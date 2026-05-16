@@ -285,8 +285,15 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     }
     function arm(): void {
       clear();
+      // M20.3 iter-342 diagnostic: trace timer arming so the
+      // production log records whether a given suspend/stop fire was
+      // preceded by a cold-boot arm, a 1→0 disconnect arm, or a
+      // re-arm from the handler. Pairs with the `viewer-*` and
+      // `idle-fire` records below.
+      app.log.info({ stage: name, ms: timeoutMs }, "idle-arm");
       timer = setTimeout(() => {
         timer = null;
+        app.log.info({ stage: name }, "idle-fire");
         void (async () => {
           await persistAllCheckpoints();
           try {
@@ -358,11 +365,13 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
   function noteViewerAdded(): void {
     viewerCount += 1;
     clearIdleTimers();
+    app.log.info({ viewerCount }, "viewer-added");
   }
 
   function noteViewerRemoved(): void {
     viewerCount -= 1;
     if (viewerCount < 0) viewerCount = 0;
+    app.log.info({ viewerCount }, "viewer-removed");
     if (viewerCount === 0) {
       armIdleTimers();
     }
@@ -678,6 +687,10 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
       };
       project.viewers.add(client);
       noteViewerAdded();
+      app.log.info(
+        { projectId, viewerCount },
+        "ws-upgrade-open",
+      );
 
       // Greet, then ship current Yjs state and a fresh compile.
       // Hydration may still be in flight; await before snapshotting
@@ -811,8 +824,17 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         }
       });
 
-      socket.on("close", () => {
-        if (!project.viewers.has(client)) return;
+      socket.on("close", (code, reasonBuf) => {
+        const hadViewer = project.viewers.has(client);
+        const reason =
+          reasonBuf && reasonBuf.length > 0
+            ? reasonBuf.toString("utf8")
+            : "";
+        app.log.info(
+          { projectId, hadViewer, code, reason },
+          "ws-upgrade-close",
+        );
+        if (!hadViewer) return;
         project.viewers.delete(client);
         noteViewerRemoved();
         project.doc.off("update", onTextChange);
