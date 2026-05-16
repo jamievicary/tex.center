@@ -12,79 +12,107 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 closeout — iter-343 fix didn't suffice; iter-344
-   diagnostic probe added.**
-   Iter 340 removed the *startup* suspend arm. Iter 343
-   generalised that to also remove the *disconnect* suspend arm,
-   so `buildServer` now arms only the stop stage on every idle
-   entry. CD pinned the iter-343 image to `SIDECAR_IMAGE` and
-   `tex-center` redeployed at 07:38:21 Z — confirmed live before
-   the iter-344 gold pass at 08:28 Z.
+1. **M20.3 closeout — iter-345 pinned root cause (data-loss on
+   viewer disconnect) and landed the fix.**
+   Iter 344's probe transcript proved the cold-start path is fine:
+   `.cm-content` mounts at 21 s, first pdf-segment at 23 s. The
+   real GT-9 failure is in phase 7: after typing the 46-char
+   sentinel, force-stop, reopen, the rehydrated source is
+   **truncated** — only the first ~12 typed chars survived the
+   round-trip (`preserve-45` instead of the full UUID sentinel).
 
-   Despite the fix being on the wire, the iter-344 gold pass
-   reproduced GT-9 + GT-6-stopped + GT-6-suspended RED, all with
-   the same shape: 60 s `cmContent.waitFor` timeout, zero signal
-   beyond `phase=1-cold-start:goto`. So the iter-343 hypothesis
-   (transient cold-reopen WS open-then-close → 5 s suspend
-   self-fire) was either wrong or only partially right.
+   Mechanism (server-side trace in `apps/sidecar/src/server.ts` +
+   `compileCoalescer.ts` + `persistence.ts`): the first ~12 Yjs
+   ops arrive, coalescer's 100 ms debounce fires `runCompile`,
+   which calls `maybePersist` and captures the doc state *as of
+   that moment* (`preserve-45`). Remaining 34 chars arrive during
+   the in-flight compile; coalescer sets `pending=true`. Compile
+   finishes; `.finally` schedules a second debounce. Test
+   immediately navigates away → WS closes → `coalescer.cancel()`
+   kills the pending timer → the second compile never runs → the
+   trailing 34 chars in the Y.Doc are never persisted → force-stop
+   destroys the in-memory doc → reopen reads the partial blob.
 
-   Iter 344 added a polling probe inside GT-9's phase-1
-   cmContent wait that, every ~5 s, records cm-content visibility,
-   `.editor` text length, editor lifecycle marks
-   (route-mounted / ws-open / yjs-hydrated / first-text-paint /
-   first-pdf-segment), and the wire-side counters
-   (wsOpenCount / wsCloseCount / wsFrameCount / lastWsCloseInfo /
-   pageErrors). Next gold pass either succeeds (probes are silent
-   noise) or fails with a transcript pinning whether the hang is
-   at the WS upgrade, the Yjs hydrate, or the CodeMirror mount.
+   This is a real product bug (any user closing the tab during a
+   typing burst loses what they typed after the last debounce-fired
+   compile), not a test artefact.
+
+   **Fix landed iter 345 (`apps/sidecar/src/server.ts`):**
+   - WS-close (last viewer): fire `persistence.maybePersist()`
+     before `coalescer.cancel()`.
+   - Idle-fire (suspend/stop): `persistAllSources()` runs across
+     every project before the user handler, symmetric with
+     `persistAllCheckpoints`.
+   - Fastify `onClose`: `persistAllSources()` before doc destroy.
+   - Pinned by normal test
+     `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`
+     (drive an edit, close WS within the debounce window, poll
+     blob; before the fix the blob stays at the seeded value).
 
    Closing M20.3 requires:
-   - (i) iter-345 reads the iter-344 GT-9 probe transcript and
-     forms a fresh hypothesis based on which lifecycle mark is
-     missing.
-   - (ii) Eventual GT-9 + GT-6-stopped GREEN.
-   - (iii) Prod cold-boot log capture confirming `restoreMs:0`
+   - (i) Deploy iter-345 sidecar image and verify GT-9 +
+     GT-6-stopped GREEN on the next gold pass.
+   - (ii) Prod cold-boot log capture confirming `restoreMs:0`
      and warmup overlap.
-2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
+
+2. **Bug B — zero pdf-segments on cold-resume edit (user-reported,
+   iter 345 discussion).** User manual repro at
+   `.autodev/discussion/344_question.md`: existing stopped project
+   reopened; `compile-status running → idle` cycles for both the
+   initial compile and an edit, but **no pdf-segment** is ever
+   shipped. Distinct from Bug A (truncation): GT-9 does receive a
+   pdf-segment for the partial source. Iter 346 priority:
+   - Capture `compile-source` + `daemon-stdin` + `daemon-round-done`
+     transcript of a failing round from prod (push
+     `DEBUG_COMPILE_LOG=1` as Fly secret first if needed).
+   - Compare on-disk `main.tex` first/last 80 bytes against
+     `p.text.toString().slice(0,80)` at compile-time.
+   - Decide whether root-cause is daemon no-op detector,
+     writeMain path, or something in the cold-resume hydrate→
+     compile sequence.
+3. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
-3. **M21.3c — page-prefetch off-by-one (final slice).** Capture
+4. **M21.3c — page-prefetch off-by-one (final slice).** Capture
    sidecar `daemon-stdin` + `daemon-round-done` transcript of
    user-reported "edit on hidden page N+2 ships nothing" repro;
    fix front-end if `target` is non-`"end"` (contradicts
    `server.ts:528` hardcode), else file upstream supertex repro
    on `maxShipout=-1`.
-4. **M9.editor-ux remaining slices.** GT-E (info/success/error
+5. **M9.editor-ux remaining slices.** GT-E (info/success/error
    toast spawn + aggregation badge); GT-F wire-driven part
    (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
    `SyncStatus` indicator (blocked on a sidecar persistence-ack
    wire signal that doesn't exist yet).
-5. **M18.2 / M18.3 preview-quality follow-ups.** ResizeObserver
+6. **M18.2 / M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change (coalesced trailing
    100 ms); forced-DPR=2 visual snapshot. Deferred until reported
    / Playwright stable-snapshot primitive exists.
-6. **M16.aesthetic.** Type pair + 4-colour palette retune for
+7. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar. Blocked on Playwright stable snapshot primitive (same
    blocker as M18.3).
-7. **M11.2b right-click context menu** (Create / Rename / Delete,
+8. **M11.2b right-click context menu** (Create / Rename / Delete,
    click-outside + Esc, keyboard nav). Then M11.3 (virtual-folder
    create), M11.4 (intra-tree DnD = rename), M11.5b (binary
    upload, blocked on wire design), M11.5c (drag-out download).
-8. **M15 user-bug.** Multi-page seeded GREEN; awaiting
+9. **M15 user-bug.** Multi-page seeded GREEN; awaiting
    user-supplied offending source via discussion mode.
 
 **Open red specs (gold):**
 
-- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 343
-  fix is live but spec stayed RED at the iter-344 gold pass with
-  zero signal beyond the goto phase. Iter 344 added a periodic
-  probe; iter 345 reads the transcript.
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — same
-  shape; carry the iter-344 diagnostic over once we know what to
-  pin.
+- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — iter 345
+  landed the persist-on-viewer-disconnect fix
+  (`apps/sidecar/src/server.ts`). Expected to flip GREEN once the
+  iter-345 sidecar image is deployed.
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — iter-344
+  pass showed the test does not actually depend on the truncation
+  bug (it only checks the canonical `documentclass` sentinel that
+  the in-sidecar fallback `MAIN_DOC_HELLO_WORLD` also satisfies).
+  Re-evaluate post-deploy; may have been incidentally RED for a
+  different reason (e.g. cold-start budget overshoot).
 - `verifyLiveGt6LiveEditableState` (M13.2(b).3, suspended) —
-  same shape, also RED on iter-344 gold pass.
+  same. Re-evaluate post-deploy.
 - `verifyLiveFullPipelineReused` — intermittent, watch. May be
   exacerbated by stale per-project Machine images (see iter 342
   log "Per-project Machine image audit").
@@ -236,9 +264,15 @@ Cold-start instrumentation (iter 328–330) pinned the 4.3 s
   viewer-disconnect 1→0 now arm only the stop stage. See M20.1
   above and `FUTURE_IDEAS.md` for the explicit tab-close wire
   signal that would re-enable fast suspend.
+- **(d) persist-on-disconnect [iter 345]** WS close (last viewer),
+  idle-fire, and Fastify `onClose` now all flush every project's
+  Y.Doc source via `persistence.maybePersist()`. Closes the
+  trailing-edits data-loss bug pinned by iter-345's reading of
+  the iter-344 probe transcript. Pinned by normal test
+  `apps/sidecar/test/serverPersistOnViewerDisconnect.test.mjs`.
 
 **Closing M20.3:** GT-9 + GT-6-stopped GREEN on next gold pass
-post-iter-343 deploy; prod cold-boot log capture confirming
+post-iter-345 deploy; prod cold-boot log capture confirming
 `restoreMs:0` + warmup overlap.
 
 Tuning: `SIDECAR_SUSPEND_MS` is currently inert in production
@@ -338,7 +372,8 @@ iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
 bump; iter-320 idle-stage factory refactor;
-iter-331/332/340/343 M20.3 cold-start sub-slices.
+iter-331/332/340/343 M20.3 cold-start sub-slices;
+iter-345 persist-on-disconnect data-loss fix (M20.3 GT-9 root cause).
 
 See git log and `.autodev/logs/` for narrative detail.
 

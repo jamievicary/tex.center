@@ -295,6 +295,7 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         timer = null;
         app.log.info({ stage: name }, "idle-fire");
         void (async () => {
+          await persistAllSources();
           await persistAllCheckpoints();
           try {
             handler!({
@@ -498,6 +499,24 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         app.log.warn(
           { err: errorMessage(e), projectId: p.id },
           "checkpoint persist failed",
+        );
+      }
+    }
+  }
+
+  // M20.3 GT-9 fix (iter 345). Flush every project's Y.Doc source
+  // to its persistence layer. Symmetric with
+  // `persistAllCheckpoints`. Used on idle-fire and Fastify
+  // `onClose` so the soft-shutdown paths can't lose trailing edits
+  // that arrived after the last `runCompile`'s `maybePersist`.
+  async function persistAllSources(): Promise<void> {
+    for (const p of projects.values()) {
+      try {
+        await p.persistence.maybePersist();
+      } catch (e) {
+        app.log.warn(
+          { err: errorMessage(e), projectId: p.id },
+          "source persist on shutdown failed",
         );
       }
     }
@@ -834,6 +853,24 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
         project.doc.off("update", onTextChange);
         project.doc.off("update", onDocUpdate);
         if (project.viewers.size === 0) {
+          // M20.3 GT-9 fix (iter 345): flush any unpersisted Yjs ops
+          // before tearing down the debounce timer. Mechanism — the
+          // last in-flight compile's `maybePersist` captures the doc
+          // state at compile-start; Yjs ops that arrive *during* that
+          // compile set `coalescer.pending=true` and would normally
+          // be flushed by a second debounce-fired compile after
+          // `.finally`. Cancelling the coalescer here drops that
+          // second compile, so the trailing chars in the Y.Doc never
+          // make it to the blob. A direct `maybePersist` (which reads
+          // the current `Y.Text` state) is the right thing here:
+          // identical write to what the next compile would have done,
+          // minus the compile itself.
+          project.persistence.maybePersist().catch((err) => {
+            app.log.warn(
+              { err: errorMessage(err), projectId },
+              "final maybePersist on viewer-disconnect failed",
+            );
+          });
           project.coalescer.cancel();
         }
       });
@@ -842,6 +879,11 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
 
   app.addHook("onClose", async () => {
     clearIdleTimers();
+    // M20.3 GT-9 fix (iter 345). Final source flush before tearing
+    // down the docs. `createStopHandler` calls `app.close()` on idle
+    // stop; any explicit `app.close()` (test cleanup, SIGTERM-driven
+    // graceful shutdown) gets the same flush invariant.
+    await persistAllSources();
     for (const p of projects.values()) {
       p.coalescer.cancel();
       await p.compiler.close();

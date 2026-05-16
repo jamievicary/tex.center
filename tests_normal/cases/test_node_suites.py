@@ -50,6 +50,15 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_blobs(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverBlobs.test.mjs")
 
+    def test_sidecar_persist_on_viewer_disconnect(self) -> None:
+        _run_tsx(
+            ROOT
+            / "apps"
+            / "sidecar"
+            / "test"
+            / "serverPersistOnViewerDisconnect.test.mjs",
+        )
+
     def test_sidecar_server_create_file(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverCreateFile.test.mjs")
 
