@@ -115,9 +115,23 @@ routed to (decision deferred post-MVP).
 - `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
   stopped-Machine cold-resume path; investigate independently of
   the now-fixed Bug A (see priority #1).
-- `verifyLiveFullPipelineReused` — intermittent. May be
-  exacerbated by stale per-project Machine images (iter 342 log
-  "Per-project Machine image audit").
+- `verifyLiveFullPipelineReused` — RED iter 354/355, root cause
+  pinned and Machine recreated iter 356. The reused-project
+  Machine `e8201edb0d3d28` was on a pre-iter-317 sidecar image
+  predating the M22.4b 17-byte pdf-segment header bump. The FE
+  decoder (`packages/protocol/src/index.ts:185-200`) read body
+  bytes 12..16 as `shipoutPage`; with an old-format frame those
+  bytes are the PDF magic `%PDF` (0x25504446 = 626017350, which
+  is exactly the value the iter-354 timeline reported). `bytes
+  .length !== segLen` then threw "pdf-segment payload truncated"
+  out of `decodeFrame`, the WS layer swallowed it into
+  `_lastError`, and PdfViewer never received a non-null `src`.
+  Iter 356 destroyed the stale Machine and deleted its
+  `machine_assignments` row; the next gold pass provisions a
+  fresh Machine on the current image. Defence-in-depth: iter 356
+  also added `console.error` on `decodeFrame` failure in
+  `apps/web/src/lib/wsClient.ts` so future wire-protocol drift
+  surfaces in the iter-355 fixture's browser-diagnostics capture.
 
 (GT-9, GT-6-suspended both GREEN in iter 347.)
 

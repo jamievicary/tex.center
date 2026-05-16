@@ -171,7 +171,17 @@ export class WsClient {
     try {
       decoded = decodeFrame(frame);
     } catch (e) {
-      this._lastError = errorMessage(e);
+      const msg = errorMessage(e);
+      this._lastError = msg;
+      // Iter 356: a stale per-project sidecar image (pre-M22.4b
+      // 17-byte pdf-segment header) silently truncates the
+      // decoded `bytes` and throws "pdf-segment payload truncated"
+      // here — the WS layer used to swallow it, hiding the
+      // protocol-drift symptom from the iter-355 fixture's
+      // console.error capture. Surface decode errors at error
+      // level so future wire-protocol drift fails loudly.
+      // eslint-disable-next-line no-console
+      console.error("[WsClient] decodeFrame failed:", msg);
       this.emit();
       return;
     }
