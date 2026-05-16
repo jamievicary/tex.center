@@ -12,129 +12,30 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.3 — cold-start latency + cold-cycle gold spec.**
-   Tigris bucket `texcenter-blobs` provisioned iter 327;
-   `BLOB_STORE=s3` + AWS_* secrets live on both `tex-center` and
-   `tex-center-sidecar`. Iter 329 unblocked the iter-328
-   instrumentation in prod (web Dockerfile fix); iter 330
-   captured one cold-start cycle:
-   - Wall-clock ~10.9 s from `Pulling container image` to first
-     `compile ok` for an image-warm stopped→started Machine.
-   - In-sidecar `runCompile` first compile: `elapsedMs:4263`,
-     `phases:{hydrateMs:0, restoreMs:273, writeMainMs:3,
-     persistMs:0, compileMs:4258}`.
-   - **Dominant term: `compileMs:4258` ≈ supertex daemon's
-     first-time `.fmt` load.** `daemon ready` stderr marker
-     arrives ~50 ms before `compile ok`, so practically the
-     entire 4.3 s is `ensureReady()` startup rather than the
-     first round.
-   - Capture: `.autodev/state/cold_start_phases_330.txt`.
-   - The 89 s figure that pinned this milestone was from the
-     `globalSetup` end-to-end warmup path (full editor SSR + WS
-     dial + possible cold image-pull) measured pre-instrumentation;
-     non-comparable to the 10.9 s above. Worst-case true cold
-     image-pull data point still missing.
+1. **M20.3 closeout — verify cold-start fix + close GT-9/GT-6-stopped.**
+   All planned code work for M20.3 has landed (warmup overlap,
+   `supportsCheckpoint:false` short-circuit, cold-boot suspend race
+   fix). Closing the milestone needs:
+   - (i) GT-9 (`verifyLiveGt9StoppedPreservesEdits`) GREEN — pins
+     the sidecar→Tigris→sidecar byte round-trip on a force-stop +
+     cold reopen.
+   - (ii) GT-6-stopped (`verifyLiveGt6LiveEditableStateStopped`)
+     GREEN — pins the cold-boot editable-state latency.
+   - (iii) Prod cold-boot log capture confirming `restoreMs:0` and
+     warmup overlap. Verification only, no code.
 
-   **M20.3(a) [landed iter 331].** `Compiler.warmup(): Promise<void>`
-   added to the interface. `SupertexDaemonCompiler.warmup()`
-   delegates to `ensureReady()` (idempotent — cached
-   `readyPromise`); `FixtureCompiler` / `SupertexOnceCompiler`
-   are no-ops. `server.ts getProject()` calls
-   `state.compiler.warmup().catch(log)` fire-and-forget right
-   after compiler construction so the daemon's 4.3 s
-   format-load runs in parallel with WS handshake + Yjs hydrate
-   + checkpoint restore. The existing `compile()` path keeps
-   calling `ensureReady()` and hits the cache. Unit-locked in
-   `apps/sidecar/test/supertexDaemonCompiler.test.mjs` case 15:
-   fake daemon delays `daemon ready` marker; two concurrent
-   warmups share one spawn; a subsequent `compile()` does NOT
-   respawn; a post-ready warmup is a no-op. Expected production
-   effect: roughly the WS-handshake + hydrate + restore latency
-   (~0.3 s today) shaved off cold-start first-paint; the worst
-   case (Tigris restore slower than 0.3 s) overlaps proportionally
-   more. Verify via next cold-boot log capture.
-
-   **M20.3(a)2 [landed iter 332].** Added
-   `Compiler.supportsCheckpoint: readonly boolean` to the
-   interface; all three impls (`Fixture`, `SupertexOnce`,
-   `SupertexDaemon`) set `false`. `server.ts ensureRestored`
-   short-circuits before calling `loadCheckpoint` when the flag
-   is false; `persistAllCheckpoints` skips the per-project
-   `snapshot() + persistCheckpoint` body symmetrically. Expected
-   prod effect: `restoreMs:273` term in cold-start `phases`
-   collapses to 0; net cold-start wallclock saving ≈ 0.27 s on
-   top of the iter-331 warmup overlap. Pinned by
-   `serverCheckpointWiring.test.mjs` case 4: `RecordingCompiler`
-   with `supportsCheckpoint:false` and a pre-seeded blob —
-   `restore` not called, blobStore.get for the checkpoint key
-   never observed (counted via `GetCountingBlobStore`),
-   `snapshot` not called on idle-stop, pre-seeded blob untouched.
-   Cases 1–3 still pin the live wiring path with the flag set
-   `true` (the new opt-in in `RecordingCompiler`). Flip to `true`
-   on `SupertexDaemonCompiler` is what M7.4.2 (upstream supertex
-   serialise wire) will do when it lands.
-
-   **M20.3(c) cold-boot suspend race fix [landed iter 340].**
-   Iter 339 enriched the GT-9 probe with per-iteration Fly state
-   fetch; the resulting transcript showed `stopped → starting →
-   suspended` within 25 s of dashboard click. Root cause: the
-   sidecar's `armIdleTimers()` at startup armed **both** the 5 s
-   suspend timer and the 5 min stop timer; the suspend timer fired
-   mid-handshake (5 s < the web proxy's worst-case cold-start
-   drive-to-started + tcpProbe + WS upgrade chain, 20–60 s), the
-   sidecar self-suspended, and the web proxy's direct 6PN TCP
-   dial to port 3001 cannot auto-resume a Fly-suspended Machine
-   (only HTTP via Fly's edge does), so the upgrade stalled
-   indefinitely. Fix in `apps/sidecar/src/server.ts:338`:
-   startup arms only the **stop** stage. The suspend stage now
-   arms only on `viewerCount` 1→0 (its design use case: "user
-   closed tab", 300 ms reconnect). `serverIdleStop.test.mjs`
-   case 5 rewritten: cold-boot orphan cleanup now asserted via
-   the stop stage (`suspendCalls === 0 && stopCalls === 1`).
-   Same fix is expected to close GT-6-stopped
-   (`verifyLiveGt6LiveEditableStateStopped`).
-
-   **M20.3(b) preservation gold spec [landed iter 333, typing
-   strategy fixed iter 334, per-phase diagnostics + 8-min wall
-   added iter 335].** `verifyLiveGt9StoppedPreservesEdits
-   .spec.ts` (GT-9). Cold-start a fresh project, type a unique
-   ` preserve-<uuid>` sentinel as visible body text at the end of
-   the `Hello, world!` line (same cursor choreography as GT-3),
-   wait for the next `pdf-segment` (proof `runCompile` ran
-   end-to-end: `persistence.maybePersist()` is called *before* the
-   compile invocation, so a fresh segment guarantees the source —
-   sentinel included — has been written to the blob store).
-   Force-stop the Machine via Fly `POST /machines/{id}/stop`, poll
-   until `state === "stopped"`, reopen via dashboard click, assert
-   the sentinel appears in `.cm-content`. Latency-agnostic by
-   design (no 1000 ms budget like GT-6-stopped); pins **byte
-   preservation** through sidecar→Tigris→sidecar round-trip.
-   Gates `finished.md`. RED today only if the preservation path is
-   actually broken in production. (Iter-333 first attempt typed
-   the sentinel as a `% preserve-…` LaTeX comment after
-   `\end{document}`; that's exactly the supertex "warm-doc body
-   edit no-op" pattern — typeset unchanged ⇒ daemon skips
-   reshipout ⇒ no `pdf-segment` ⇒ the wire-observable persistence
-   proof never arrives. Iter 334 switched to visible body text.
-   Iter 335 added per-phase `[verifyLiveGt9...] elapsedMs=… phase=…`
-   diagnostic console logs at every boundary (entry + exit markers,
-   including inside the deadline-poll loops) and raised
-   `testInfo.setTimeout(5 * 60_000)` → `8 * 60_000` because the
-   worst-case sum of phase budgets (60 + 90 + 30 + 60 + 30 + 90
-   ≈ 365 s) sat above the 5-min wall — iter-334's gold pass timed
-   out at exactly 5.0 m with zero log output, leaving the failure
-   mode opaque. The behavioural assertions are unchanged.)
+   Iter 340's suspend-race fix is the most likely cause of both
+   prior RED specs; verify on next gold pass once sidecar redeploy
+   completes.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
-3. **M21.3c — page-prefetch off-by-one (final slice).** M21.3b
-   (post-round daemon log) landed iter 319; M21.3a (tightened
-   `pickMaxVisible` threshold to 0.1 + unit test) landed iter 324.
-   M21.3c: capture sidecar `daemon-stdin` + `daemon-round-done`
-   transcript of user-reported "edit on hidden page N+2 ships
-   nothing" repro; fix front-end if `target` is non-`"end"`
-   (contradicts `server.ts:528` hardcode), else file upstream
-   supertex repro on `maxShipout=-1`.
+3. **M21.3c — page-prefetch off-by-one (final slice).** Capture
+   sidecar `daemon-stdin` + `daemon-round-done` transcript of
+   user-reported "edit on hidden page N+2 ships nothing" repro;
+   fix front-end if `target` is non-`"end"` (contradicts
+   `server.ts:528` hardcode), else file upstream supertex repro
+   on `maxShipout=-1`.
 4. **M9.editor-ux remaining slices.** GT-E (info/success/error
    toast spawn + aggregation badge); GT-F wire-driven part
    (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
@@ -157,8 +58,11 @@ routed to (decision deferred post-MVP).
 
 **Open red specs (gold):**
 
-- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) — RED,
-  expected, blocked on M20.2.
+- `verifyLiveGt9StoppedPreservesEdits` (M20.3 GT-9) — expected
+  GREEN on next pass post-iter-340-fix deploy.
+- `verifyLiveGt6LiveEditableStateStopped` (M13.2(b).4) —
+  expected GREEN on next pass post-iter-340-fix deploy.
+- `verifyLiveFullPipelineReused` — intermittent, watch.
 
 ## 2. Milestones
 
@@ -206,30 +110,17 @@ routed to (decision deferred post-MVP).
   FUTURE_IDEAS "binary asset upload" wire design.
 - **M11.5c** drag-out download from tree to OS. Unblocked.
 
-### M13.open-latency — instrument-then-fix
+### M13.open-latency — settled
 
-**Load-bearing detail:** M13.2(a) SSR seed gate is visual-only;
-seed is never inserted into the local Y.Doc (CRDT can't dedupe
-two independent `insert(0, …)` ops with different `clientID`).
-Placeholder is `<pre class="editor-seed">`, not `.cm-content`.
+M13.2(a) SSR seed gate is visual-only; seed is never inserted into
+the local Y.Doc (CRDT can't dedupe two independent `insert(0, …)`
+ops with different `clientID`). Placeholder is
+`<pre class="editor-seed">`, not `.cm-content`.
 
-**Open red:** M13.2(b).4 stopped-state cold-editable pin
-(`verifyLiveGt6LiveEditableStateStopped.spec.ts`) — RED, target
-for M20.2.
-
-**Open follow-ups:**
-- `cleanupProjectMachine` re-arms the SSR seed gate. Iter 323 wired
-  the placeholder text through `coldSourceFor`, so once shared
-  blob storage lands (M20.2(d) Tigris) the post-cleanup SSR
-  naturally shows the persisted source instead of hello-world.
-  The gate *condition* (assignment-is-null) is unchanged — that's
-  fine, because the placeholder fires precisely when cold-start
-  latency is about to be paid, regardless of where the seed bytes
-  come from.
-- GT-A polls `.cm-content` (only appears post-hydrate); seed
-  placeholder is a separate DOM element. If a future iteration
-  consolidates seed and real editor under one `.cm-content`,
-  GT-A's invariant must survive.
+**Open follow-up:** GT-A polls `.cm-content` (only appears
+post-hydrate); seed placeholder is a separate DOM element. If a
+future iteration consolidates seed and real editor under one
+`.cm-content`, GT-A's invariant must survive.
 
 ### M15.multipage-preview — settled (α), user-bug pending
 
@@ -273,98 +164,59 @@ Two-tier idle cascade (per `293_answer.md` (4)).
 
 **M20.1 contract (load-bearing):** `SidecarOptions` exposes
 independent `suspendTimeoutMs`/`onSuspend` and
-`stopTimeoutMs`/`onStop`; both arm on `viewerCount→0` and on
-cold boot until first viewer. Suspend POSTs Fly `/suspend` and
-re-arms whether POST succeeds or fails; stop closes the app and
-exits 0. Checkpoint persist runs before both handlers. Env vars:
+`stopTimeoutMs`/`onStop`. **Cold boot arms ONLY the stop stage**
+(iter-340 fix: the 5 s suspend timer raced the web proxy's 20–60 s
+cold-handshake chain and self-suspended mid-upgrade; direct 6PN
+TCP dial can't auto-resume a suspended Machine). The suspend stage
+arms only on `viewerCount` 1→0 (its design use case: "user closed
+tab", ~300 ms reconnect). Stop closes the app and exits 0.
+Checkpoint persist runs before both handlers. Env vars:
 `SIDECAR_SUSPEND_MS` (default 5_000), `SIDECAR_STOP_MS`
 (default 300_000). Locks:
 `apps/sidecar/test/idleSuspend.test.mjs`,
 `serverIdleStop.test.mjs`, `serverCheckpointWiring.test.mjs`.
 
-- **M20.2 (closed iter 325).** Shared `BLOB_STORE` on web tier
-  *and* sidecar. Sidecar persists source + latex compilation
-  artefacts (NOT supertex outputs) on every settle. Rehydrate
-  on cold boot. Unblocks
-  `verifyLiveGt6LiveEditableStateStopped` once production wires
-  Tigris secrets (see M20.3). Split:
-  - **(a) [landed iter 322].** Web tier wired to the same
-    `BLOB_STORE` / `BLOB_STORE_LOCAL_DIR` env protocol as
-    sidecar via `@tex-center/blobs`-hosted
-    `defaultBlobStoreFromEnv()` (lifted out of
-    `apps/sidecar/src/persistence.ts`). New
-    `apps/web/src/lib/server/blobStore.ts` exposes
-    `webBlobStoreFromEnv()` + `coldSourceFor(blobStore,
-    projectId)` reading the canonical
-    `projects/<id>/files/main.tex` key shape. Dark code: no
-    production caller consults it yet.
-  - **(b) [done].** Sidecar persistence on every settle is
-    already in place: `persistence.maybePersist()` runs at the
-    top of every `runCompile` (after `writeMain`, before the
-    compile invocation, so a failed compile cannot lose user
-    edits), and `persistAllCheckpoints()` runs in
-    `createIdleStage`'s persist-before-handler step on both the
-    suspend and stop cascades. No new code needed here for
-    M20.2.
-  - **(c) [landed iter 323].** Cold-storage seed cutover wired
-    in two places. `apps/web/src/server.ts` composes the new
-    `createSeedDocFor({ blobStore, getDbSeedDoc })` helper into
-    the resolver's `seedDocFor`: blob beats db `seed_doc` beats
-    null (and the sidecar's hello-world fallback runs only when
-    both miss). The SSR placeholder in
-    `apps/web/src/routes/editor/[projectId]/+page.server.ts`
-    learned the same blob chain: when `assignment === null`,
-    seed text is `coldSourceFor(blobStore, id) ??
-    MAIN_DOC_HELLO_WORLD`. Cutover is behind today's per-Machine
-    `LocalFsBlobStore`, which always misses in production, but
-    `apps/web/test/blobStore.test.mjs` exercises the chain
-    (blob-wins / empty-blob fallthrough / null-store / transport
-    error → reported and falls through to db). Real cross-Machine
-    cold storage still needs the S3/Tigris adapter (next slice).
-  - **(d) [landed iter 325/326].** `packages/blobs/src/s3.ts`
-    (`S3BlobStore implements BlobStore`, path-style SigV4 over
-    `fetch`, no external deps) + `packages/blobs/src/sigv4.ts`
-    (pure-Node signing, locked against the AWS docs
-    GetObject-with-Range known-answer signature). `envSelect`
-    wires `BLOB_STORE=s3` to require five fields, each accepting
-    either an explicit `BLOB_STORE_S3_*` name (wins) or the
-    AWS-SDK fallback that `flyctl storage create` auto-injects
-    (`AWS_ENDPOINT_URL_S3` / `AWS_REGION` / `BUCKET_NAME` /
-    `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). Missing-field
-    errors name both prefixes. Round-trip + canonical-shape +
-    per-field precedence unit-locked in
-    `packages/blobs/test/s3.test.mjs` against an in-process stub
-    server that emulates the PUT/GET/DELETE/HEAD/list-type=2
-    subset we use (paginated via base64 `NextContinuationToken`).
-    Dark code until production wires Tigris secrets — see M20.3.
-- **M20.3 (open).** Tigris provisioning landed iter 327
-  (`flyctl storage create -a tex-center -n texcenter-blobs -y`
-  followed by `flyctl secrets set BLOB_STORE=s3 -a <app>` on
-  both `tex-center` and `tex-center-sidecar`; same AWS_*
-  credentials mirrored to both apps because Tigris bucket names
-  are globally unique and the second `storage create` fails
-  with `Name has already been taken`). Saved to
-  `creds/tigris-tex-center.txt`. M20.3(a)+(a)2 landed iters
-  331/332; the preservation gold spec landed iter 333;
-  M20.3(c) cold-boot suspend race fixed iter 340 (see
-  "M20.3(c)" entry above and iter 340 log). Closing M20.3 needs:
-  (i) prod cold-boot log capture validating that `restoreMs`
-  collapsed from 273 ms → 0 and the warmup overlap shaved the
-  pre-compile hydrate/restore window (verification only, no code);
-  (ii) GT-9 passing live (and GT-6-stopped) — pins the
-  sidecar→Tigris→sidecar byte round-trip on a force-stop + cold
-  reopen. Iter 340's fix is the most likely cause of both prior
-  RED specs; verify on next gold pass.
+**M20.2 (closed iter 322–326).** Shared `BLOB_STORE` on web tier
+*and* sidecar via `@tex-center/blobs`. Sidecar persists source +
+latex compilation artefacts on every `runCompile`
+(`persistence.maybePersist()` before compile invocation) and on
+suspend/stop. Cold-storage seed cutover in
+`apps/web/src/server.ts` (`createSeedDocFor`) and editor SSR
+placeholder. `packages/blobs/src/s3.ts` + `sigv4.ts` (pure-Node
+SigV4 over `fetch`, no external deps); `envSelect` accepts
+explicit `BLOB_STORE_S3_*` or AWS SDK fallback names.
 
-Tuning: 5 s suspend is aggressive but suspend cost is ~300 ms
-reconnect. Adjust via env if live use shows thrash.
+**M20.3 (open).** Tigris bucket `texcenter-blobs` provisioned
+iter 327; `BLOB_STORE=s3` + AWS_* secrets live on both apps.
+Cold-start instrumentation (iter 328–330) pinned the 4.3 s
+`compileMs` term as dominant. Optimisations landed:
+- **(a) [iter 331]** `Compiler.warmup()` overlaps daemon
+  format-load with WS handshake / hydrate / restore.
+- **(a)2 [iter 332]** `Compiler.supportsCheckpoint:false`
+  short-circuits `restore`/`snapshot` for all current
+  implementations (flip to `true` is M7.4.2's job).
+- **(b) preservation gold spec [iter 333–335]**
+  `verifyLiveGt9StoppedPreservesEdits.spec.ts` — types visible
+  body sentinel, waits for `pdf-segment` (proves persist), force-
+  stops Machine, reopens, asserts sentinel in `.cm-content`.
+  Per-phase diagnostic logs + 8-min wall.
+- **(c) suspend race fix [iter 340]** cold boot arms only the
+  stop stage; see M20.1 above.
+
+**Closing M20.3:** GT-9 + GT-6-stopped GREEN on next gold pass
+post-iter-340 deploy; prod cold-boot log capture confirming
+`restoreMs:0` + warmup overlap.
+
+Tuning: 5 s suspend is aggressive but on-viewer-close suspend cost
+is ~300 ms reconnect. Adjust via env if live use shows thrash.
 
 ### M21.target-page — max-visible-page wire signal
 
-**M21.1 + M21.3b contracts (load-bearing):** `pickMaxVisible`
-+ `PageTracker` widened to `{ mostVisible, maxVisible }`;
-client sends `maxViewingPage` over WS; sidecar reducer routes
-to `coalescer.kickForView`. `server.ts:528` hardcodes
+**M21.1 + M21.3a/b contracts (load-bearing):** `pickMaxVisible`
++ `PageTracker` widened to `{ mostVisible, maxVisible }` with a
+`> 0.1` ratio threshold (≥10% of page area in viewport); client
+sends `maxViewingPage` over WS; sidecar reducer routes to
+`coalescer.kickForView`. `server.ts:528` hardcodes
 `targetPage: 0` → `recompile,end` (no active target-page gate).
 Sidecar log surfaces both pre-round (`daemon-stdin`:
 `{ round, target, sourceLen }`) and post-round
@@ -374,22 +226,12 @@ violation? }`).
 - **M21.2 (open).** Gold spec: 3-page PDF, scroll page 2 fully
   + page 3 intrusion → sidecar receives target=3. Needs real
   3-page Playwright source + sidecar introspection hook.
-- **M21.3a (landed iter 324).** `pickMaxVisible` predicate
-  tightened from strict `> 0` to `> MAX_VISIBLE_RATIO_THRESHOLD`
-  (0.1, i.e. ≥10% of page area in viewport). `PageTracker`
-  consumes the same default. Locked by
-  `apps/web/test/pageTracker.test.mjs`. No observable effect on
-  segment shipping today — `server.ts:528` still hardcodes
-  `targetPage: 0` — but the `outgoing-viewing-page` debug toast
-  now stops promoting to N+1 on a sliver intrusion, and the
-  default is in place for any future iteration that re-wires
-  the per-compile target-page gate.
-- **M21.3c (open).** With M21.3b in place: capture sidecar log
-  transcript of the user-reported "edit on hidden page N+2
-  ships no segment" repro. Fix front-end if `daemon-stdin`
-  shows non-`end` target (contradicts `server.ts:528`); else
-  file upstream supertex repro if `daemon-round-done` shows
-  `maxShipout=-1` on a round that should have shipped.
+- **M21.3c (open).** Capture sidecar log transcript of the
+  user-reported "edit on hidden page N+2 ships no segment" repro.
+  Fix front-end if `daemon-stdin` shows non-`end` target
+  (contradicts `server.ts:528`); else file upstream supertex
+  repro if `daemon-round-done` shows `maxShipout=-1` on a round
+  that should have shipped.
 
 ### M22.debug-toasts — front→back wire coverage
 
@@ -410,30 +252,16 @@ assembled segment before encode. Debug-toast text:
 `${bytes} bytes` when 0/missing; `compileCycleTracker`
 prefixes with `${elapsedMs}s — ` when a cycle is open.
 
-### M23.workspace-mirror — write every project file to disk
-
-Categorical regression for any multi-file project: without this,
-`apps/sidecar/src/workspace.ts` only exposed `writeMain(source)`,
-so auxiliary files in Yjs/blob never reached the on-disk
-workspace dir and `\input{sec1}` failed with no `[N.out]`
-events.
-
-**Closed iter 313/314/315/316:** `ProjectWorkspace.writeFile /
-deleteFile / renameFile` (atomic write-tmp-rename, parent reap)
-+ persistence-level structural mirror on Yjs-acked file mutations
-+ cold-boot rehydration + in-place `Y.Text.observe` mirror with
-coalesced writes (at most one in-flight + one queued per file)
-and flush-on-rename / flush-on-delete (unsubscribe + await
-in-flight write before structural op, prevents resurrection).
-Locks: `apps/sidecar/test/workspace.test.mjs`,
-`serverWorkspaceMirror.test.mjs`, `serverObserveMirror.test.mjs`;
-gold `test_sidecar_workspace_mirror_compile`.
+### M23.workspace-mirror — closed iter 313–316
 
 **Load-bearing insight:** "write all files in `runCompile`" was
 tried and abandoned because it races with concurrent
 `delete-file` ops (writeFile resurrects via tmp+rename
 atomicity). The persistence-level mirror is race-free because
 per-name ops serialise through `handleFileOp`'s await chain.
+Locks: `apps/sidecar/test/workspace.test.mjs`,
+`serverWorkspaceMirror.test.mjs`, `serverObserveMirror.test.mjs`;
+gold `test_sidecar_workspace_mirror_compile`.
 
 ### M16.aesthetic — writerly chrome retune
 
@@ -468,12 +296,13 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M21.3b;
+M17; M17.b; M18.1; M19; M20.1; M20.2; M21.1; M21.3a/b;
 M22.1/2-local/3/4a/4b/5; M23.1/2/4/5;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
-bump; iter-320 idle-stage factory refactor.
+bump; iter-320 idle-stage factory refactor;
+iter-331/332/340 M20.3 cold-start sub-slices.
 
 See git log and `.autodev/logs/` for narrative detail.
 
