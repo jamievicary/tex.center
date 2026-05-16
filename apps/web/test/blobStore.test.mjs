@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { LocalFsBlobStore } from "../../../packages/blobs/src/index.ts";
 import {
   coldSourceFor,
+  createSeedDocFor,
   webBlobStoreFromEnv,
 } from "../src/lib/server/blobStore.ts";
 
@@ -102,6 +103,95 @@ try {
     );
     const got = await coldSourceFor(store, "proj-drift");
     assert.equal(got, body);
+  }
+  // createSeedDocFor: blob wins over db.
+  {
+    const store = new LocalFsBlobStore({ rootDir: root });
+    const blobBody = "from-blob";
+    await store.put(
+      `projects/proj-chain-blob-wins/files/main.tex`,
+      new TextEncoder().encode(blobBody),
+    );
+    let dbCalls = 0;
+    const seedDocFor = createSeedDocFor({
+      blobStore: store,
+      getDbSeedDoc: async () => {
+        dbCalls += 1;
+        return "from-db";
+      },
+    });
+    const got = await seedDocFor("proj-chain-blob-wins");
+    assert.equal(got, blobBody);
+    assert.equal(dbCalls, 0, "db must not be consulted when blob exists");
+  }
+  // createSeedDocFor: no blob → falls through to db.
+  {
+    const store = new LocalFsBlobStore({ rootDir: root });
+    const seedDocFor = createSeedDocFor({
+      blobStore: store,
+      getDbSeedDoc: async (id) => `db-seed-for-${id}`,
+    });
+    const got = await seedDocFor("proj-chain-db-fallback");
+    assert.equal(got, "db-seed-for-proj-chain-db-fallback");
+  }
+  // createSeedDocFor: empty blob → falls through to db (same shape
+  // as "no blob"; coldSourceFor normalises both to null).
+  {
+    const store = new LocalFsBlobStore({ rootDir: root });
+    await store.put(
+      `projects/proj-chain-empty/files/main.tex`,
+      new Uint8Array(),
+    );
+    const seedDocFor = createSeedDocFor({
+      blobStore: store,
+      getDbSeedDoc: async () => "db-wins-after-empty",
+    });
+    const got = await seedDocFor("proj-chain-empty");
+    assert.equal(got, "db-wins-after-empty");
+  }
+  // createSeedDocFor: no blob + no db row → null (the
+  // upstreamResolver omits SEED_MAIN_DOC_B64 in this case).
+  {
+    const store = new LocalFsBlobStore({ rootDir: root });
+    const seedDocFor = createSeedDocFor({
+      blobStore: store,
+      getDbSeedDoc: async () => null,
+    });
+    const got = await seedDocFor("proj-chain-no-seed");
+    assert.equal(got, null);
+  }
+  // createSeedDocFor: blob store undefined (deploy opted out of
+  // cold storage) → goes straight to db.
+  {
+    const seedDocFor = createSeedDocFor({
+      blobStore: undefined,
+      getDbSeedDoc: async (id) => `db-only-${id}`,
+    });
+    const got = await seedDocFor("proj-no-blobstore");
+    assert.equal(got, "db-only-proj-no-blobstore");
+  }
+  // createSeedDocFor: blob lookup throws → reported and chain
+  // falls through to db. A transient blob-store outage must not
+  // pin a project to its db seed forever.
+  {
+    const throwingStore = {
+      get: async () => {
+        throw new Error("simulated transport error");
+      },
+      put: async () => {},
+      delete: async () => {},
+    };
+    const errors = [];
+    const seedDocFor = createSeedDocFor({
+      blobStore: throwingStore,
+      getDbSeedDoc: async () => "db-after-blob-error",
+      onBlobError: (e) => errors.push(e),
+    });
+    const got = await seedDocFor("proj-blob-error");
+    assert.equal(got, "db-after-blob-error");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].projectId, "proj-blob-error");
+    assert.match(errors[0].message, /simulated transport error/);
   }
 } finally {
   await rm(root, { recursive: true, force: true });

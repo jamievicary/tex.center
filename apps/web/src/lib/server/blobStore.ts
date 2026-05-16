@@ -45,10 +45,10 @@ export function webBlobStoreFromEnv(
  * throwing on a missing blob, but propagates transport errors so the
  * caller can decide whether to log + fall back or fail closed.
  *
- * Today this is dark code: no production caller invokes it. The
- * M20.2(c) cutover composes it into `seedDocFor` in
- * `apps/web/src/server.ts` as the first lookup in a chain
- * (blob → db `seed_doc` → no seed ⇒ `MAIN_DOC_HELLO_WORLD`).
+ * The M20.2(c) cutover composes this into `seedDocFor` in
+ * `apps/web/src/server.ts` (via `createSeedDocFor` below), as the
+ * first lookup in a chain that falls through to the db `seed_doc`
+ * column and ultimately to the canonical hello-world template.
  */
 export async function coldSourceFor(
   blobStore: BlobStore,
@@ -58,4 +58,41 @@ export async function coldSourceFor(
   const bytes = await blobStore.get(key);
   if (!bytes || bytes.length === 0) return null;
   return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Compose the production `seedDocFor` chain consumed by
+ * `upstreamResolver.createMachine`: try the cold-storage blob first
+ * (a persisted `main.tex` from a previous Machine lifetime), then
+ * fall through to the caller-supplied db lookup (the M15 `seed_doc`
+ * column), then `null`. The web tier passes the result into
+ * `buildUpstreamFromEnv`, which bakes a non-null seed into
+ * `SEED_MAIN_DOC_B64` on Machine create.
+ *
+ * Blob lookup errors are reported via `onBlobError` and do not block
+ * the chain — a transient blob-store failure must not pin a project
+ * to its db seed; it falls through and the next attempt retries.
+ */
+export function createSeedDocFor(opts: {
+  readonly blobStore: BlobStore | undefined;
+  readonly getDbSeedDoc: (projectId: string) => Promise<string | null>;
+  readonly onBlobError?: (err: {
+    readonly projectId: string;
+    readonly message: string;
+  }) => void;
+}): (projectId: string) => Promise<string | null> {
+  return async (projectId) => {
+    if (opts.blobStore !== undefined) {
+      try {
+        const blob = await coldSourceFor(opts.blobStore, projectId);
+        if (blob !== null) return blob;
+      } catch (err) {
+        opts.onBlobError?.({
+          projectId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return opts.getDbSeedDoc(projectId);
+  };
 }

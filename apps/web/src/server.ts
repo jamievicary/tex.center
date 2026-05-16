@@ -23,6 +23,10 @@ import {
   describeSessionSweepStatus,
   runBootSessionSweep,
 } from "./lib/server/sessionSweep.js";
+import {
+  createSeedDocFor,
+  webBlobStoreFromEnv,
+} from "./lib/server/blobStore.js";
 import { getDb } from "./lib/server/db.js";
 import { MachinesClient } from "./lib/server/flyMachines.js";
 import { loadSessionSigningKey } from "./lib/server/sessionConfig.js";
@@ -73,20 +77,32 @@ const authoriseUpgrade =
 // route each `/ws/project/<id>` upgrade to that project's Machine.
 // Otherwise fall through to the static `SIDECAR_HOST`/`SIDECAR_PORT`
 // upstream (M7.0 shared-sidecar path).
+//
+// `seedDocFor` resolves the bytes baked into the new Machine's
+// `SEED_MAIN_DOC_B64` env. The chain is blob → db `seed_doc` → null:
+// a persisted cold-storage blob (M20.2) wins over the M15 db seed
+// (`createProject({ seedMainDoc })`), which in turn wins over the
+// sidecar's `MAIN_DOC_HELLO_WORLD` fallback. Today's
+// `LocalFsBlobStore` is per-Machine so the blob branch always misses
+// in production; once shared backing storage lands (S3/Tigris),
+// reattach-after-cleanup naturally rides the same chain.
+const blobStore = webBlobStoreFromEnv();
 const resolveUpstream = buildUpstreamFromEnv(process.env, {
   makeMachinesClient: ({ token, appName }) =>
     new MachinesClient({ token, appName }),
   makeStore: () => dbMachineAssignmentStore(getDb().db),
-  // M15 Step D: bake `projects.seed_doc` (when non-null) into the
-  // per-project Machine's env at creation time. The sidecar uses
-  // those bytes for `main.tex` on first hydration in place of the
-  // canonical hello-world template. Used today by the gold suite
-  // to spin up projects with deterministic multi-page source
-  // without any editing keystrokes.
-  seedDocFor: async (projectId: string) => {
-    const { db } = getDb();
-    return getProjectSeedDoc(db, projectId);
-  },
+  seedDocFor: createSeedDocFor({
+    blobStore,
+    getDbSeedDoc: async (projectId) => {
+      const { db } = getDb();
+      return getProjectSeedDoc(db, projectId);
+    },
+    onBlobError: ({ projectId, message }) => {
+      console.error(
+        JSON.stringify({ blob_seed_lookup_error: { projectId, message } }),
+      );
+    },
+  }),
 });
 
 // Apply pending DB migrations before accepting traffic. Gated by

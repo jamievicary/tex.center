@@ -12,11 +12,17 @@ routed to (decision deferred post-MVP).
 
 **Active priority queue (open work only):**
 
-1. **M20.2 / M20.3 — cold-storage rehydration.** Shared `BLOB_STORE`
-   binding on web tier *and* sidecar; sidecar persists source +
-   latex artefacts on every settle, rehydrates on cold boot. Then
-   M20.3 gold spec exercises the full suspend→stop→cold cycle.
-   Unblocks `verifyLiveGt6LiveEditableStateStopped`.
+1. **M20.2(d) / M20.3 — S3/Tigris adapter + cold-cycle gold spec.**
+   With M20.2(a/b/c) landed (web tier sees the same `BlobStore`
+   protocol as sidecar; sidecar persists on every settle and
+   cold-boots from blob; seedDocFor + SSR seed both chain through
+   `coldSourceFor`), the remaining work is genuinely shared
+   backing storage. Build the `BLOB_STORE=s3` branch of
+   `defaultBlobStoreFromEnv` against a Tigris bucket (Fly's
+   S3-compatible offering). Bake a request-recording HTTP stub so
+   adapter tests are deterministic. Then M20.3 gold spec exercises
+   the full suspend→stop→cold cycle — unblocks
+   `verifyLiveGt6LiveEditableStateStopped`.
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
@@ -111,10 +117,14 @@ Placeholder is `<pre class="editor-seed">`, not `.cm-content`.
 for M20.2.
 
 **Open follow-ups:**
-- `cleanupProjectMachine` re-arms the SSR seed gate even though
-  sidecar blob store may still hold the user's edits. Benign
-  while blob store is per-Machine; once shared (M20.2), the gate
-  must flip from "no machine assignment" to "no persisted blob".
+- `cleanupProjectMachine` re-arms the SSR seed gate. Iter 323 wired
+  the placeholder text through `coldSourceFor`, so once shared
+  blob storage lands (M20.2(d) Tigris) the post-cleanup SSR
+  naturally shows the persisted source instead of hello-world.
+  The gate *condition* (assignment-is-null) is unchanged — that's
+  fine, because the placeholder fires precisely when cold-start
+  latency is about to be paid, regardless of where the seed bytes
+  come from.
 - GT-A polls `.cm-content` (only appears post-hydrate); seed
   placeholder is a separate DOM element. If a future iteration
   consolidates seed and real editor under one `.cm-content`,
@@ -194,19 +204,21 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
     `createIdleStage`'s persist-before-handler step on both the
     suspend and stop cascades. No new code needed here for
     M20.2.
-  - **(c) cold-storage seed cutover [next ordinary iter].**
-    Compose `coldSourceFor` into the production `seedDocFor`
-    chain in `apps/web/src/server.ts`: blob lookup beats db
-    `seed_doc` beats `MAIN_DOC_HELLO_WORLD`. Cutover happens
-    *behind* the existing infra: today's `LocalFsBlobStore` is
-    per-Machine so the blob lookup always returns `null` in
-    production, but the path is exercised by an integration
-    test pointing web tier and a synthetic sidecar at a shared
-    `BLOB_STORE_LOCAL_DIR`. Real cross-Machine cold storage
-    needs an S3-compatible adapter (Tigris on Fly) which is its
-    own subsequent slice. The SSR seed-gate flip
-    ("no machine assignment" → "no persisted blob") rides on
-    this same cutover.
+  - **(c) [landed iter 323].** Cold-storage seed cutover wired
+    in two places. `apps/web/src/server.ts` composes the new
+    `createSeedDocFor({ blobStore, getDbSeedDoc })` helper into
+    the resolver's `seedDocFor`: blob beats db `seed_doc` beats
+    null (and the sidecar's hello-world fallback runs only when
+    both miss). The SSR placeholder in
+    `apps/web/src/routes/editor/[projectId]/+page.server.ts`
+    learned the same blob chain: when `assignment === null`,
+    seed text is `coldSourceFor(blobStore, id) ??
+    MAIN_DOC_HELLO_WORLD`. Cutover is behind today's per-Machine
+    `LocalFsBlobStore`, which always misses in production, but
+    `apps/web/test/blobStore.test.mjs` exercises the chain
+    (blob-wins / empty-blob fallthrough / null-store / transport
+    error → reported and falls through to db). Real cross-Machine
+    cold storage still needs the S3/Tigris adapter (next slice).
 - **M20.3 (open).** Gold spec: open project, idle 6 s
   (suspended), edit → 300 ms ack; idle 6 min (stopped), edit →
   cold-start budget; content preserved. Override stop timer via

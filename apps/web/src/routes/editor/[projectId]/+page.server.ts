@@ -8,6 +8,7 @@
 
 import { error } from "@sveltejs/kit";
 
+import { coldSourceFor, webBlobStoreFromEnv } from "$lib/server/blobStore.js";
 import { getDb } from "$lib/server/db.js";
 import {
   getMachineAssignmentByProjectId,
@@ -16,6 +17,13 @@ import {
 import { MAIN_DOC_HELLO_WORLD, MAIN_DOC_NAME } from "@tex-center/protocol";
 
 import type { PageServerLoad } from "./$types.js";
+
+// One BlobStore per process: `defaultBlobStoreFromEnv` only reads
+// env at module-load, and the local-fs adapter is stateless beyond
+// the root dir. `undefined` means the deploy opted out of cold
+// storage entirely (BLOB_STORE unset/none) and SSR falls through to
+// the canonical hello-world template.
+const blobStore = webBlobStoreFromEnv();
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const session = locals.session;
@@ -29,20 +37,27 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     throw error(404, "Project not found");
   }
 
-  // M13.2(a): when the project has never had a sidecar Machine
-  // assigned (i.e. no `machine_assignments` row), no WS has ever
-  // upgraded for it, so the sidecar's authoritative state for this
-  // project is still just the canonical seed template. Surface that
-  // template to the client so CodeMirror can paint in hundreds of
-  // ms — bypassing the ~11.5 s cold-start WS upgrade that GT-6 pins.
-  // The client renders the seed as a placeholder `.cm-content`; it
-  // never writes the seed into the local Y.Doc, so the CRDT cannot
-  // duplicate the sidecar's identical seed once initial sync lands.
+  // M13.2(a) + M20.2(c): when the project has never had a sidecar
+  // Machine assigned (i.e. no `machine_assignments` row), no WS has
+  // ever upgraded for it, so the cold-start delay is about to be
+  // paid. Surface a placeholder so CodeMirror can paint in hundreds
+  // of ms — bypassing the ~11.5 s cold-start WS upgrade that GT-6
+  // pins. The text mirrors what the sidecar will ultimately
+  // produce: a persisted `main.tex` blob (if cold storage holds one
+  // from a destroyed Machine), else the canonical hello-world
+  // template. The client renders the seed as a placeholder `<pre
+  // class="editor-seed">`; it never writes the seed into the local
+  // Y.Doc, so the CRDT cannot duplicate the sidecar's identical
+  // seed once initial sync lands.
   const assignment = await getMachineAssignmentByProjectId(db, project.id);
-  const seed =
-    assignment === null
-      ? { name: MAIN_DOC_NAME, text: MAIN_DOC_HELLO_WORLD }
-      : null;
+  let seed: { name: string; text: string } | null = null;
+  if (assignment === null) {
+    const cold =
+      blobStore !== undefined
+        ? await coldSourceFor(blobStore, project.id).catch(() => null)
+        : null;
+    seed = { name: MAIN_DOC_NAME, text: cold ?? MAIN_DOC_HELLO_WORLD };
+  }
 
   return {
     user: {
