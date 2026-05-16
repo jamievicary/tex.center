@@ -74,21 +74,27 @@ routed to (decision deferred post-MVP).
    on `SupertexDaemonCompiler` is what M7.4.2 (upstream supertex
    serialise wire) will do when it lands.
 
-   **M20.3(b) preservation gold spec [landed iter 333].**
-   `verifyLiveGt9StoppedPreservesEdits.spec.ts` (GT-9). Cold-start
-   a fresh project, type a unique `% preserve-<uuid>` LaTeX comment
-   at the end of `main.tex`, wait for the next `pdf-segment` (proof
-   `runCompile` ran end-to-end: `persistence.maybePersist()` is
-   called *before* the compile invocation, so a fresh segment
-   guarantees the source — sentinel included — has been written to
-   the blob store). Force-stop the Machine via Fly `POST
-   /machines/{id}/stop`, poll until `state === "stopped"`, reopen
-   via dashboard click, assert the sentinel appears in
-   `.cm-content`. Latency-agnostic by design (no 1000 ms budget
-   like GT-6-stopped); pins **byte preservation** through
-   sidecar→Tigris→sidecar round-trip. Gates `finished.md`. RED
-   today only if the preservation path is actually broken in
-   production.
+   **M20.3(b) preservation gold spec [landed iter 333, typing
+   strategy fixed iter 334].** `verifyLiveGt9StoppedPreservesEdits
+   .spec.ts` (GT-9). Cold-start a fresh project, type a unique
+   ` preserve-<uuid>` sentinel as visible body text at the end of
+   the `Hello, world!` line (same cursor choreography as GT-3),
+   wait for the next `pdf-segment` (proof `runCompile` ran
+   end-to-end: `persistence.maybePersist()` is called *before* the
+   compile invocation, so a fresh segment guarantees the source —
+   sentinel included — has been written to the blob store).
+   Force-stop the Machine via Fly `POST /machines/{id}/stop`, poll
+   until `state === "stopped"`, reopen via dashboard click, assert
+   the sentinel appears in `.cm-content`. Latency-agnostic by
+   design (no 1000 ms budget like GT-6-stopped); pins **byte
+   preservation** through sidecar→Tigris→sidecar round-trip.
+   Gates `finished.md`. RED today only if the preservation path is
+   actually broken in production. (Iter-333 first attempt typed
+   the sentinel as a `% preserve-…` LaTeX comment after
+   `\end{document}`; that's exactly the supertex "warm-doc body
+   edit no-op" pattern — typeset unchanged ⇒ daemon skips
+   reshipout ⇒ no `pdf-segment` ⇒ the wire-observable persistence
+   proof never arrives. Iter 334 switched to visible body text.)
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.

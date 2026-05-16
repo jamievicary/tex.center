@@ -10,15 +10,26 @@
 // persistence path would still let GT-6-stopped pass.
 //
 // This spec inserts a **unique** sentinel (random UUID prefix)
-// into the document body, waits for the next post-edit
-// `pdf-segment` so we know `runCompile` has run end-to-end —
-// `runCompile` calls `persistence.maybePersist()` BEFORE invoking
-// the compiler (`apps/sidecar/src/server.ts:549`), so a fresh
-// `pdf-segment` after our edit proves the source has been written
-// to the blob store. Then force-stop the Machine via Fly's
-// `POST /machines/{id}/stop`, poll until `state === "stopped"`,
-// reopen the editor, and assert the unique sentinel reappears in
-// `.cm-content`.
+// as visible text at the end of the `Hello, world!` body line
+// — i.e., the same cursor choreography as GT-3
+// (`verifyLiveGt3EditTriggersFreshPdf`). The edit changes the
+// typeset PDF, so the supertex daemon reshipouts and a fresh
+// `pdf-segment` arrives. `runCompile` calls
+// `persistence.maybePersist()` BEFORE invoking the compiler
+// (`apps/sidecar/src/server.ts:549`), so a fresh `pdf-segment`
+// after our edit proves the source (sentinel included) has been
+// written to the blob store. Then force-stop the Machine via
+// Fly's `POST /machines/{id}/stop`, poll until
+// `state === "stopped"`, reopen the editor, and assert the
+// unique sentinel reappears in `.cm-content`.
+//
+// Important: an iter-333 attempt typed the sentinel as a
+// `% preserve-…` comment AFTER `\end{document}`. LaTeX ignored
+// it (as intended) but so did the supertex daemon's no-op
+// detector (`test_supertex_warm_doc_body_edit_noop`): typeset
+// unchanged ⇒ no shipout ⇒ no `pdf-segment` ⇒ the wire-proof of
+// persistence we rely on never arrives. The visible-body
+// strategy below is the fix.
 //
 // Aspirational. Gold-only — failures don't revert. Pins:
 //   - Sidecar blob persistence on every settle (`persistence.ts
@@ -86,12 +97,13 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
     const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
 
     // Sentinel is a fresh UUID so two runs of the spec can never
-    // collide via stale blobs. `% ` prefix makes it a LaTeX comment
-    // — placing it after `\end{document}` would also be safe, but
-    // an in-body comment exercises the cursor positioning the user
-    // would actually use.
+    // collide via stale blobs. We type it as visible body text at
+    // the end of the `Hello, world!` line — see file header for
+    // why a LaTeX comment doesn't work (daemon-side no-op skip).
+    // Leading space tidies the rendered PDF; irrelevant for the
+    // `.cm-content` substring assertion.
     const sentinel = `preserve-${randomUUID()}`;
-    const sentinelLine = `% ${sentinel}`;
+    const sentinelInsert = ` ${sentinel}`;
 
     const project = await createProject(db.db.db, {
       ownerId: db.userId,
@@ -127,16 +139,19 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       ).toBeGreaterThan(0);
       const segmentsAfterCold = pdfSegmentCount;
 
-      // 2. Insert the unique sentinel as a LaTeX comment just below
-      //    `\end{document}`. Position: Control+End places the
-      //    cursor at the end of the document (the trailing empty
-      //    line after `\end{document}\n`), so a straight
-      //    `keyboard.type` appends the comment as a new line.
-      //    LaTeX ignores everything after `\end{document}`, so the
-      //    compile path stays green.
+      // 2. Insert the unique sentinel inline at the end of the
+      //    `Hello, world!` body line. Cursor choreography mirrors
+      //    GT-3 (Control+End → ArrowUp×2 → End), which lands at
+      //    the end of the visible body line in the seeded
+      //    template. Visible text means the daemon reshipouts
+      //    (no-op detector doesn't trip) so a fresh pdf-segment
+      //    follows.
       await cmContent.click();
       await authedPage.keyboard.press("Control+End");
-      await authedPage.keyboard.type(sentinelLine, { delay: 5 });
+      await authedPage.keyboard.press("ArrowUp");
+      await authedPage.keyboard.press("ArrowUp");
+      await authedPage.keyboard.press("End");
+      await authedPage.keyboard.type(sentinelInsert, { delay: 5 });
 
       // 3. Wait for the next pdf-segment. The sidecar's
       //    `runCompile` calls `persistence.maybePersist()` after
