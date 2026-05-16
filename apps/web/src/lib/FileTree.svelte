@@ -8,6 +8,15 @@
     createFileTreeInstance,
     type FileItemData,
   } from "./fileTreeHeadless.js";
+  import {
+    decideMenuKeyAction,
+    initialMenuFocus,
+    menuItemsForFile,
+    menuItemsForRoot,
+    moveMenuFocus,
+    type MenuAction,
+    type MenuItem,
+  } from "./fileTreeContextMenu.js";
 
   let {
     files,
@@ -221,6 +230,118 @@
     onRenameFile(path, trimmed);
   }
 
+  function promptCreate(): void {
+    if (!onCreateFile) return;
+    const next = window.prompt("New file name:", "");
+    const trimmed = next?.trim();
+    if (!trimmed) return;
+    const reason = rejectionReason(trimmed);
+    if (reason) {
+      window.alert(`Cannot create "${trimmed}": ${reason}.`);
+      return;
+    }
+    onCreateFile(trimmed);
+  }
+
+  function confirmDelete(path: string): void {
+    if (!onDeleteFile) return;
+    if (!window.confirm(`Delete ${path}?`)) return;
+    onDeleteFile(path);
+  }
+
+  // M11.2b: right-click context menu. Open state carries the screen
+  // coordinates of the originating event, the list of items, the
+  // focused index for arrow-key nav, and (for file menus) the path
+  // the menu was opened against. Mutually exclusive — a fresh
+  // contextmenu replaces an open menu instead of stacking.
+  interface OpenMenu {
+    x: number;
+    y: number;
+    items: MenuItem[];
+    focused: number;
+    /** Present for file-row menus; absent for root menus. */
+    path?: string;
+  }
+  let menu = $state<OpenMenu | null>(null);
+
+  function openFileMenu(e: MouseEvent, path: string): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const items = menuItemsForFile(path, MAIN_DOC_NAME);
+    menu = { x: e.clientX, y: e.clientY, items, focused: initialMenuFocus(items), path };
+  }
+
+  function openRootMenu(e: MouseEvent): void {
+    if (!onCreateFile) return;
+    e.preventDefault();
+    const items = menuItemsForRoot();
+    menu = { x: e.clientX, y: e.clientY, items, focused: initialMenuFocus(items) };
+  }
+
+  function dismissMenu(): void {
+    menu = null;
+  }
+
+  function invokeMenu(action: MenuAction, path: string | undefined): void {
+    dismissMenu();
+    if (action === "create") {
+      promptCreate();
+    } else if (action === "rename" && path !== undefined) {
+      promptRename(path);
+    } else if (action === "delete" && path !== undefined) {
+      confirmDelete(path);
+    }
+  }
+
+  function onMenuItemClick(item: MenuItem): void {
+    if (!item.enabled || menu === null) return;
+    invokeMenu(item.action, menu.path);
+  }
+
+  function onMenuKeyDown(e: KeyboardEvent): void {
+    if (menu === null) return;
+    const action = decideMenuKeyAction(e);
+    if (action === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action.kind === "dismiss") {
+      dismissMenu();
+      return;
+    }
+    if (action.kind === "prev") {
+      menu = { ...menu, focused: moveMenuFocus(menu.items, menu.focused, -1) };
+      return;
+    }
+    if (action.kind === "next") {
+      menu = { ...menu, focused: moveMenuFocus(menu.items, menu.focused, 1) };
+      return;
+    }
+    // activate
+    const item = menu.items[menu.focused];
+    if (item && item.enabled) {
+      invokeMenu(item.action, menu.path);
+    }
+  }
+
+  // Pointerdown anywhere outside the menu element dismisses it. The
+  // menu's own pointerdown handler stops propagation, so this fires
+  // only on truly-outside clicks (including on file rows themselves
+  // — clicking another row should both dismiss the menu and select
+  // that row, which is the same as the user's mental model).
+  function onWindowPointerDown(): void {
+    if (menu !== null) dismissMenu();
+  }
+
+  function onMenuPointerDown(e: PointerEvent): void {
+    e.stopPropagation();
+  }
+
+  // Auto-focus the menu wrapper on open so keyboard nav works
+  // without the user clicking into it.
+  function autoFocus(node: HTMLElement): void {
+    node.focus();
+  }
+
   // M11.2a: keyboard CRUD on the focused file row. F2 → rename
   // (existing prompt flow); Delete/Backspace → confirm-then-delete.
   // Keyboard delete is one keystroke away from accident, so it gates
@@ -254,6 +375,8 @@
   }
 </script>
 
+<svelte:window onpointerdown={onWindowPointerDown} />
+
 <div
   class="ft-host"
   class:dragover={isDragOver}
@@ -261,6 +384,7 @@
   ondragover={onDragOver}
   ondragleave={onDragLeave}
   ondrop={onDrop}
+  oncontextmenu={openRootMenu}
 >
 <ul class="root" role="tree">
   {#each rows as row (row.id)}
@@ -287,6 +411,7 @@
           style:padding-left={indent}
           onclick={() => selectFile(row.data.path)}
           onkeydown={(e) => onFileRowKeyDown(e, row.data.path)}
+          oncontextmenu={(e) => openFileMenu(e, row.data.path)}
         >
           <span class="label">{row.data.name}</span>
         </button>
@@ -344,6 +469,33 @@
   {:else if serverError}
     <p class="err" role="alert">server: {serverError}</p>
   {/if}
+{/if}
+
+{#if menu !== null}
+  <div
+    class="ctx-menu"
+    role="menu"
+    data-testid="filetree-context-menu"
+    style:left="{menu.x}px"
+    style:top="{menu.y}px"
+    tabindex="-1"
+    use:autoFocus
+    onpointerdown={onMenuPointerDown}
+    onkeydown={onMenuKeyDown}
+  >
+    {#each menu.items as item, i (item.action)}
+      <button
+        type="button"
+        role="menuitem"
+        class="ctx-item"
+        class:focused={i === menu.focused}
+        disabled={!item.enabled}
+        data-action={item.action}
+        onclick={() => onMenuItemClick(item)}
+        onmouseenter={() => (menu = menu === null ? null : { ...menu, focused: i })}
+      >{item.label}</button>
+    {/each}
+  </div>
 {/if}
 </div>
 
@@ -450,5 +602,36 @@
     padding: 0.15rem 0.5rem 0.4rem;
     font-size: 0.75rem;
     color: #b91c1c;
+  }
+  .ctx-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 9rem;
+    padding: 0.25rem 0;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    outline: none;
+  }
+  .ctx-item {
+    display: block;
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .ctx-item.focused:not(:disabled) {
+    background: #e5e7eb;
+  }
+  .ctx-item:disabled {
+    color: #9ca3af;
+    cursor: default;
   }
 </style>

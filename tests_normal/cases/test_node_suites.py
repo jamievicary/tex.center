@@ -233,6 +233,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_web_file_tree_keyboard(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "fileTreeKeyboard.test.mjs")
 
+    def test_web_file_tree_context_menu(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "fileTreeContextMenu.test.mjs")
+
     def test_web_editor_panel_layout(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "editorPanelLayout.test.mjs")
 

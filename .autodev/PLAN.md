@@ -94,10 +94,19 @@ routed to (decision deferred post-MVP).
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar. Blocked on Playwright stable snapshot primitive (same
    blocker as M18.3).
-9. **M11.2b right-click context menu** (Create / Rename / Delete,
-   click-outside + Esc, keyboard nav). Then M11.3 (virtual-folder
-   create), M11.4 (intra-tree DnD = rename), M11.5b (binary
-   upload, blocked on wire design), M11.5c (drag-out download).
+9. **M11.2b right-click context menu landed iter 354.** Pure
+   policy helper at `apps/web/src/lib/fileTreeContextMenu.ts`
+   (items + key/focus rules); FileTree.svelte renders a
+   fixed-position menu on `contextmenu`, with click-outside (via
+   `<svelte:window onpointerdown>`) and Esc dismissal,
+   arrow-key + Enter/Space activation. Locks:
+   `tests_normal/.../fileTreeContextMenu.test.mjs` (pure module);
+   `tests_gold/playwright/editorFileTreeContextMenu.spec.ts`
+   (local, 3 cases: main-row guards, root New file… opens prompt,
+   click-outside dismiss). M11.3 (virtual-folder create) is the
+   next slice; then M11.4 (intra-tree DnD = rename), M11.5b
+   (binary upload, blocked on wire design), M11.5c (drag-out
+   download).
 10. **M15 user-bug.** Multi-page seeded GREEN; awaiting
    user-supplied offending source via discussion mode.
 
@@ -149,9 +158,15 @@ routed to (decision deferred post-MVP).
 
 **Remaining sub-slices:**
 
-- **M11.2b** CRUD via right-click context menu. Click-outside +
-  Esc dismissal; keyboard nav (arrow keys / Enter). Same
-  imperative flows as existing buttons.
+- **M11.2b** CRUD via right-click context menu — **landed iter
+  354.** `apps/web/src/lib/fileTreeContextMenu.ts` (pure) +
+  `FileTree.svelte` render; `<svelte:window>` click-outside +
+  Esc dismissal; arrow-key + Enter/Space activation; same
+  imperative flows as existing buttons (`promptCreate`,
+  `promptRename`, `confirmDelete`). main.tex menu items are
+  greyed (mirrors `✎` / `×` button guards). Locks:
+  `apps/web/test/fileTreeContextMenu.test.mjs` + local
+  Playwright `editorFileTreeContextMenu.spec.ts`.
 - **M11.3** create folder via virtual-folder model.
 - **M11.4** intra-tree DnD move = rename op; one file per drag.
 - **M11.5b** OS drop-upload — binary assets. Blocked by
