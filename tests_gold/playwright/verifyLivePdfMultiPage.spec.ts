@@ -496,4 +496,245 @@ test.describe("live multi-page PDF preview (M15)", () => {
       });
     }
   });
+
+  // M21.2 / priority #1 iter B-gold (per `.autodev/PLAN.md`,
+  // `369b_answer.md`). The first case above asserts
+  // `pageWrapperCount ≥ 2` for a static two-page source — but that
+  // count is satisfied by the iter-372 `.pdf-page-placeholder` slot
+  // alone, so it never validates that the bootstrap-cascade chain
+  // actually replaces the placeholder with a real page 2. This
+  // case closes that gap by exercising every hop:
+  //
+  //   1. Fresh project, static two-page source via Ctrl+A → type.
+  //   2. Post-replace pdf-segment ships `shipoutPage=1,
+  //      lastPage=false` (target capped to `maxViewingPage=1`).
+  //   3. PdfViewer mounts `.pdf-page-placeholder` for page 2.
+  //   4. `placeholderEl.scrollIntoView()` → IntersectionObserver
+  //      fires (ratio > 0.1 threshold) → `setViewingPage(2)` →
+  //      outgoing `view` frame → sidecar `kickForView(2)` →
+  //      recompile with `targetPage=2`.
+  //   5. Post-cascade pdf-segment ships `shipoutPage≥2,
+  //      lastPage=true`.
+  //   6. PdfViewer removes placeholder, two *real* `.pdf-page`
+  //      wrappers (no `pdf-page-placeholder` class) live in the
+  //      DOM.
+  //
+  // `lastPage` is the new tri-state byte at frame-offset 18 (i.e.
+  // payload[17]) — encoder writes 2=true / 1=false / 0=unset
+  // (`packages/protocol/src/index.ts`). Parsed inline here so the
+  // wireFrames fixture stays minimal.
+  test("bootstrap cascade: scroll into placeholder triggers page-2 fetch and replaces placeholder", async ({
+    authedPage,
+    db,
+  }, testInfo) => {
+    // Outer envelope: cold first-compile ≤90 s + replace-and-
+    // recompile ≤60 s + scroll-cascade compile ≤60 s + slack.
+    testInfo.setTimeout(240_000);
+
+    const project = await createProject(db.db.db, {
+      ownerId: db.userId,
+      name: `pw-probe-cascade-${Date.now()}`,
+    });
+
+    const { pdfSegmentFrames, compileStatusEvents } = captureFrames(
+      authedPage,
+      project.id,
+    );
+
+    // Per-frame parse for lastPage. `null` ≡ legacy header (< 18 B)
+    // or the new tri-state's `unset` value — neither matches the
+    // page-2 cascade success shape, which requires `true`.
+    const parseLastPage = (frame: Buffer): boolean | null => {
+      if (frame.length < 18) return null;
+      const byte = frame.readUInt8(17);
+      if (byte === 2) return true;
+      if (byte === 1) return false;
+      return null;
+    };
+    const parseShipoutPage = (frame: Buffer): number | null => {
+      if (frame.length < 17) return null;
+      const raw = frame.readUInt32BE(13);
+      return raw > 0 ? raw : null;
+    };
+
+    try {
+      await authedPage.goto(`/editor/${project.id}`);
+
+      const cmContent = authedPage.locator(".cm-content");
+      await cmContent.waitFor({ state: "visible", timeout: 60_000 });
+
+      // Initial cold-compile hello-world segment + canvas paint,
+      // so we know the per-project Machine is warm before we
+      // replace the source.
+      await expect
+        .poll(() => pdfSegmentFrames.length, {
+          timeout: COMPILE_BUDGET_MS,
+          message:
+            "no initial pdf-segment for seeded hello-world template",
+        })
+        .toBeGreaterThan(0);
+      await expectPreviewCanvasPainted(authedPage);
+
+      const segmentsBefore = pdfSegmentFrames.length;
+
+      // Atomic replace, identical mechanism to the static case
+      // above. The post-replace compile ships page 1 only (target
+      // capped to maxViewingPage=1) with `lastPage=false`.
+      await cmContent.click();
+      await authedPage.keyboard.press("Control+a");
+      await authedPage.keyboard.type(STATIC_TWO_PAGE);
+
+      // Wait for the page-2 placeholder to mount. This is the
+      // single load-bearing signal that (a) the post-replace
+      // compile shipped, (b) it carried `lastPage=false`, and
+      // (c) PdfViewer's `syncPlaceholder` ran after the commit.
+      // Any other failure mode (compile errored, segment lost on
+      // the wire, viewer crashed) prevents the placeholder from
+      // appearing and surfaces here as a timeout.
+      const placeholder = authedPage.locator(".pdf-page-placeholder");
+      try {
+        await placeholder.waitFor({ state: "attached", timeout: 90_000 });
+      } catch (err) {
+        // Failure-mode diagnostics: surface the segment shapes
+        // observed since `segmentsBefore` so the failing message
+        // classifies which hop is broken.
+        const postReplaceFrames = pdfSegmentFrames.slice(segmentsBefore);
+        const shapes = postReplaceFrames.map((f) => ({
+          bytes: f.length,
+          shipoutPage: parseShipoutPage(f),
+          lastPage: parseLastPage(f),
+        }));
+        const csCounts = compileStatusEvents.reduce<Record<string, number>>(
+          (acc, e) => {
+            acc[e.state] = (acc[e.state] ?? 0) + 1;
+            return acc;
+          },
+          {},
+        );
+        const csSummary =
+          Object.entries(csCounts)
+            .map(([s, n]) => `${s}×${n}`)
+            .join(",") || "none";
+        throw new Error(
+          `placeholder never mounted within 90 s after the ` +
+            `Ctrl+A → type replacement. ` +
+            `postReplaceFrameCount=${postReplaceFrames.length} ` +
+            `shapes=${JSON.stringify(shapes)} ` +
+            `compileStatusEvents=${csSummary} ` +
+            `original=${err instanceof Error ? err.message : String(err)}. ` +
+            `Classification: 0 post-replace segments + no error → ` +
+            `coalescer never fired; ≥1 with lastPage===null or true → ` +
+            `sidecar didn't stamp lastPage on a 2-page source; ` +
+            `≥1 with lastPage===false but placeholder absent → ` +
+            `PdfViewer.syncPlaceholder() broke.`,
+        );
+      }
+
+      const segmentsAtPlaceholder = pdfSegmentFrames.length;
+
+      // Scroll the placeholder into view. Triggers IO → tracker
+      // promotes maxVisible to 2 → `setViewingPage(2)` →
+      // outgoing `view` frame → sidecar `kickForView(2)`.
+      await placeholder.scrollIntoViewIfNeeded();
+
+      // Await a post-cascade pdf-segment with both lastPage=true
+      // and shipoutPage ≥ 2. Either signal alone is insufficient:
+      // a coincidental compile with lastPage=true on page 1 (a
+      // single-page document re-emitted) would have shipoutPage=1.
+      const cascadeDeadline = Date.now() + 90_000;
+      let cascadeSeg: { idx: number; shipoutPage: number | null } | null = null;
+      while (Date.now() < cascadeDeadline) {
+        for (let i = segmentsAtPlaceholder; i < pdfSegmentFrames.length; i++) {
+          const f = pdfSegmentFrames[i]!;
+          if (parseLastPage(f) === true) {
+            const sp = parseShipoutPage(f);
+            if (sp !== null && sp >= 2) {
+              cascadeSeg = { idx: i, shipoutPage: sp };
+              break;
+            }
+          }
+        }
+        if (cascadeSeg) break;
+        await authedPage.waitForTimeout(250);
+      }
+
+      if (!cascadeSeg) {
+        const postCascadeFrames = pdfSegmentFrames.slice(segmentsAtPlaceholder);
+        const shapes = postCascadeFrames.map((f) => ({
+          bytes: f.length,
+          shipoutPage: parseShipoutPage(f),
+          lastPage: parseLastPage(f),
+        }));
+        const csCounts = compileStatusEvents.reduce<Record<string, number>>(
+          (acc, e) => {
+            acc[e.state] = (acc[e.state] ?? 0) + 1;
+            return acc;
+          },
+          {},
+        );
+        const csSummary =
+          Object.entries(csCounts)
+            .map(([s, n]) => `${s}×${n}`)
+            .join(",") || "none";
+        expect(
+          cascadeSeg,
+          `no pdf-segment with shipoutPage≥2 AND lastPage=true ` +
+            `arrived within 90 s of scrolling the placeholder into ` +
+            `view. ` +
+            `postCascadeFrameCount=${postCascadeFrames.length} ` +
+            `shapes=${JSON.stringify(shapes)} ` +
+            `compileStatusEvents=${csSummary}. ` +
+            `Classification: 0 post-scroll segments → IO didn't ` +
+            `fire OR setViewingPage() didn't reach sidecar OR ` +
+            `kickForView skipped (check sidecar log for ` +
+            `kickForView-skip with reason); ≥1 with ` +
+            `shipoutPage=1 → sidecar still capping target at 1 ` +
+            `(maxViewingPage state lost); ≥1 with ` +
+            `shipoutPage=2 + lastPage=false → engine didn't ` +
+            `hit \\enddocument at page 2 (upstream supertex).`,
+        ).not.toBeNull();
+      }
+
+      // The PdfViewer must remove the placeholder and add a
+      // second real `.pdf-page` wrapper after the cascade segment
+      // commits. Bounded poll on the DOM rather than a fixed
+      // sleep: the render is bytes→pdfjs→canvases→commit, so a
+      // few hundred ms of slack is enough on a warm Machine.
+      const renderDeadline = Date.now() + 30_000;
+      let realPages = 0;
+      let placeholderCount = 1;
+      while (Date.now() < renderDeadline) {
+        const counts = await authedPage.evaluate(() => ({
+          realPages: document.querySelectorAll(
+            ".preview .pdf-page:not(.pdf-page-placeholder)",
+          ).length,
+          placeholderCount: document.querySelectorAll(
+            ".preview .pdf-page-placeholder",
+          ).length,
+        }));
+        realPages = counts.realPages;
+        placeholderCount = counts.placeholderCount;
+        if (realPages >= 2 && placeholderCount === 0) break;
+        await authedPage.waitForTimeout(250);
+      }
+
+      expect(
+        realPages >= 2 && placeholderCount === 0,
+        `bootstrap cascade rendered, but the viewer did not ` +
+          `replace the placeholder with a real page 2 within 30 s. ` +
+          `realPages=${realPages} placeholderCount=${placeholderCount}. ` +
+          `Classification: realPages=1 + placeholderCount=1 → ` +
+          `cascade segment arrived but PdfViewer's render() didn't ` +
+          `commit a 2-page descriptor list (check pdfjs path); ` +
+          `realPages=2 + placeholderCount=1 → ` +
+          `syncPlaceholder() didn't remove the slot after commit ` +
+          `(lastPage prop never flipped to true on PdfViewer).`,
+      ).toBe(true);
+    } finally {
+      await cleanupLiveProjectMachine({
+        projectId: project.id,
+        drizzle: db.db.db,
+      });
+    }
+  });
 });
