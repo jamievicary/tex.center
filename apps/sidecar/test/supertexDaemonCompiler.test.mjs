@@ -129,14 +129,19 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 // 1. Happy path: spawn lazy, ready marker, one round, chunks concatenated.
+//    Also locks the M21.3b post-round log emission paired with
+//    `daemon-stdin`.
 {
   const workDir = await makeWorkDir("happy");
+  const logCalls = [];
   const c = new SupertexDaemonCompiler({
     workDir,
     supertexBin: fakeBin,
     spawnFn: makeSpawnFn({ FAKE_TOTAL: "3" }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
+    projectId: "proj-happy",
   });
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, true, "happy compile ok");
@@ -151,6 +156,25 @@ const require = createRequire(import.meta.url);
   // Chunk files on disk.
   const onDisk = readdirSync(join(workDir, "chunks")).sort();
   assert.deepEqual(onDisk, ["1.out", "2.out", "3.out"]);
+  // M21.3b: `daemon-stdin` (pre-round) and `daemon-round-done`
+  // (post-round) both fired, in order, with matching `round` field.
+  const stdinLine = logCalls.find((l) => l.msg === "daemon-stdin");
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(stdinLine, "daemon-stdin log emitted");
+  assert.ok(doneLine, "daemon-round-done log emitted");
+  assert.equal(stdinLine.fields.round, 1, "stdin round=1");
+  assert.equal(stdinLine.fields.target, "end");
+  assert.equal(stdinLine.fields.projectId, "proj-happy");
+  assert.equal(doneLine.fields.round, 1, "done round matches stdin");
+  assert.equal(doneLine.fields.maxShipout, 3, "done carries maxShipout=3");
+  assert.equal(doneLine.fields.errorReason, null, "done has no error");
+  assert.equal(doneLine.fields.violation, undefined, "done has no violation");
+  assert.equal(doneLine.fields.projectId, "proj-happy");
+  // Ordering: stdin must precede done within the same compile call.
+  assert.ok(
+    logCalls.indexOf(stdinLine) < logCalls.indexOf(doneLine),
+    "daemon-stdin precedes daemon-round-done",
+  );
   await c.close();
 }
 
@@ -190,8 +214,10 @@ const require = createRequire(import.meta.url);
 
 // 4. `[error reason]` followed by `[round-done]` → CompileFailure
 //    surfacing the reason, then a subsequent compile succeeds.
+//    Also locks the M21.3b post-round log on the error path.
 {
   const workDir = await makeWorkDir("error-recover");
+  const logCalls = [];
   // Two-stage: first compile with FAKE_MODE=error, then would-be
   // recovery. But spawnFn env is fixed per-instance, so we just
   // assert the error surface here; recovery is exercised in
@@ -202,26 +228,44 @@ const require = createRequire(import.meta.url);
     spawnFn: makeSpawnFn({ FAKE_TOTAL: "1", FAKE_MODE: "error" }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
   });
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, false);
   assert.match(r.error, /simulated failure/);
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted on error path");
+  assert.equal(doneLine.fields.errorReason, "simulated failure");
+  assert.equal(
+    doneLine.fields.violation,
+    undefined,
+    "no violation on a clean [error …] round",
+  );
   await c.close();
 }
 
 // 5. Protocol violation → kills child and surfaces raw line.
+//    Also locks the M21.3b post-round log carrying the `violation`
+//    field on this path.
 {
   const workDir = await makeWorkDir("violation");
+  const logCalls = [];
   const c = new SupertexDaemonCompiler({
     workDir,
     supertexBin: fakeBin,
     spawnFn: makeSpawnFn({ FAKE_TOTAL: "1", FAKE_MODE: "violation" }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
   });
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, false);
   assert.match(r.error, /protocol violation.*garbage-line/);
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted on violation path");
+  assert.match(doneLine.fields.violation, /protocol violation.*garbage-line/);
+  assert.equal(doneLine.fields.errorReason, null);
+  assert.equal(doneLine.fields.maxShipout, -1, "violation before any shipout");
   await c.close();
 }
 
@@ -349,17 +393,30 @@ const require = createRequire(import.meta.url);
 //     edit→preview regression iter 188 diagnosed.
 {
   const workDir = await makeWorkDir("noop");
+  const logCalls = [];
   const c = new SupertexDaemonCompiler({
     workDir,
     supertexBin: fakeBin,
     spawnFn: makeSpawnFn({ FAKE_TOTAL: "0", FAKE_MODE: "noop" }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
   });
   const r = await c.compile({ source: "x", targetPage: 0 });
   assert.equal(r.ok, true, "noop compile ok");
   assert.deepEqual(r.segments, [], "noop emits no segments");
   assert.equal(r.shipoutPage, undefined, "noop has no shipoutPage");
+  // M21.3b: a no-op round is the most diagnostically valuable case
+  // — `{ ok: true, segments: [] }` and "everything is fine
+  // upstream, the engine just decided not to ship" look identical
+  // to the caller. The post-round log must record maxShipout=-1
+  // and errorReason=null so the operator can distinguish a genuine
+  // upstream no-op from a sidecar-side suppression.
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted on noop path");
+  assert.equal(doneLine.fields.maxShipout, -1);
+  assert.equal(doneLine.fields.errorReason, null);
+  assert.equal(doneLine.fields.violation, undefined);
   await c.close();
 }
 

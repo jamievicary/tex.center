@@ -40,9 +40,14 @@ import type {
 /**
  * M15 Step A diagnostic sink shape (matches `CompileDebugLog` in
  * `../server.ts`; redeclared here so the compiler module has no
- * back-reference to the server). When wired, the daemon emits a
- * `daemon-stdin` record before each `recompile,…` write and a
- * `daemon-stderr` record per forwarded stderr line.
+ * back-reference to the server). When wired, the daemon emits:
+ *   - `daemon-stdin`     before each `recompile,…` write,
+ *     fields `{ round, target, sourceLen }`.
+ *   - `daemon-round-done` after `collectRound` returns,
+ *     fields `{ round, maxShipout, errorReason, violation? }`
+ *     (M21.3b — pairs with `daemon-stdin` to expose the per-round
+ *     emit decision).
+ *   - `daemon-stderr`    per forwarded stderr line.
  */
 export type DaemonDebugLog = (
   fields: Record<string, unknown>,
@@ -154,6 +159,26 @@ export class SupertexDaemonCompiler implements Compiler {
       );
       this.writeStdin(`recompile,${target}\n`);
       const events = await this.collectRound();
+      // M21.3b: pair the pre-round `daemon-stdin` line with a
+      // post-round emission carrying the collected `maxShipout` and
+      // `errorReason` (plus `violation` when the daemon stream broke
+      // protocol). This is the only place the emit decision becomes
+      // visible in the structured log — without it, a `{ ok: true,
+      // segments: [] }` round looks identical to a successful one
+      // upstream, and a violation has no trail beyond the surfaced
+      // error string.
+      this.log?.(
+        {
+          projectId: this.projectId,
+          round: this.roundSeq,
+          maxShipout: events.maxShipout,
+          errorReason: events.errorReason,
+          ...(events.violation !== undefined
+            ? { violation: events.violation }
+            : {}),
+        },
+        "daemon-round-done",
+      );
       if (events.violation !== undefined) {
         return { ok: false, error: events.violation };
       }

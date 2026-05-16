@@ -275,12 +275,24 @@ Tuning note: 5 s suspend is aggressive but suspend cost is
 - **M21.3 (open).** Page-prefetch emit-decision investigation
   (queued iter 310). Critical context: `server.ts:528` hard-codes
   `targetPage: 0` → `recompile,end`. No active target-page gate;
-  `maxViewingPage` only feeds `coalescer.kickForView`. M21.3a
-  tightens `pickMaxVisible` to require ratio > some threshold
-  (today: ratio > 0). M21.3b extends the iter-282 `daemon-stdin`
-  debug log with `maxShipout` and `errorReason` from
-  `collectRound`. M21.3c files upstream supertex repro if
-  evidence points there.
+  `maxViewingPage` only feeds `coalescer.kickForView`.
+  - **M21.3a (open).** Tighten `pickMaxVisible` to require ratio >
+    some threshold (today: ratio > 0). Front-end pure helper +
+    unit test.
+  - **M21.3b (iter 319).** Paired `daemon-round-done` log line
+    (post-`collectRound`) carries `{ round, maxShipout,
+    errorReason, violation? }`. Together with the iter-282
+    `daemon-stdin` (pre-round, `{ round, target, sourceLen }`)
+    the structured log now exposes the per-round emit decision
+    end-to-end. Lock cases in
+    `apps/sidecar/test/supertexDaemonCompiler.test.mjs` (happy,
+    error, violation, noop).
+  - **M21.3c (open).** With M21.3b in place, capture a sidecar
+    log transcript of the user-reported "edit on hidden page
+    N+2 ships no segment" repro and either fix front-end if
+    daemon-stdin shows a non-`end` target, or file upstream
+    supertex repro if `daemon-round-done` shows `maxShipout=-1`
+    on a round that should have shipped.
 
 ### M22.debug-toasts — front→back wire coverage
 
@@ -426,7 +438,8 @@ M0–M7.5.5; M8.smoke.0; M8.pw.0–M8.pw.4-reused; M9.observability;
 M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
-M17; M17.b; M18.1; M19; M20.1; M21.1; M22.1/2-local/3/4a/4b/5; M23.1/2/4/5;
+M17; M17.b; M18.1; M19; M20.1; M21.1; M21.3b;
+M22.1/2-local/3/4a/4b/5; M23.1/2/4/5;
 iter-200 coalescer extraction; iter-258/259 boot-time session
 sweep; iter-280 layout math extraction + iter-290 dead-branch
 removal; iter-293 startup `pw-*` sweep + machine-count threshold
