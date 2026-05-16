@@ -134,12 +134,43 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
     phase("project-created", { projectId: project.id, sentinel });
 
     let pdfSegmentCount = 0;
+    // Iter 338: iter 337's probes proved `.cm-content` never appears
+    // at all after reopen (cmLen=0 for full 90 s). That element only
+    // mounts once `snapshot.hydrated === true` per the editor page,
+    // which requires the WS to open + Yjs initial sync. To
+    // discriminate "WS never opens" / "WS opens but never syncs" /
+    // "page crashed before mount", track total WS open events, frame
+    // counts, close events, and page errors throughout, and surface
+    // them in the sentinel-poll probe.
+    let wsOpenCount = 0;
+    let wsCloseCount = 0;
+    let wsFrameCount = 0;
+    let lastWsCloseInfo = "(none)";
     authedPage.on("websocket", (ws) => {
       if (!ws.url().includes(`/ws/project/${project.id}`)) return;
+      wsOpenCount += 1;
       ws.on("framereceived", ({ payload }) => {
+        wsFrameCount += 1;
         if (typeof payload === "string" || payload.length === 0) return;
         if (payload[0] === TAG_PDF_SEGMENT) pdfSegmentCount += 1;
       });
+      ws.on("close", () => {
+        wsCloseCount += 1;
+        lastWsCloseInfo = `wasClean=${ws.isClosed()}`;
+      });
+      ws.on("socketerror", (err) => {
+        lastWsCloseInfo = `socketerror=${String(err).slice(0, 80)}`;
+      });
+    });
+
+    const pageErrors: string[] = [];
+    authedPage.on("pageerror", (err) => {
+      pageErrors.push(`${err.name}: ${err.message.slice(0, 120)}`);
+    });
+    authedPage.on("console", (msg) => {
+      if (msg.type() === "error") {
+        pageErrors.push(`console.error: ${msg.text().slice(0, 120)}`);
+      }
     });
 
     let machineId = "(unset)";
@@ -282,7 +313,16 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       //    iteration logs the current cm-content state so a
       //    timeout-fired run still tells us whether the editor
       //    rendered at all and what its text was.
-      phase("7-sentinel:poll");
+      // Snapshot WS counters at the moment we enter the post-reopen
+      // poll, so the probe can show what happened *after* the click.
+      const wsFramesBeforeReopen = wsFrameCount;
+      const wsOpensBeforeReopen = wsOpenCount;
+      const pdfSegmentsBeforeReopen = pdfSegmentCount;
+      phase("7-sentinel:poll", {
+        wsOpensBeforeReopen,
+        wsFramesBeforeReopen,
+        pdfSegmentsBeforeReopen,
+      });
       const sentinelDeadline = Date.now() + SENTINEL_VISIBLE_BUDGET_MS;
       let pollIter = 0;
       let lastLoggedIter = -1;
@@ -298,10 +338,54 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
           (pollIter === 1 || pollIter - lastLoggedIter >= 20) &&
           !found
         ) {
+          // Iter 338 enrichment: capture page-level state per probe.
+          // `bodyLen` ~0 ⇒ blank/error page; `seedPresent` true ⇒
+          // SSR placeholder rendered (assignment === null at load
+          // time, surprising for a re-opened project); `wsOpens` /
+          // `wsFrames` delta against the pre-reopen snapshot tells
+          // us whether the WS upgrade completed; `pdfSegments` delta
+          // tells us whether the daemon started compiling.
+          // `pageErrors` last entry surfaces a hydration crash.
+          // All collected via a single page.evaluate to keep
+          // per-iteration cost low.
+          const pageState = await authedPage
+            .evaluate(() => ({
+              url: location.href,
+              bodyLen: document.body?.innerText?.length ?? 0,
+              seedPresent: document.querySelector(".editor-seed") !== null,
+              cmContentPresent:
+                document.querySelector(".cm-content") !== null,
+              cmEditorPresent: document.querySelector(".cm-editor") !== null,
+              title: document.title,
+            }))
+            .catch((e) => ({
+              url: "(evaluate-failed)",
+              bodyLen: -1,
+              seedPresent: false,
+              cmContentPresent: false,
+              cmEditorPresent: false,
+              title: String(e).slice(0, 80),
+            }));
           phase("7-sentinel:probe", {
             iter: pollIter,
             cmLen: cmTextAfterReopen.length,
             cmPrefix: cmTextAfterReopen.slice(0, 80),
+            url: pageState.url,
+            title: pageState.title,
+            bodyLen: pageState.bodyLen,
+            seedPresent: pageState.seedPresent,
+            cmContentPresent: pageState.cmContentPresent,
+            cmEditorPresent: pageState.cmEditorPresent,
+            wsOpens: wsOpenCount,
+            wsFrames: wsFrameCount,
+            wsCloses: wsCloseCount,
+            lastWsClose: lastWsCloseInfo,
+            pdfSegments: pdfSegmentCount,
+            pageErrorsCount: pageErrors.length,
+            lastPageError:
+              pageErrors.length > 0
+                ? pageErrors[pageErrors.length - 1]
+                : "(none)",
           });
           lastLoggedIter = pollIter;
         }
@@ -312,6 +396,11 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         iter: pollIter,
         found: cmTextAfterReopen.includes(sentinel),
         cmLen: cmTextAfterReopen.length,
+        wsOpens: wsOpenCount,
+        wsFrames: wsFrameCount,
+        wsCloses: wsCloseCount,
+        pdfSegments: pdfSegmentCount,
+        pageErrorsCount: pageErrors.length,
       });
 
       // Diagnostic line — kept regardless of pass/fail so the gold
