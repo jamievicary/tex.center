@@ -65,9 +65,17 @@ const COLD_START_BUDGET_MS = 90_000;
 // proof the source has hit blob storage.
 const POST_EDIT_COMPILE_BUDGET_MS = 30_000;
 // After reopening the stopped project, allow the cold-restart
-// path to surface the sentinel in `.cm-content`. Same envelope
-// as the initial cold-start.
-const SENTINEL_VISIBLE_BUDGET_MS = 90_000;
+// path to surface the sentinel in `.cm-content`. The
+// stopped→started lifecycle goes through `createUpstreamResolver`
+// `driveToStarted` which can wait up to ~140 s in the legitimate
+// worst case (`waitForStartedWithRetry` 60 s + 60 s `tcpProbe`
+// loop + `getMachine` overhead). Iter 338's gold-pass probe showed
+// the second WS receiving zero frames for the full prior 90 s
+// budget, with `wsCloses=0` on it — strong evidence the proxy was
+// still waiting on the resolver when the test bailed. 180 s gives
+// the legitimate path room to complete without hiding a real
+// regression: any cold-restart >180 s is itself a finding.
+const SENTINEL_VISIBLE_BUDGET_MS = 180_000;
 
 test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -258,6 +266,25 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       const base = `https://api.machines.dev/v1/apps/${appName}/machines/${machineId}`;
       const auth = { Authorization: `Bearer ${token}` };
 
+      // Iter 339: per-probe Fly Machine state lookup so the
+      // sentinel-poll probe distinguishes "Fly hasn't started the
+      // Machine yet" from "started but sidecar isn't responding".
+      // Bounded by a 2 s abort so a hung Fly API call can't tank
+      // probe cadence.
+      const fetchFlyState = async (): Promise<string> => {
+        try {
+          const r = await fetch(base, {
+            headers: auth,
+            signal: AbortSignal.timeout(2_000),
+          });
+          if (!r.ok) return `err:http=${r.status}`;
+          const j = (await r.json()) as { state?: string };
+          return j.state ?? "(missing)";
+        } catch (err) {
+          return `err:${String(err).slice(0, 60)}`;
+        }
+      };
+
       const stopRes = await fetch(`${base}/stop`, {
         method: "POST",
         headers: auth,
@@ -318,10 +345,12 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
       const wsFramesBeforeReopen = wsFrameCount;
       const wsOpensBeforeReopen = wsOpenCount;
       const pdfSegmentsBeforeReopen = pdfSegmentCount;
+      const flyStateAtPollEntry = await fetchFlyState();
       phase("7-sentinel:poll", {
         wsOpensBeforeReopen,
         wsFramesBeforeReopen,
         pdfSegmentsBeforeReopen,
+        flyState: flyStateAtPollEntry,
       });
       const sentinelDeadline = Date.now() + SENTINEL_VISIBLE_BUDGET_MS;
       let pollIter = 0;
@@ -348,24 +377,28 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
           // `pageErrors` last entry surfaces a hydration crash.
           // All collected via a single page.evaluate to keep
           // per-iteration cost low.
-          const pageState = await authedPage
-            .evaluate(() => ({
-              url: location.href,
-              bodyLen: document.body?.innerText?.length ?? 0,
-              seedPresent: document.querySelector(".editor-seed") !== null,
-              cmContentPresent:
-                document.querySelector(".cm-content") !== null,
-              cmEditorPresent: document.querySelector(".cm-editor") !== null,
-              title: document.title,
-            }))
-            .catch((e) => ({
-              url: "(evaluate-failed)",
-              bodyLen: -1,
-              seedPresent: false,
-              cmContentPresent: false,
-              cmEditorPresent: false,
-              title: String(e).slice(0, 80),
-            }));
+          const [pageState, flyState] = await Promise.all([
+            authedPage
+              .evaluate(() => ({
+                url: location.href,
+                bodyLen: document.body?.innerText?.length ?? 0,
+                seedPresent: document.querySelector(".editor-seed") !== null,
+                cmContentPresent:
+                  document.querySelector(".cm-content") !== null,
+                cmEditorPresent:
+                  document.querySelector(".cm-editor") !== null,
+                title: document.title,
+              }))
+              .catch((e) => ({
+                url: "(evaluate-failed)",
+                bodyLen: -1,
+                seedPresent: false,
+                cmContentPresent: false,
+                cmEditorPresent: false,
+                title: String(e).slice(0, 80),
+              })),
+            fetchFlyState(),
+          ]);
           phase("7-sentinel:probe", {
             iter: pollIter,
             cmLen: cmTextAfterReopen.length,
@@ -386,12 +419,14 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
               pageErrors.length > 0
                 ? pageErrors[pageErrors.length - 1]
                 : "(none)",
+            flyState,
           });
           lastLoggedIter = pollIter;
         }
         if (found) break;
         await authedPage.waitForTimeout(150);
       }
+      const flyStateAtDone = await fetchFlyState();
       phase("7-sentinel:done", {
         iter: pollIter,
         found: cmTextAfterReopen.includes(sentinel),
@@ -401,6 +436,7 @@ test.describe("live stopped-Machine source preservation (M20.3 GT-9)", () => {
         wsCloses: wsCloseCount,
         pdfSegments: pdfSegmentCount,
         pageErrorsCount: pageErrors.length,
+        flyState: flyStateAtDone,
       });
 
       // Diagnostic line — kept regardless of pass/fail so the gold
