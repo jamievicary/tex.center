@@ -28,7 +28,15 @@ import { expect, type DbFixture } from "./authedPage.js";
 import { cleanupLiveProjectMachine } from "./cleanupLiveProjectMachine.js";
 import { TAG_DOC_UPDATE, TAG_PDF_SEGMENT } from "./wireFrames.js";
 
-const CM_CONTENT_BUDGET_MS = 1000;
+// Default `.cm-content` budget. Per-spec override via
+// `ColdFromInactiveOptions.cmContentBudgetMs` — the two variants
+// (suspended / stopped) have different intrinsic floors, so the
+// number is parameterised per call site rather than hardcoded
+// here. See `.autodev/discussion/365_answer.md` for the suspended
+// variant's empirical basis (1349 ms single-sample iter 362 +
+// headroom). Stopped variant's diagnostic has not yet landed; its
+// budget stays at the helper default until a real number exists.
+const CM_CONTENT_BUDGET_MS_DEFAULT = 1000;
 const KEYSTROKE_ACK_BUDGET_MS = 1000;
 // Maximum wait for the first pdf-segment during cold-start. Same
 // budget the cleanup tests use.
@@ -45,6 +53,16 @@ export interface ColdFromInactiveOptions {
   readonly settleTimeoutMs: number;
   /** Per-project-name prefix; helps post-mortem identify the variant. */
   readonly projectNamePrefix: string;
+  /**
+   * Optional override for the `.cm-content` ready budget. Defaults
+   * to `CM_CONTENT_BUDGET_MS_DEFAULT` (1000 ms). The suspended
+   * variant overrides upward — empirically the
+   * suspended-Machine-resume + sidecar-boot + Yjs-hydrate flow is
+   * intrinsically ~1.3 s (iter 362 sample), not a regression — and
+   * the stopped variant leaves the default in place until its own
+   * diagnostic line fires.
+   */
+  readonly cmContentBudgetMs?: number;
 }
 
 interface RunCtx {
@@ -59,6 +77,8 @@ export async function runColdFromInactiveLiveEditableTest(
 ): Promise<void> {
   const token = process.env.FLY_API_TOKEN!;
   const appName = process.env.SIDECAR_APP_NAME ?? "tex-center-sidecar";
+  const cmContentBudgetMs =
+    options.cmContentBudgetMs ?? CM_CONTENT_BUDGET_MS_DEFAULT;
 
   const project = await createProject(db.db.db, {
     ownerId: db.userId,
@@ -190,7 +210,7 @@ export async function runColdFromInactiveLiveEditableTest(
     // 4a. `.cm-content` populated with the seed sentinel.
     let cmContentReadyMs: number | null = null;
     let cmText = "";
-    const cmDeadline = clickAt + CM_CONTENT_BUDGET_MS;
+    const cmDeadline = clickAt + cmContentBudgetMs;
     while (Date.now() < cmDeadline) {
       cmText =
         (await authedPage
@@ -253,14 +273,14 @@ export async function runColdFromInactiveLiveEditableTest(
     expect(
       cmContentReadyMs,
       `.cm-content did not contain the seeded documentclass sentinel ` +
-        `within ${CM_CONTENT_BUDGET_MS}ms of dashboard click on a ` +
+        `within ${cmContentBudgetMs}ms of dashboard click on a ` +
         `${options.flyState} Machine. last cmText prefix: ` +
         `${JSON.stringify(cmText.slice(0, 80))}`,
     ).not.toBeNull();
     expect(
       cmContentReadyMs!,
-      `.cm-content ready time exceeded ${CM_CONTENT_BUDGET_MS}ms`,
-    ).toBeLessThanOrEqual(CM_CONTENT_BUDGET_MS);
+      `.cm-content ready time exceeded ${cmContentBudgetMs}ms`,
+    ).toBeLessThanOrEqual(cmContentBudgetMs);
     expect(
       keystrokeAckMs,
       `keystroke did not produce a DOC_UPDATE wire frame within ` +

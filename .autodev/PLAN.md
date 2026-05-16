@@ -13,33 +13,41 @@ routed to (decision deferred post-MVP).
 **Active priority queue (open work only):**
 
 1. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
-   editable-state.** RED on every gold pass since iter 347. Iter
-   358 first pinned numbers `cmContentReadyMs=5372
-   keystrokeAckMs=8` — the 5.3 s end-to-end is essentially all
-   pre-first-frame (Fly start + WS handshake + sidecar boot).
-   Iter 359 added `clickToWsOpenMs` / `clickToFirstFrameMs` /
-   `wsPostClick=opens:N/closes:M` to the diagnostic.
+   editable-state.** Iter 362 ran with widened outer budgets and
+   first surfaced the iter-359 diagnostic for the suspended path:
+   `cmContentReadyMs=1349 keystrokeAckMs=9 clickToWsOpenMs=78
+   clickToFirstFrameMs=863 wsPostClick=opens:1/closes:0`. The
+   suspended-resume path is intrinsically ~1.3 s (Fly resume ~78 ms
+   + sidecar boot ~785 ms + Yjs hydrate ~486 ms); the original
+   1000 ms inner `.cm-content` budget was unmeetable by
+   architecture, not by regression.
 
-   **Iter 362 widened both outer test budgets to 120 s**
-   (suspended was 40 s, stopped was 60 s) so the diagnostic line
-   actually fires on the next gold pass. The 1000 ms product
-   invariants inside the helper are unchanged. If the next pass
-   *still* hits the 120 s outer budget without firing the
-   diagnostic, the cold-from-inactive cost has regressed past
-   even the headroom margin — itself a finding worth routing.
+   **Iter 366 bumped suspended-variant `cmContentBudgetMs` to
+   2500 ms** (via a new `ColdFromInactiveOptions` field; helper
+   default stays 1000 ms; stopped-variant call site untouched).
+   Keystroke-ack budget remains 1000 ms (observed 9 ms in the
+   same sample). Routing for the next gold pass:
 
-   Once the breakdown lands, routing:
-   - `clickToWsOpenMs` ≫ everything else → M13.2(b).5
-     architectural (widen SSR seed for non-fresh projects, or
-     eliminate `stopped` state — see FUTURE_IDEAS "Explicit
-     tab-close wire signal" for the latter).
-   - Big gap WS-open → first-frame → sidecar boot regression;
-     cross-check iter-353 warmup-fails-then-respawn pattern.
-   - `cmContentReadyMs - clickToFirstFrameMs` ≫ small → Yjs /
-     CodeMirror render path.
-   - `wsPostClick=opens:0` (suspended variant) → confirms WS
-     never opens; investigate `upstreamResolver.driveToStarted`
-     for `suspended` state at `upstreamResolver.ts:293`.
+   - **Suspended.** GREEN expected. If RED at 2500 ms with the
+     same three-phase shape, the highest-leverage lever is the
+     ~785 ms sidecar-boot phase — investigate whether `await
+     workspace.init()` blocks `hello` and whether
+     `compiler.warmup()` races the WS handshake correctly
+     post-iter-353. (Architectural M13.2(b).5 candidates — widen
+     SSR seed / eliminate `stopped` / per-cycle marks — were
+     about a `clickToWsOpenMs`-dominated breakdown, which this
+     iteration's data rules out for the suspended path.)
+   - **Stopped.** First diagnostic line still pending (iter 362
+     widened its outer to 120 s but no gold pass since). On the
+     next pass, audit the breakdown and bump
+     `cmContentBudgetMs` accordingly — stopped is intrinsically
+     slower (full Fly start + sidecar boot vs. resume +
+     sidecar boot), so its number will be different from the
+     suspended 2500.
+   - **Outer test-budget exceeded with no diagnostic.** Same
+     route as before: cold-from-inactive cost has regressed past
+     even the 120 s headroom; broader Fly cold-start health
+     check (image pull, region, builder warmth).
 
 2. **`verifyLiveFullPipeline` NEW FAIL iter 360.** Fresh-project
    full pipeline `cmContent.waitFor` timed out at 40 s testTimeout

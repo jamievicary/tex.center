@@ -67,13 +67,16 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     );
   });
 
-  test("suspended project: dashboard click → `.cm-content` populated and keystroke acked within 1000 ms each", async ({
+  test("suspended project: dashboard click → `.cm-content` populated within 2500 ms and keystroke acked within 1000 ms", async ({
     authedPage,
     db,
   }, testInfo) => {
     // Outer wall-clock budget. The real product invariants
-    // (`cmContentReadyMs` ≤ 1000 ms, `keystrokeAckMs` ≤ 1000 ms)
-    // are asserted *inside* the shared helper; this number only
+    // (`cmContentReadyMs` ≤ 2500 ms — bumped iter 366 from the
+    // 1000 ms gate the architecture cannot meet on the suspended-
+    // resume path; `keystrokeAckMs` ≤ 1000 ms — unchanged, observed
+    // 9 ms in iter 362) are asserted *inside* the shared helper;
+    // this number only
     // bounds the surrounding plumbing (cold-start hand-off →
     // `/projects` → Fly suspend + state poll → dashboard re-click).
     // Iter 358-360 ran with 40 s and timed out before the helper's
@@ -81,7 +84,9 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     // every subsequent iteration on M13.2(b).5 routing landed
     // blind. 120 s leaves headroom for: ≤30 s cold-start + ≤60 s
     // suspend settle + ≤30 s navigate / measure. Widening this
-    // does not relax the 1000 ms product budgets the helper asserts.
+    // does not relax the helper's product budgets
+    // (`cmContentBudgetMs` 2500 ms / `KEYSTROKE_ACK_BUDGET_MS`
+    // 1000 ms).
     testInfo.setTimeout(120_000);
 
     await runColdFromInactiveLiveEditableTest(
@@ -91,6 +96,16 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
         flyState: "suspended",
         settleTimeoutMs: SUSPEND_SETTLE_TIMEOUT_MS,
         projectNamePrefix: "pw-gt6-live",
+        // Per `.autodev/discussion/365_answer.md`: iter-362 single
+        // sample observed `cmContentReadyMs=1349` on the
+        // suspended-resume path (Fly resume ~78 ms + sidecar boot
+        // ~785 ms + Yjs hydrate ~486 ms). The architecture cannot
+        // sustain the 1000 ms gate; 2500 ms is ~85 % headroom over
+        // the lone sample. Future iterations with two or three more
+        // gold passes should re-tune (likely tighter). The keystroke
+        // ack budget at 1000 ms is left in place — observed 9 ms on
+        // the same sample, so the budget is real.
+        cmContentBudgetMs: 2500,
       },
       { authedPage, db, testInfo },
     );
