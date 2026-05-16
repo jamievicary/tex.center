@@ -16,6 +16,7 @@
     "@codemirror/view": "^6.35.0",
     "@headless-tree/core": "1.6.3",
     "@tex-center/auth": "workspace:*",
+    "@tex-center/blobs": "workspace:*",
     "@tex-center/db": "workspace:*",
     "@tex-center/protocol": "workspace:*",
     "codemirror": "^6.0.1",

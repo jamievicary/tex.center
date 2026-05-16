@@ -263,6 +263,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_blobs_local_fs(self) -> None:
         _run_tsx(ROOT / "packages" / "blobs" / "test" / "localFs.test.mjs")
 
+    def test_web_blob_store(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "blobStore.test.mjs")
+
     def test_auth(self) -> None:
         _run_tsx(ROOT / "packages" / "auth" / "test" / "auth.test.mjs")
 

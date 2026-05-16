@@ -26,3 +26,4 @@ export interface BlobStore {
 
 export { LocalFsBlobStore } from "./localFs.js";
 export { validateKey } from "./key.js";
+export { defaultBlobStoreFromEnv } from "./envSelect.js";

@@ -90,6 +90,9 @@ importers:
       '@tex-center/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@tex-center/blobs':
+        specifier: workspace:*
+        version: link:../../packages/blobs
       '@tex-center/db':
         specifier: workspace:*
         version: link:../../packages/db

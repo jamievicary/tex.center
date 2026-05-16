@@ -171,11 +171,42 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
 `apps/sidecar/test/idleSuspend.test.mjs`,
 `serverIdleStop.test.mjs`, `serverCheckpointWiring.test.mjs`.
 
-- **M20.2 (open).** Shared `BLOB_STORE` on web tier *and*
+- **M20.2 (in-progress).** Shared `BLOB_STORE` on web tier *and*
   sidecar. Sidecar persists source + latex compilation
   artefacts (NOT supertex outputs) on every settle. Rehydrate
   on cold boot. Unblocks
-  `verifyLiveGt6LiveEditableStateStopped`.
+  `verifyLiveGt6LiveEditableStateStopped`. Split:
+  - **(a) [landed iter 322].** Web tier wired to the same
+    `BLOB_STORE` / `BLOB_STORE_LOCAL_DIR` env protocol as
+    sidecar via `@tex-center/blobs`-hosted
+    `defaultBlobStoreFromEnv()` (lifted out of
+    `apps/sidecar/src/persistence.ts`). New
+    `apps/web/src/lib/server/blobStore.ts` exposes
+    `webBlobStoreFromEnv()` + `coldSourceFor(blobStore,
+    projectId)` reading the canonical
+    `projects/<id>/files/main.tex` key shape. Dark code: no
+    production caller consults it yet.
+  - **(b) [done].** Sidecar persistence on every settle is
+    already in place: `persistence.maybePersist()` runs at the
+    top of every `runCompile` (after `writeMain`, before the
+    compile invocation, so a failed compile cannot lose user
+    edits), and `persistAllCheckpoints()` runs in
+    `createIdleStage`'s persist-before-handler step on both the
+    suspend and stop cascades. No new code needed here for
+    M20.2.
+  - **(c) cold-storage seed cutover [next ordinary iter].**
+    Compose `coldSourceFor` into the production `seedDocFor`
+    chain in `apps/web/src/server.ts`: blob lookup beats db
+    `seed_doc` beats `MAIN_DOC_HELLO_WORLD`. Cutover happens
+    *behind* the existing infra: today's `LocalFsBlobStore` is
+    per-Machine so the blob lookup always returns `null` in
+    production, but the path is exercised by an integration
+    test pointing web tier and a synthetic sidecar at a shared
+    `BLOB_STORE_LOCAL_DIR`. Real cross-Machine cold storage
+    needs an S3-compatible adapter (Tigris on Fly) which is its
+    own subsequent slice. The SSR seed-gate flip
+    ("no machine assignment" → "no persisted blob") rides on
+    this same cutover.
 - **M20.3 (open).** Gold spec: open project, idle 6 s
   (suspended), edit → 300 ms ack; idle 6 min (stopped), edit →
   cold-start budget; content preserved. Override stop timer via

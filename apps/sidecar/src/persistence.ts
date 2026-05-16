@@ -68,7 +68,7 @@
 import * as Y from "yjs";
 
 import type { BlobStore } from "@tex-center/blobs";
-import { LocalFsBlobStore } from "@tex-center/blobs";
+import { defaultBlobStoreFromEnv } from "@tex-center/blobs";
 
 import {
   MAIN_DOC_HELLO_WORLD,
@@ -626,22 +626,7 @@ export function createProjectPersistence(args: {
   };
 }
 
-// Selects a default `BlobStore` from environment:
-//   - `BLOB_STORE` unset / "none" → undefined (no persistence)
-//   - "local" → `LocalFsBlobStore` rooted at `$BLOB_STORE_LOCAL_DIR`
-//   - "s3"    → reserved for M4.3.1; rejected for now
-export function defaultBlobStoreFromEnv(): BlobStore | undefined {
-  const which = process.env.BLOB_STORE;
-  if (!which || which === "none") return undefined;
-  if (which === "local") {
-    const dir = process.env.BLOB_STORE_LOCAL_DIR;
-    if (!dir) {
-      throw new Error("BLOB_STORE=local requires BLOB_STORE_LOCAL_DIR");
-    }
-    return new LocalFsBlobStore({ rootDir: dir });
-  }
-  if (which === "s3") {
-    throw new Error("BLOB_STORE=s3 not implemented yet (M4.3.1)");
-  }
-  throw new Error(`unknown BLOB_STORE: ${which}`);
-}
+// `defaultBlobStoreFromEnv` re-exported above; lives in
+// `@tex-center/blobs` so the web tier and sidecar agree on a single
+// `BLOB_STORE` / `BLOB_STORE_LOCAL_DIR` env protocol.
+export { defaultBlobStoreFromEnv };
