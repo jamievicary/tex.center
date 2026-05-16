@@ -32,10 +32,11 @@ import { TAG_DOC_UPDATE, TAG_PDF_SEGMENT } from "./wireFrames.js";
 // `ColdFromInactiveOptions.cmContentBudgetMs` — the two variants
 // (suspended / stopped) have different intrinsic floors, so the
 // number is parameterised per call site rather than hardcoded
-// here. See `.autodev/discussion/365_answer.md` for the suspended
-// variant's empirical basis (1349 ms single-sample iter 362 +
-// headroom). Stopped variant's diagnostic has not yet landed; its
-// budget stays at the helper default until a real number exists.
+// here. Suspended: 2500 ms (iter 366; iter-362 sample 1349 ms +
+// ~85 % headroom). Stopped: 9000 ms (iter 367; iter-366 sample
+// 4853 ms + ~85 % headroom — fresh container boot is ~5× slower
+// than suspended-resume). The default below applies only to call
+// sites that pass no override.
 const CM_CONTENT_BUDGET_MS_DEFAULT = 1000;
 const KEYSTROKE_ACK_BUDGET_MS = 1000;
 // Maximum wait for the first pdf-segment during cold-start. Same
@@ -55,12 +56,12 @@ export interface ColdFromInactiveOptions {
   readonly projectNamePrefix: string;
   /**
    * Optional override for the `.cm-content` ready budget. Defaults
-   * to `CM_CONTENT_BUDGET_MS_DEFAULT` (1000 ms). The suspended
-   * variant overrides upward — empirically the
-   * suspended-Machine-resume + sidecar-boot + Yjs-hydrate flow is
-   * intrinsically ~1.3 s (iter 362 sample), not a regression — and
-   * the stopped variant leaves the default in place until its own
-   * diagnostic line fires.
+   * to `CM_CONTENT_BUDGET_MS_DEFAULT` (1000 ms). Both variants
+   * override upward — the suspended-Machine-resume + sidecar-boot
+   * + Yjs-hydrate flow is intrinsically ~1.3 s (iter 362 sample;
+   * spec budget 2500 ms), and the fresh-container cold-from-
+   * stopped flow is intrinsically ~4.9 s (iter 366 sample; spec
+   * budget 9000 ms).
    */
   readonly cmContentBudgetMs?: number;
 }

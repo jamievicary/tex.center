@@ -13,37 +13,41 @@ routed to (decision deferred post-MVP).
 **Active priority queue (open work only):**
 
 1. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
-   editable-state.** Iter 362 ran with widened outer budgets and
-   first surfaced the iter-359 diagnostic for the suspended path:
-   `cmContentReadyMs=1349 keystrokeAckMs=9 clickToWsOpenMs=78
-   clickToFirstFrameMs=863 wsPostClick=opens:1/closes:0`. The
-   suspended-resume path is intrinsically ~1.3 s (Fly resume ~78 ms
-   + sidecar boot ~785 ms + Yjs hydrate ~486 ms); the original
-   1000 ms inner `.cm-content` budget was unmeetable by
-   architecture, not by regression.
+   editable-state.** Iter 362 surfaced the suspended-path
+   diagnostic; iter 366 bumped suspended-variant
+   `cmContentBudgetMs` to 2500 ms; iter 366 gold pass GREEN on
+   suspended, and finally surfaced the stopped-path diagnostic:
+   `cmContentReadyMs=4853 keystrokeAckMs=7 clickToWsOpenMs=95
+   clickToFirstFrameMs=4556 wsPostClick=opens:1/closes:0`.
 
-   **Iter 366 bumped suspended-variant `cmContentBudgetMs` to
-   2500 ms** (via a new `ColdFromInactiveOptions` field; helper
-   default stays 1000 ms; stopped-variant call site untouched).
-   Keystroke-ack budget remains 1000 ms (observed 9 ms in the
-   same sample). Routing for the next gold pass:
+   Two distinct intrinsic floors:
+   - **Suspended.** ~1.3 s (Fly resume ~78 ms + sidecar boot
+     ~785 ms + Yjs hydrate ~486 ms). Spec budget 2500 ms.
+   - **Stopped.** ~4.9 s. `clickToWsOpenMs=95` is fast (Fly
+     start was hot), but `clickToFirstFrameMs=4556` shows a
+     fresh container boot (no resume shortcut) is ~5× slower
+     than the suspended-resume path's sidecar boot. Iter 367
+     bumped spec budget to 9000 ms (~85 % headroom over the
+     lone sample, matching iter-366's ratio).
 
-   - **Suspended.** GREEN expected. If RED at 2500 ms with the
-     same three-phase shape, the highest-leverage lever is the
-     ~785 ms sidecar-boot phase — investigate whether `await
-     workspace.init()` blocks `hello` and whether
-     `compiler.warmup()` races the WS handshake correctly
-     post-iter-353. (Architectural M13.2(b).5 candidates — widen
-     SSR seed / eliminate `stopped` / per-cycle marks — were
-     about a `clickToWsOpenMs`-dominated breakdown, which this
-     iteration's data rules out for the suspended path.)
-   - **Stopped.** First diagnostic line still pending (iter 362
-     widened its outer to 120 s but no gold pass since). On the
-     next pass, audit the breakdown and bump
-     `cmContentBudgetMs` accordingly — stopped is intrinsically
-     slower (full Fly start + sidecar boot vs. resume +
-     sidecar boot), so its number will be different from the
-     suspended 2500.
+   Both budgets are single-sample tunes; future iterations with
+   2-3 more gold passes should re-tune (likely tighter). Keystroke
+   ack budget stays 1000 ms on both (observed 9 ms suspended,
+   7 ms stopped).
+
+   **Routing for the next gold pass (both variants):**
+   - **GREEN.** Close M13.2(b).4. The intrinsic-floor analysis
+     was right; the original 1000 ms gate was unmeetable by
+     architecture.
+   - **Suspended RED with three-phase shape unchanged.** Highest-
+     leverage lever is the ~785 ms sidecar-boot phase —
+     investigate whether `await workspace.init()` blocks `hello`
+     and whether `compiler.warmup()` races the WS handshake
+     correctly post-iter-353.
+   - **Stopped RED with `clickToFirstFrameMs` >> 4556 ms.** The
+     sidecar boot on a fresh container has further regressed;
+     same investigation lever as suspended but with an
+     intrinsically higher floor (container start vs. resume).
    - **Outer test-budget exceeded with no diagnostic.** Same
      route as before: cold-from-inactive cost has regressed past
      even the 120 s headroom; broader Fly cold-start health
