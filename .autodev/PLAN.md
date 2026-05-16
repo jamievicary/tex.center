@@ -15,30 +15,48 @@ routed to (decision deferred post-MVP).
 1. **M20.3 — cold-start latency + cold-cycle gold spec.**
    Tigris bucket `texcenter-blobs` provisioned iter 327;
    `BLOB_STORE=s3` + AWS_* secrets live on both `tex-center` and
-   `tex-center-sidecar` (same credential pair, since `flyctl
-   storage create` rejects same-name re-creation; saved to
-   `creds/tigris-tex-center.txt`). Both deploys healthy.
-   `verifyLiveGt6LiveEditableStateStopped` is now blocked on
-   **cold-start latency**, not architecture: globalSetup warmup
-   measured first-pdf-segment-on-fresh-project at ~89 s, but the
-   test's own 60 s budget targets ~12.5 s. Per-stage cold-boot
-   instrumentation landed iter 328: `sidecar-listening` log line
-   carries `bootElapsedMs`, and the `compile ok` record carries
-   `phases: { hydrateMs, restoreMs, writeMainMs, persistMs,
-   compileMs }`.
-   **Iter 329 caveat:** every web-tier deploy 323→328 was
-   silently failing (`apps/web/Dockerfile` was not source-copying
-   the new `packages/blobs/` workspace dep). Iter 329 fixed the
-   Dockerfile and added
-   `test_source_copy_covers_web_workspace_deps` to pin the
-   regression class. The instrumentation is dark in prod until
-   the iter-329 deploy goes green. Next slice (waits on that):
-   scrape `flyctl logs -a tex-center-sidecar` on a fresh cold
-   start (`fly machine stop` first), find the dominant phase,
-   close it. After that, add a real preservation gold spec —
-   create + edit unique string + force-stop + reopen + assert
-   bytes round-trip (the existing GT-6-stopped only checks the
-   seed placeholder, which the hello-world fallback satisfies).
+   `tex-center-sidecar`. Iter 329 unblocked the iter-328
+   instrumentation in prod (web Dockerfile fix); iter 330
+   captured one cold-start cycle:
+   - Wall-clock ~10.9 s from `Pulling container image` to first
+     `compile ok` for an image-warm stopped→started Machine.
+   - In-sidecar `runCompile` first compile: `elapsedMs:4263`,
+     `phases:{hydrateMs:0, restoreMs:273, writeMainMs:3,
+     persistMs:0, compileMs:4258}`.
+   - **Dominant term: `compileMs:4258` ≈ supertex daemon's
+     first-time `.fmt` load.** `daemon ready` stderr marker
+     arrives ~50 ms before `compile ok`, so practically the
+     entire 4.3 s is `ensureReady()` startup rather than the
+     first round.
+   - Capture: `.autodev/state/cold_start_phases_330.txt`.
+   - The 89 s figure that pinned this milestone was from the
+     `globalSetup` end-to-end warmup path (full editor SSR + WS
+     dial + possible cold image-pull) measured pre-instrumentation;
+     non-comparable to the 10.9 s above. Worst-case true cold
+     image-pull data point still missing.
+
+   **Next slice (M20.3(a)):** add an eager `Compiler.warmup()`
+   hook (`SupertexDaemonCompiler` implements by calling
+   `ensureReady`; `FixtureCompiler` / `SupertexOnceCompiler`
+   are no-ops). Call it from `getProject` immediately after
+   compiler construction so the 4.3 s daemon format-load runs
+   in parallel with WS handshake + hydrate + restore (currently
+   ~0.3 s combined). Expected: ~3 s shaved off cold-start
+   first-paint. Add a sidecar-side unit lock that asserts
+   `compile()`'s `compileMs` is < N when `warmup()` was
+   invoked > N ms earlier.
+
+   **Free follow-up (M20.3(a)2):** today every cold-boot
+   sidecar makes a wasted `loadCheckpoint` GET to Tigris that
+   always returns null (all compiler `snapshot()` return null
+   pre-upstream-supertex-serialise). Gate the GET on a future
+   flag or simply skip it until upstream supertex exposes the
+   serialise wire; saves ~0.27 s per cold start.
+
+   After both: add a real preservation gold spec — create + edit
+   unique string + force-stop + reopen + assert bytes round-trip
+   (the existing GT-6-stopped only checks the seed placeholder,
+   which the hello-world fallback satisfies).
 2. **M21.2 max-visible gold pin.** 3-page PDF + sidecar
    introspection hook; scroll so page 2 fully visible and page 3
    intrudes → assert sidecar receives `target=3`.
