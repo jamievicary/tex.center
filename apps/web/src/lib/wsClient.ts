@@ -25,6 +25,18 @@ export type ConnectionState = "connecting" | "open" | "closed" | "error";
 export interface WsClientSnapshot {
   status: ConnectionState;
   pdfBytes: Uint8Array | null;
+  /**
+   * Tri-state echo of the most recent `pdf-segment.lastPage` field
+   * (iter-370 wire). `true` ⇒ the daemon reached `\enddocument` on
+   * that round and no further pages will be produced; `false` ⇒ the
+   * round stopped short of `\enddocument`, more pages exist past the
+   * current shipout, and the FE should render a demand-fetch
+   * placeholder for page N+1. `undefined` ⇒ the compiler does not
+   * expose the signal (e.g. `FixtureCompiler`) — FE leaves the
+   * placeholder slot closed (the legacy "ship every page" model
+   * applies in that case, so there's no missing page to fetch).
+   */
+  pdfLastPage: boolean | undefined;
   lastError: string | null;
   compileState: "idle" | "running" | "error" | "unknown";
   files: string[];
@@ -105,6 +117,7 @@ export class WsClient {
   private readonly url: string;
   private _status: ConnectionState = "connecting";
   private _pdfBytes: Uint8Array | null = null;
+  private _pdfLastPage: boolean | undefined = undefined;
   private _lastError: string | null = null;
   private _compileState: WsClientSnapshot["compileState"] = "unknown";
   private _files: string[] = [MAIN_DOC_NAME];
@@ -195,6 +208,7 @@ export class WsClient {
         break;
       case "pdf-segment":
         this._pdfBytes = this.pdf.applySegment(decoded.segment);
+        this._pdfLastPage = decoded.segment.lastPage;
         {
           const ev: WsDebugEvent =
             decoded.segment.shipoutPage !== undefined
@@ -341,6 +355,7 @@ export class WsClient {
     return {
       status: this._status,
       pdfBytes: this._pdfBytes,
+      pdfLastPage: this._pdfLastPage,
       lastError: this._lastError,
       compileState: this._compileState,
       files: this._files,

@@ -13,7 +13,8 @@ routed to (decision deferred post-MVP).
 **Active priority queue (open work only):**
 
 1. **`[pdf-end]` + `lastPage` wire-through + multipage demand-fetch
-   (per 368_question / 368_answer).** Two iterations:
+   (per 368_question / 368_answer).** All three slices landed
+   modulo the bootstrap-cascade gold pin.
    - **Iter A (landed iter 370).** Submodule pointer at `aaa625a`
      on `vendor/supertex`. `daemonProtocol.ts` parses `[pdf-end]`
      into a `pdf-end` event; `supertexDaemon.collectRound` tracks
@@ -21,40 +22,28 @@ routed to (decision deferred post-MVP).
      segment + `CompileSuccess.lastPage`; protocol `PdfSegment`
      extends with `lastPage?: boolean` encoded as a tri-state
      uint8 (0=unset, 1=false, 2=true; header 17 B → 18 B,
-     roundtrip-safe). Normal-test pins:
-     `supertexDaemonCompiler.test.mjs` cases 16(a) 2-page
-     `pdf-end → true` and 16(b) 5-page-stopped-short-at-3
-     `no pdf-end → false`; `codec.test.mjs` covers the tri-state
-     wire and an out-of-range-byte rejection.
-   - **Iter B (next ordinary iteration).** Single coherent slice
-     (per 369b_answer): swap `server.ts:611` `targetPage: 0` →
-     `maxViewingPage(p)` (clamped ≥1) **early** in the iteration;
-     FE consumes `lastPage` in `PdfViewer.svelte` to reserve a
-     placeholder `.pdf-page` while `lastPage===false` (height =
-     most-recently-rendered-page height; A4 fallback);
-     PageTracker viewport entry on the placeholder triggers
-     `maxViewingPage` bump → sidecar `recompile,N+1`; placeholder
-     replaced by real canvas on segment arrival without remount
-     (in-place DOM swap, not `{#key}` remount — see 369b_answer's
-     risk note about spurious `maxViewingPage` bumps during the
-     placeholder→real transition). Bootstrap: cold open
-     `maxViewingPage` defaults to 1 → `recompile,1` → cascade. The
-     iter-368 (c) routing ("daemon-round-done capture for
-     all-`.out`-on-edit") is **closed-no-op** per 369_question and
-     369_answer — sidecar's `assembleSegment(maxShipout)` already
-     concatenates chunks 1..maxShipout (load-bearing read below);
-     the user-observed "page 1 updated when I scrolled back" with
-     `shipoutPage=4` is exactly the expected behaviour. Gold spec
-     extends `verifyLivePdfMultiPage.spec.ts` with a 2-page
-     bootstrap case (page 1 renders → placeholder for page 2 →
-     scroll → second segment with `shipoutPage=2 lastPage=true`
-     → no further placeholder); this also closes M21.2 (folded
-     in — see #5 removed).
-   - **Iter B′ — toast-text format slice.** Post-iter-B
-     micro-iteration (or piggy-back if iter B finishes with
-     budget). `apps/web/src/lib/debugToasts.ts` pdf-segment
-     branch: `shipoutPage > 1` → `[1..N.out] ${bytes} bytes`
-     (range, makes chunks-1..N concatenation visible);
+     roundtrip-safe).
+   - **Iter B (landed iter 372).** Sidecar `runCompile`
+     `targetPage: 0` → `targetPage: maxViewingPage(p)` (clamped
+     ≥1). `WsClient` snapshot gains `pdfLastPage: boolean |
+     undefined`. `PdfViewer.svelte` mounts a sibling
+     `.pdf-page.pdf-page-placeholder` after the controller commit
+     when `lastPage===false`; the placeholder is observed by the
+     existing IntersectionObserver path so a scroll bumps
+     `maxViewingPage` → sidecar `recompile,N+1`. DOM-stability
+     invariant: `removePlaceholder()` runs **before** every render
+     so the controller's trailing `createWrapper(N) → appendChild`
+     stays in DOM order; the placeholder is re-mounted by
+     `syncPlaceholder()` post-commit if `lastPage` is still
+     `false`. Normal-test pins:
+     `apps/sidecar/test/serverTargetPage.test.mjs`
+     (cold-open targetPage=1; view=4 promotes subsequent compiles)
+     and `apps/web/test/wsClientLastPage.test.mjs` (tri-state
+     mirror; cascade-end replace).
+   - **Iter B′ — toast-text format slice (open, queued).** Small
+     standalone slice. `apps/web/src/lib/debugToasts.ts`
+     pdf-segment branch: `shipoutPage > 1` → `[1..N.out] ${bytes}
+     bytes` (range, makes chunks-1..N concatenation visible);
      `shipoutPage === 1` → `[1.out] ${bytes} bytes`;
      `shipoutPage` undefined/0 → `${bytes} bytes` (unchanged).
      `lastPage` deliberately NOT in the toast (placeholder slot
@@ -62,6 +51,15 @@ routed to (decision deferred post-MVP).
      `lastPageReached`). New unit case in
      `debugToastsToggle.test.mjs` (or sibling) pinning both
      branches.
+   - **Iter B-gold — bootstrap-cascade gold case (open, deferred).**
+     Extend `verifyLivePdfMultiPage.spec.ts` with: fresh 2-page
+     project, wait for page 1 render + placeholder for page 2,
+     scroll placeholder into viewport, await `shipoutPage=2
+     lastPage=true` segment, assert placeholder replaced. Deferred
+     out of iter B because the scroll → IO-fires → maxViewingPage
+     bump → recompile chain is multi-hop and needs careful
+     polling-timeout choices to avoid flake on cold per-project
+     Machines. Also closes M21.2 (same coverage; see #5).
    - **Load-bearing read of current sidecar segment assembly.**
      `assembleSegment(maxShipout)` (sidecar) concatenates chunks
      `1.out…maxShipout.out` from disk into ONE `PdfSegment` with
@@ -150,12 +148,12 @@ routed to (decision deferred post-MVP).
    closing"` → shutdown race in `runCompile`'s `awaitHydrated`/
    `ensureRestored`. No proactive work needed until then.
 
-5. **M21.2 max-visible gold pin.** Folded into priority #1 iter B
-   (per 369b_answer): the bootstrap-cascade case extending
-   `verifyLivePdfMultiPage.spec.ts` exercises max-visible →
-   sidecar target on each placeholder→real transition, giving
-   the same coverage as a separate 3-page introspection-hook
-   spec. Close when iter B's gold lands.
+5. **M21.2 max-visible gold pin.** Folded into priority #1
+   iter-B-gold (per 369b_answer): the bootstrap-cascade case
+   extending `verifyLivePdfMultiPage.spec.ts` exercises
+   max-visible → sidecar target on each placeholder→real
+   transition, giving the same coverage as a separate 3-page
+   introspection-hook spec. Close when that case lands.
 
 6. **M21.3c page-prefetch off-by-one.** Capture sidecar
    `daemon-stdin` + `daemon-round-done` transcript of user-
@@ -328,19 +326,18 @@ cleanup path until the explicit tab-close wire lands.
 + `PageTracker` widened to `{ mostVisible, maxVisible }` with a
 `> 0.1` ratio threshold (≥10% of page area in viewport); client
 sends `maxViewingPage` over WS; sidecar reducer routes to
-`coalescer.kickForView`. `server.ts:528` hardcodes
-`targetPage: 0` → `recompile,end` (no active target-page gate).
+`coalescer.kickForView`. **Iter 372 swap:** `runCompile` now
+passes `targetPage: maxViewingPage(p)` (clamped ≥1) on every
+compile (was hardcoded `0` ≡ `recompile,end` pre-iter-372).
 Sidecar log surfaces both pre-round (`daemon-stdin`:
 `{ round, target, sourceLen }`) and post-round
 (`daemon-round-done`: `{ round, maxShipout, errorReason,
 violation? }`).
 
-- **M21.2 (folded into priority #1 iter B).** Per 369b_answer
-  the iter-B bootstrap-cascade gold case in
-  `verifyLivePdfMultiPage.spec.ts` (placeholder → scroll →
-  segment with `shipoutPage=2 lastPage=true`) covers the same
-  max-visible→target invariant without a separate 3-page spec
-  or sidecar introspection hook. Close when iter B's gold
+- **M21.2 (open, gold pin deferred from iter B).** Iter B's
+  bootstrap-cascade gold (priority #1 iter-B-gold) covers the
+  same max-visible→target invariant without a separate 3-page
+  spec or sidecar introspection hook. Close when that case
   lands.
 - **M21.3c (open).** Capture sidecar log transcript of the
   user-reported "edit on hidden page N+2 ships no segment" repro.
@@ -413,7 +410,8 @@ M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/2b/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
 M17; M17.b; M18.1; M19; M20.1; M20.2; M20.3 (bar GT-6-stopped);
-M21.1; M21.3a/b; M22.1/2-local/3/4a/4b/5; M23.1/2/4/5.
+M21.1; M21.3a/b; M21.target-page-swap (iter 372);
+M22.1/2-local/3/4a/4b/5; M23.1/2/4/5.
 
 See git log and `.autodev/logs/` for narrative detail.
 

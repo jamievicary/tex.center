@@ -60,6 +60,7 @@
   let snapshot = $state<WsClientSnapshot>({
     status: "connecting",
     pdfBytes: null,
+    pdfLastPage: undefined,
     lastError: null,
     compileState: "unknown",
     files: [MAIN_DOC_NAME],
@@ -496,7 +497,11 @@
     onpointerup={onDividerPointerUp}
   ></div>
   <section class="preview">
-    <PdfViewer src={snapshot.pdfBytes} onPageChange={handlePageChange} />
+    <PdfViewer
+      src={snapshot.pdfBytes}
+      lastPage={snapshot.pdfLastPage}
+      onPageChange={handlePageChange}
+    />
     {#if snapshot.compileState === "running"}
       <div class="badge">compiling…</div>
     {:else if snapshot.compileState === "error"}

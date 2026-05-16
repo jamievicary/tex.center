@@ -8,9 +8,23 @@
 
   let {
     src,
+    lastPage,
     onPageChange,
   }: {
     src: Uint8Array | string | null;
+    /**
+     * Tri-state echo of the most recent `pdf-segment.lastPage` wire
+     * field (iter 372 / M21 iter B). `false` ⇒ the document has at
+     * least one more page past the last shipped page; the viewer
+     * reserves a same-size placeholder `.pdf-page` slot so the
+     * IntersectionObserver can promote `maxViewingPage` once it
+     * enters view, driving a sidecar `recompile,N+1`. `true` /
+     * `undefined` ⇒ no placeholder (`true` ≡ daemon hit
+     * `\enddocument`; `undefined` ≡ compiler does not expose the
+     * signal, so the legacy "every page shipped" model applies and
+     * there's no missing page to fetch).
+     */
+    lastPage?: boolean | undefined;
     onPageChange?: (page: number) => void;
   } = $props();
 
@@ -28,10 +42,63 @@
   let observer: IntersectionObserver | null = null;
   let controller: PdfFadeController | null = null;
 
+  // Geometry of the most recently rendered page; used to size the
+  // demand-fetch placeholder slot so it reserves a realistic
+  // viewport entry trigger. Falls back to A4 if no page has rendered
+  // yet (bootstrap on a fresh project before the first segment).
+  let lastPageGeometry: { width: number; height: number } = {
+    width: 595,
+    height: 842,
+  };
+  let placeholderEl: HTMLDivElement | null = null;
+
+  function syncPlaceholder(): void {
+    const target = host;
+    if (!target) return;
+    const want =
+      lastPage === false && controller !== null && controller.length > 0;
+    if (!want) {
+      removePlaceholder();
+      return;
+    }
+    const nextPage = controller!.length + 1; // 1-indexed page number
+    if (!placeholderEl) {
+      const el = document.createElement("div");
+      el.className = "pdf-page pdf-page-placeholder";
+      el.dataset.page = String(nextPage);
+      el.dataset.placeholder = "1";
+      // Sized like a real page so its viewport ratio is comparable.
+      // PageTracker treats `data-page` numerically; the observer
+      // path is identical to a real wrapper's, so a scroll-into-view
+      // bumps `maxViewingPage` and the sidecar receives the
+      // corresponding `view` frame.
+      target.appendChild(el);
+      placeholderEl = el;
+      ensureObserver()?.observe(el);
+    } else if (placeholderEl.dataset.page !== String(nextPage)) {
+      placeholderEl.dataset.page = String(nextPage);
+    }
+    placeholderEl.style.width = `${lastPageGeometry.width}px`;
+    placeholderEl.style.aspectRatio = `${lastPageGeometry.width} / ${lastPageGeometry.height}`;
+  }
+
+  function removePlaceholder(): void {
+    if (!placeholderEl) return;
+    observer?.unobserve(placeholderEl);
+    placeholderEl.remove();
+    placeholderEl = null;
+  }
+
   $effect(() => {
     if (!host || !src) return;
     const token = ++renderToken;
     const target = host;
+    // Remove the placeholder *before* re-rendering so the controller's
+    // trailing-addition path (which appends new wrappers as last
+    // children of the host) keeps page wrappers in DOM order. The
+    // placeholder, if still wanted, is re-mounted after the commit
+    // returns — see syncPlaceholder().
+    removePlaceholder();
     // Iter 355 (`.autodev/discussion/354_answer.md`): the rendering
     // path used to throw silently — `void render(...)` discards a
     // rejected promise, no UI signal, no log. The
@@ -44,12 +111,27 @@
     // canvas that will never come. Clear on every fresh render so
     // a recovered-from-transient failure doesn't leave stale state.
     delete target.dataset.pdfError;
-    render(src, target, () => token === renderToken).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      // eslint-disable-next-line no-console
-      console.error("[PdfViewer] render failed:", message);
-      target.dataset.pdfError = message;
-    });
+    render(src, target, () => token === renderToken)
+      .then(() => {
+        if (token !== renderToken) return;
+        syncPlaceholder();
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // eslint-disable-next-line no-console
+        console.error("[PdfViewer] render failed:", message);
+        target.dataset.pdfError = message;
+      });
+  });
+
+  // Independently react to `lastPage` flipping (a same-bytes segment
+  // can carry a different tri-state value, and the FE must add or
+  // remove the placeholder synchronously without waiting for the
+  // next PDF re-render).
+  $effect(() => {
+    // Read the reactive prop so Svelte tracks it.
+    void lastPage;
+    syncPlaceholder();
   });
 
   function ensureObserver(): IntersectionObserver | null {
@@ -138,10 +220,16 @@
       }),
     );
     controller.commit(descriptors);
+    // Remember the last real page's CSS-px geometry so the
+    // demand-fetch placeholder (mounted after this render in
+    // syncPlaceholder()) reserves a same-shape slot for page N+1.
+    const last = descriptors[descriptors.length - 1];
+    if (last) lastPageGeometry = { width: last.width, height: last.height };
   }
 
   onDestroy(() => {
     renderToken++;
+    removePlaceholder();
     controller?.destroy();
     controller = null;
     observer?.disconnect();
@@ -181,5 +269,16 @@
     width: 100%;
     height: 100%;
     transition: opacity var(--pdf-fade-ms, 180ms) ease;
+  }
+  /* Demand-fetch placeholder (iter 372 / M21 iter B): same outline
+     as a real `.pdf-page` so its IntersectionObserver ratio is
+     directly comparable, but visually distinct (subtle paper tone +
+     dashed outline) so the user knows the slot is empty and will
+     fill on scroll. No canvas child — width/aspect-ratio come from
+     inline style copied off the most recent real page. */
+  :global(.host .pdf-page-placeholder) {
+    background: rgba(250, 247, 240, 0.55);
+    border: 1px dashed rgba(31, 27, 22, 0.18);
+    box-shadow: none;
   }
 </style>

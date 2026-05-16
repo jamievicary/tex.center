@@ -598,17 +598,22 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     const tPersistStart = Date.now();
     await p.persistence.maybePersist();
     const persistMs = Date.now() - tPersistStart;
-    // targetPage = 0 ⇒ `recompile,end` (every page shipped). The
-    // earlier `maxViewingPage(p)` default clamped every compile to
-    // page 1 (no viewer ever sets a higher viewingPage until a page-2
-    // canvas exists, which depends on page 2 being shipped — M15
-    // chicken-and-egg). With "end" the user sees the full document
-    // on every compile; the per-page targetPage gate is layered back
-    // on later if a long-document perf optimisation is justified.
+    // M21 / iter 372: compile only up to the highest page the viewer
+    // has reported. Earlier work hardcoded `targetPage: 0`
+    // (≡ `recompile,end`) so every edit ran the daemon to
+    // `\enddocument` and shipped the whole document — visible as a
+    // 20×/100× cost on long docs (`369b_question.md` repro). The
+    // chicken-and-egg from M15 (no page-2 canvas until page 2 ships)
+    // is resolved by the FE placeholder slot landing in the same
+    // iter B slice: a `lastPage===false` segment renders a viewport-
+    // observed placeholder that bumps `maxViewingPage` on scroll,
+    // driving the demand-fetch cascade. `maxViewingPage(p)` already
+    // clamps to ≥1 (cold open with no viewer-reported viewingPage
+    // yet → `recompile,1`).
     const tCompileStart = Date.now();
     const result = await p.compiler.compile({
       source,
-      targetPage: 0,
+      targetPage: maxViewingPage(p),
     });
     const compileMs = Date.now() - tCompileStart;
     if (!result.ok) {
