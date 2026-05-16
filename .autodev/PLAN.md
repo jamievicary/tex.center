@@ -79,24 +79,36 @@ routed to (decision deferred post-MVP).
    fix front-end if `target` is non-`"end"` (contradicts
    `server.ts:528` hardcode), else file upstream supertex repro
    on `maxShipout=-1`.
-5. **M9.editor-ux remaining slices.** GT-E (info/success/error
+5. **WS-frame timeline as default fixture (iter 345 discussion).**
+   Promote `tests_gold/playwright/fixtures/wireFrames.ts` from
+   helper to default fixture on the `live` Playwright project;
+   add per-frame timestamps + a `dumpTimeline(specName)` that
+   emits a compact in/out summary block to `console.log` on every
+   spec's `afterEach` (success and failure). Gated by
+   `TEXCENTER_DUMP_WIRE_TIMELINE=1`, default on in local
+   iter-state harness. Implementation per
+   `.autodev/discussion/345_answer.md` §B steps 1–4. Step 5
+   (`verifyLiveGtNStoppedReopenEmitsSegment`) waits until Bug B
+   root-cause is known. Schedule: iter 348 after Bug B
+   investigation (iter 347).
+6. **M9.editor-ux remaining slices.** GT-E (info/success/error
    toast spawn + aggregation badge); GT-F wire-driven part
    (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
    `SyncStatus` indicator (blocked on a sidecar persistence-ack
    wire signal that doesn't exist yet).
-6. **M18.2 / M18.3 preview-quality follow-ups.** ResizeObserver
+7. **M18.2 / M18.3 preview-quality follow-ups.** ResizeObserver
    re-render on `.preview` width change (coalesced trailing
    100 ms); forced-DPR=2 visual snapshot. Deferred until reported
    / Playwright stable-snapshot primitive exists.
-7. **M16.aesthetic.** Type pair + 4-colour palette retune for
+8. **M16.aesthetic.** Type pair + 4-colour palette retune for
    chrome surfaces; visual snapshots on `/`, `/projects`, editor
    topbar. Blocked on Playwright stable snapshot primitive (same
    blocker as M18.3).
-8. **M11.2b right-click context menu** (Create / Rename / Delete,
+9. **M11.2b right-click context menu** (Create / Rename / Delete,
    click-outside + Esc, keyboard nav). Then M11.3 (virtual-folder
    create), M11.4 (intra-tree DnD = rename), M11.5b (binary
    upload, blocked on wire design), M11.5c (drag-out download).
-9. **M15 user-bug.** Multi-page seeded GREEN; awaiting
+10. **M15 user-bug.** Multi-page seeded GREEN; awaiting
    user-supplied offending source via discussion mode.
 
 **Open red specs (gold):**
