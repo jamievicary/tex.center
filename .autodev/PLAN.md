@@ -86,7 +86,24 @@ routed to (decision deferred post-MVP).
      current single-segment-per-round assembly.
 
 2. **M13.2(b).4 — GT-6-stopped (and GT-6-suspended) cold-resume
-   editable-state.** Iter 362 surfaced the suspended-path
+   editable-state.** **Iter-377 fix:** `upstreamResolver.ts` now
+   retries 412 from `startMachine` for a bounded budget
+   (`startMachineRetryTimeoutSec`, default 10 s, 250 ms backoff).
+   Fly's `POST /machines/{id}/stop` is asynchronous — the API can
+   flip `state` to `stopped` 7–8 s before the runtime fully reaps,
+   and a follow-up `startMachine` in the gap returns
+   `412 failed_precondition: machine still active`. Pin:
+   `apps/web/test/upstreamResolver.test.mjs` cases 11 + 12 (retry
+   succeeds; persistent 412 propagates). Iter-376 GT-6-stopped
+   gold failure traced this exact race via the Fly events
+   endpoint; the same retry covers the symmetric
+   `suspending → suspended → start` path on the suspended variant
+   for free (race window much smaller — ~78 ms resume — so it
+   rarely surfaces there). The narrative below predates this fix
+   and remains the right routing logic for OTHER failure shapes
+   (the 412 race specifically should now self-heal).
+   
+   Iter 362 surfaced the suspended-path
    diagnostic; iter 366 bumped suspended-variant
    `cmContentBudgetMs` to 2500 ms and the iter-366 gold pass went
    GREEN on suspended, and finally surfaced the stopped-path

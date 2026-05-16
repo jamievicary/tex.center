@@ -109,6 +109,18 @@ export interface UpstreamResolverOptions {
    */
   readonly tcpProbeTimeoutSec?: number;
   /**
+   * Bound on the 412-retry loop wrapping `startMachine`, in
+   * seconds. Defaults to 10. Fly's `POST /machines/{id}/stop` is
+   * asynchronous: the API can report `state=stopped` before the
+   * runtime has finished tearing down, and a subsequent
+   * `startMachine` within the gap returns
+   * `412 failed_precondition: machine still active, refusing to
+   * start`. The wrapper retries 412 (only) with 250 ms backoff
+   * until this budget elapses. Observed gap ≤8 s in production
+   * (iter 376 GT-6-stopped trace); 10 s leaves headroom.
+   */
+  readonly startMachineRetryTimeoutSec?: number;
+  /**
    * M15 Step D: optional seed-doc lookup. Called exactly once,
    * during the first `createMachine` for a project (no existing
    * assignment). When it resolves non-null, the per-project
@@ -278,6 +290,29 @@ export function createUpstreamResolver(
     }
   };
 
+  // 412 "machine still active, refusing to start" can be returned by
+  // Fly when `startMachine` is called immediately after the API
+  // flipped `state` to `stopped` but before flyd finished reaping the
+  // runtime. Bounded retry only on 412; all other errors propagate
+  // on the first attempt.
+  const startMachineWithRetry = async (machineId: string): Promise<void> => {
+    const deadline =
+      Date.now() + (opts.startMachineRetryTimeoutSec ?? 10) * 1000;
+    while (true) {
+      try {
+        await opts.machines.startMachine(machineId);
+        return;
+      } catch (err) {
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 412 && Date.now() < deadline) {
+          await sleep(250);
+          continue;
+        }
+        throw err;
+      }
+    }
+  };
+
   const driveToStarted = async (
     machineId: string,
     machine: Machine,
@@ -286,12 +321,12 @@ export function createUpstreamResolver(
     if (machine.state === "started") return machine;
     if (machine.state === "stopping" || machine.state === "suspending") {
       await opts.machines.waitForState(machineId, "stopped", { timeoutSec });
-      await opts.machines.startMachine(machineId);
+      await startMachineWithRetry(machineId);
       await waitForStartedWithRetry(machineId);
       return await opts.machines.getMachine(machineId);
     }
     if (machine.state === "stopped" || machine.state === "suspended") {
-      await opts.machines.startMachine(machineId);
+      await startMachineWithRetry(machineId);
       await waitForStartedWithRetry(machineId);
       return await opts.machines.getMachine(machineId);
     }

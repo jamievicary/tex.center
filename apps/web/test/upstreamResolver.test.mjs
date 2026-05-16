@@ -576,4 +576,108 @@ const baseOpts = {
   assert.equal(seedCalls, 0, "seedDocFor not called when machine already exists");
 }
 
+// ---- case 11: 412 on startMachine for a stopped machine is retried ----
+//
+// Iter 376 diagnosis (GT-6 stopped gold failure): Fly's
+// `POST /machines/{id}/stop` is asynchronous — the API can report
+// `state=stopped` before the runtime has finished tearing down, and
+// a subsequent `startMachine` within the gap returns
+// `412 failed_precondition: machine still active`. Resolver must
+// retry 412 until a bounded budget elapses.
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p11",
+    machineId: "m-still-active",
+    region: "fra",
+    state: "stopped",
+  });
+  const machines = {
+    appName: "test-app",
+    async createMachine() {
+      throw new Error("createMachine should not be called when row is cached");
+    },
+    async getMachine(id) {
+      return { id, state: "stopped", region: "fra" };
+    },
+    startCalls: 0,
+    async startMachine(_id) {
+      this.startCalls += 1;
+      if (this.startCalls === 1) {
+        const err = new Error(
+          "Fly Machines API 412 failed_precondition: machine still active",
+        );
+        err.status = 412;
+        throw err;
+      }
+      // Second attempt succeeds.
+    },
+    async waitForState() {},
+    internalAddress(id) {
+      return `${id}.vm.test-app.internal`;
+    },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    // Sub-second budget keeps the test fast; the 250 ms backoff in
+    // the resolver fits comfortably under 2 s.
+    startMachineRetryTimeoutSec: 2,
+  });
+  const upstream = await resolve("p11");
+  assert.equal(upstream.host, "m-still-active.vm.test-app.internal");
+  assert.equal(
+    machines.startCalls,
+    2,
+    "startMachine must retry exactly once after 412",
+  );
+}
+
+// ---- case 12: persistent 412 past the retry budget propagates ----
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p12",
+    machineId: "m-stuck-active",
+    region: "fra",
+    state: "stopped",
+  });
+  const machines = {
+    appName: "test-app",
+    async createMachine() {
+      throw new Error("createMachine should not be called when row is cached");
+    },
+    async getMachine(id) {
+      return { id, state: "stopped", region: "fra" };
+    },
+    startCalls: 0,
+    async startMachine(_id) {
+      this.startCalls += 1;
+      const err = new Error(
+        "Fly Machines API 412 failed_precondition: machine still active",
+      );
+      err.status = 412;
+      throw err;
+    },
+    async waitForState() {},
+    internalAddress(id) {
+      return id;
+    },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    // Zero budget: the loop attempts once, sees the deadline already
+    // past, rethrows. Keeps the test deterministic and instant.
+    startMachineRetryTimeoutSec: 0,
+  });
+  await assert.rejects(() => resolve("p12"), /412/);
+  assert.ok(
+    machines.startCalls >= 1,
+    "startMachine must have been attempted at least once",
+  );
+}
+
 console.log("upstreamResolver ok");
