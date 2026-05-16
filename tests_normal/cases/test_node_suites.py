@@ -290,6 +290,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_scripts_cloudflare_dns(self) -> None:
         _run_tsx(ROOT / "scripts" / "test" / "cloudflareDns.test.mjs")
 
+    def test_wire_timeline_format(self) -> None:
+        _run_tsx(ROOT / "tests_normal" / "cases" / "wireTimelineFormat.test.mjs")
+
 
 if __name__ == "__main__":
     unittest.main()

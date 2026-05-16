@@ -1,5 +1,5 @@
-// Shared helper for the five live Playwright specs that need to
-// watch the per-project WebSocket frame stream.
+// Shared helper for the live Playwright specs that watch the
+// per-project WebSocket frame stream.
 //
 // Each spec used to redeclare:
 //   - `TAG_PDF_SEGMENT = 0x20` (and GT-C/D also `TAG_CONTROL = 0x10`)
@@ -12,12 +12,41 @@
 // transform path doesn't have `@tex-center/protocol` in its
 // devDeps, and wiring it would be heavier than re-stating two
 // bytes. Authoritative definition lives in the protocol package.
+//
+// Iter 352 (`.autodev/PLAN.md` priority #5, see iter-345 discussion):
+// every capture also records a `TimelineEntry[]` so the fixture can
+// dump a per-spec wire timeline + compile-cycle summary on test
+// teardown. Format lives in `wireTimelineFormat.ts` (pure module,
+// unit-tested from `tests_normal/cases/wireTimelineFormat.test.mjs`).
+// The auto-fixture variant (`captureFramesAuto`) sniffs project IDs
+// from the WS URL so it can be attached to every test without an
+// explicit projectId argument.
 
 import type { Page } from "@playwright/test";
 
+import {
+  formatTimeline,
+  type TimelineEntry,
+  type TimelineTag,
+} from "./wireTimelineFormat.js";
+
+export {
+  formatTimeline,
+  summariseProject,
+  type ProjectSummary,
+  type TimelineEntry,
+  type TimelineTag,
+} from "./wireTimelineFormat.js";
+
 export const TAG_DOC_UPDATE = 0x00;
+export const TAG_AWARENESS = 0x01;
 export const TAG_CONTROL = 0x10;
 export const TAG_PDF_SEGMENT = 0x20;
+
+// Matches the `/ws/project/<uuid>/…` path that the per-project WS
+// upgrade uses on both `live` and `local` targets. The capture
+// group is the project UUID.
+const PROJECT_WS_RE = /\/ws\/project\/([0-9a-f-]{36})/;
 
 export interface FrameCapture {
   /** All TAG_PDF_SEGMENT (0x20) binary frames, in arrival order. */
@@ -54,6 +83,209 @@ export interface FrameCapture {
    *     succeeded but emitted no segment (sidecar-layer bug).
    */
   compileStatusEvents: { state: string; detail?: string }[];
+  /**
+   * Render the per-project timeline + summary for this capture.
+   * Format is documented in `wireTimelineFormat.ts`.
+   */
+  dumpTimeline: (specName: string) => string;
+}
+
+export interface AutoFrameCapture {
+  /** Render the per-project timeline + summary for this capture. */
+  dumpTimeline: (specName: string) => string;
+  /** Observed project IDs (extracted from WS URL on first open). */
+  projectIds: () => string[];
+}
+
+interface InternalState {
+  entries: TimelineEntry[];
+  projectIds: Set<string>;
+  startMs: number;
+}
+
+function newState(): InternalState {
+  return {
+    entries: [],
+    projectIds: new Set<string>(),
+    startMs: Date.now(),
+  };
+}
+
+interface IncomingDecoded {
+  isPdfSegment: boolean;
+  isOverlapError: boolean;
+  overlapErrorJson?: string;
+  compileStatus?: { state: string; detail?: string };
+}
+
+function recordIncoming(
+  state: InternalState,
+  projectId: string,
+  payload: Buffer,
+): IncomingDecoded {
+  const tMs = Date.now() - state.startMs;
+  if (payload.length === 0) {
+    return { isPdfSegment: false, isOverlapError: false };
+  }
+  const tag = payload[0]!;
+  if (tag === TAG_PDF_SEGMENT) {
+    // Header layout: tag(1) + total(4) + offset(4) + segLen(4) + shipoutPage(4)
+    let shipoutPage: number | undefined;
+    if (payload.length >= 17) {
+      const raw = payload.readUInt32BE(13);
+      if (raw > 0) shipoutPage = raw;
+    }
+    const entry: TimelineEntry = {
+      tMs,
+      dir: "in",
+      projectId,
+      tag: "pdf-segment",
+      bytes: payload.length,
+    };
+    if (shipoutPage !== undefined) entry.shipoutPage = shipoutPage;
+    state.entries.push(entry);
+    return { isPdfSegment: true, isOverlapError: false };
+  }
+  if (tag === TAG_CONTROL) {
+    const json = payload.subarray(1).toString("utf8");
+    const result: IncomingDecoded = {
+      isPdfSegment: false,
+      isOverlapError: false,
+    };
+    let controlType: string | undefined;
+    let controlState: string | undefined;
+    try {
+      const obj = JSON.parse(json) as {
+        type?: string;
+        state?: string;
+        detail?: string;
+      };
+      if (obj && typeof obj.type === "string") {
+        controlType = obj.type;
+        if (
+          obj.type === "compile-status" &&
+          typeof obj.state === "string"
+        ) {
+          controlState = obj.state;
+          const cs: { state: string; detail?: string } = {
+            state: obj.state,
+          };
+          if (typeof obj.detail === "string") cs.detail = obj.detail;
+          result.compileStatus = cs;
+        }
+      }
+    } catch {
+      // Non-JSON control payload (shouldn't happen post-protocol
+      // v1, but defensive parsing keeps the fixture robust).
+    }
+    if (json.includes("already in flight")) {
+      result.isOverlapError = true;
+      result.overlapErrorJson = json;
+    }
+    const entry: TimelineEntry = {
+      tMs,
+      dir: "in",
+      projectId,
+      tag: "control",
+      bytes: payload.length,
+    };
+    if (controlType !== undefined) entry.controlType = controlType;
+    if (controlState !== undefined) entry.controlState = controlState;
+    state.entries.push(entry);
+    return result;
+  }
+  let kind: TimelineTag = "unknown";
+  if (tag === TAG_DOC_UPDATE) kind = "doc-update";
+  else if (tag === TAG_AWARENESS) kind = "awareness";
+  state.entries.push({
+    tMs,
+    dir: "in",
+    projectId,
+    tag: kind,
+    bytes: payload.length,
+  });
+  return { isPdfSegment: false, isOverlapError: false };
+}
+
+interface OutgoingDecoded {
+  isDocUpdate: boolean;
+}
+
+function recordOutgoing(
+  state: InternalState,
+  projectId: string,
+  payload: Buffer,
+): OutgoingDecoded {
+  const tMs = Date.now() - state.startMs;
+  if (payload.length === 0) {
+    return { isDocUpdate: false };
+  }
+  const tag = payload[0]!;
+  let kind: TimelineTag = "unknown";
+  let controlType: string | undefined;
+  if (tag === TAG_DOC_UPDATE) kind = "doc-update";
+  else if (tag === TAG_AWARENESS) kind = "awareness";
+  else if (tag === TAG_PDF_SEGMENT) kind = "pdf-segment";
+  else if (tag === TAG_CONTROL) {
+    kind = "control";
+    try {
+      const obj = JSON.parse(payload.subarray(1).toString("utf8")) as {
+        type?: string;
+      };
+      if (obj && typeof obj.type === "string") controlType = obj.type;
+    } catch {
+      // Non-JSON control payload.
+    }
+  }
+  const entry: TimelineEntry = {
+    tMs,
+    dir: "out",
+    projectId,
+    tag: kind,
+    bytes: payload.length,
+  };
+  if (controlType !== undefined) entry.controlType = controlType;
+  state.entries.push(entry);
+  return { isDocUpdate: tag === TAG_DOC_UPDATE };
+}
+
+interface AttachOpts {
+  page: Page;
+  state: InternalState;
+  match: (url: string) => string | null;
+  onIncoming?: (ctx: {
+    projectId: string;
+    payload: Buffer;
+    decoded: IncomingDecoded;
+  }) => void;
+  onOutgoing?: (ctx: {
+    projectId: string;
+    payload: Buffer;
+    decoded: OutgoingDecoded;
+  }) => void;
+}
+
+function attachListener(opts: AttachOpts): void {
+  const { page, state, match, onIncoming, onOutgoing } = opts;
+  page.on("websocket", (ws) => {
+    const matched = match(ws.url());
+    if (matched === null) return;
+    state.projectIds.add(matched);
+    ws.on("framereceived", ({ payload }) => {
+      if (typeof payload === "string") return;
+      const decoded = recordIncoming(state, matched, payload);
+      if (onIncoming !== undefined) {
+        onIncoming({ projectId: matched, payload, decoded });
+      }
+    });
+    ws.on("framesent", ({ payload }) => {
+      if (typeof payload === "string") return;
+      const decoded = recordOutgoing(state, matched, payload);
+      if (onOutgoing !== undefined) {
+        onOutgoing({ projectId: matched, payload, decoded });
+      }
+    });
+  });
 }
 
 /**
@@ -69,55 +301,29 @@ export interface FrameCapture {
  * — we only need to detect a sentinel substring in the JSON tail.
  */
 export function captureFrames(page: Page, projectId: string): FrameCapture {
+  const state = newState();
   const pdfSegmentFrames: Buffer[] = [];
   const overlapErrors: string[] = [];
   const docUpdateSent = { value: 0 };
   const compileStatusEvents: { state: string; detail?: string }[] = [];
 
-  page.on("websocket", (ws) => {
-    if (!ws.url().includes(`/ws/project/${projectId}`)) return;
-    ws.on("framereceived", ({ payload }) => {
-      if (typeof payload === "string") return;
-      if (payload.length === 0) return;
-      if (payload[0] === TAG_PDF_SEGMENT) {
-        pdfSegmentFrames.push(payload);
-        return;
+  attachListener({
+    page,
+    state,
+    match: (url) =>
+      url.includes(`/ws/project/${projectId}`) ? projectId : null,
+    onIncoming: ({ payload, decoded }) => {
+      if (decoded.isPdfSegment) pdfSegmentFrames.push(payload);
+      if (decoded.isOverlapError && decoded.overlapErrorJson !== undefined) {
+        overlapErrors.push(decoded.overlapErrorJson);
       }
-      if (payload[0] === TAG_CONTROL) {
-        const json = payload.subarray(1).toString("utf8");
-        if (json.includes("already in flight")) {
-          overlapErrors.push(json);
-        }
-        try {
-          const obj = JSON.parse(json) as {
-            type?: string;
-            state?: string;
-            detail?: string;
-          };
-          if (
-            obj &&
-            obj.type === "compile-status" &&
-            typeof obj.state === "string"
-          ) {
-            const entry: { state: string; detail?: string } = {
-              state: obj.state,
-            };
-            if (typeof obj.detail === "string") entry.detail = obj.detail;
-            compileStatusEvents.push(entry);
-          }
-        } catch {
-          // Non-JSON control payload (shouldn't happen post-protocol
-          // v1, but defensive parsing keeps the fixture robust).
-        }
+      if (decoded.compileStatus !== undefined) {
+        compileStatusEvents.push(decoded.compileStatus);
       }
-    });
-    ws.on("framesent", ({ payload }) => {
-      if (typeof payload === "string") return;
-      if (payload.length === 0) return;
-      if (payload[0] === TAG_DOC_UPDATE) {
-        docUpdateSent.value += 1;
-      }
-    });
+    },
+    onOutgoing: ({ decoded }) => {
+      if (decoded.isDocUpdate) docUpdateSent.value += 1;
+    },
   });
 
   return {
@@ -125,5 +331,39 @@ export function captureFrames(page: Page, projectId: string): FrameCapture {
     overlapErrors,
     docUpdateSent,
     compileStatusEvents,
+    dumpTimeline: (specName) =>
+      formatTimeline({
+        specName,
+        entries: state.entries,
+        projectIds: [...state.projectIds],
+      }),
+  };
+}
+
+/**
+ * Auto-bind variant: attach a `framereceived`/`framesent` listener
+ * that buckets per-project, extracting the project UUID lazily from
+ * the WS URL the first time it sees a matching open. Used by the
+ * `authedPage` fixture so every test gets a timeline-on-teardown
+ * without naming a projectId up front.
+ */
+export function captureFramesAuto(page: Page): AutoFrameCapture {
+  const state = newState();
+  attachListener({
+    page,
+    state,
+    match: (url) => {
+      const m = url.match(PROJECT_WS_RE);
+      return m === null ? null : m[1]!;
+    },
+  });
+  return {
+    dumpTimeline: (specName) =>
+      formatTimeline({
+        specName,
+        entries: state.entries,
+        projectIds: [...state.projectIds],
+      }),
+    projectIds: () => [...state.projectIds],
   };
 }

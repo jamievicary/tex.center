@@ -162,6 +162,15 @@ class TestPlaywright(unittest.TestCase):
         # breakage that should surface as an iteration goal.
         env.update(_load_live_creds())
         env["TEXCENTER_FULL_PIPELINE"] = "1"
+        # Default-on the per-spec WS-frame timeline dump (priority #5
+        # of `.autodev/PLAN.md`, iter 346 commitment). The
+        # `authedPage` fixture appends one block per project on
+        # afterEach. Cheap (≤O(frames-per-test)) and adds the
+        # `zero-segment-cycles=Z` derived stat that pins Bug B
+        # (compile-cycle ran, no pdf-segment shipped). Any future
+        # hosted CI runner that wants slimmer output can opt out by
+        # exporting `TEXCENTER_DUMP_WIRE_TIMELINE=0` in its env.
+        env.setdefault("TEXCENTER_DUMP_WIRE_TIMELINE", "1")
 
         _setup_playwright()
 

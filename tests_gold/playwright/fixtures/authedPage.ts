@@ -59,6 +59,7 @@ import {
   type FlyProxyHandle,
 } from "../../lib/src/flyProxy.js";
 import { startLocalStack, type LocalStack } from "./localStack.js";
+import { captureFramesAuto } from "./wireFrames.js";
 
 export interface DbFixture {
   readonly db: DbHandle;
@@ -183,7 +184,7 @@ export const test = base.extend<
     { scope: "worker" },
   ],
 
-  authedPage: async ({ browser, db, baseURL }, use) => {
+  authedPage: async ({ browser, db, baseURL }, use, testInfo) => {
     if (!baseURL) {
       throw new Error("authedPage: baseURL fixture returned undefined");
     }
@@ -203,9 +204,22 @@ export const test = base.extend<
       }),
     ]);
     const page = await context.newPage();
+    // Iter 352 (PLAN priority #5, iter-346 commitment): every test
+    // gets a WS-frame timeline collector that buckets per-project
+    // by sniffing the WS URL. Dumped on teardown only when the
+    // env flag is set (default-on in `tests_gold/cases/
+    // test_playwright.py`'s gold runner; off in any future hosted
+    // CI runner that wants slimmer output). Local-target specs
+    // never open a project WS — the dump degrades to one uniform
+    // "no project WS observed" line.
+    const wireTimeline = captureFramesAuto(page);
     try {
       await use(page);
     } finally {
+      if (process.env.TEXCENTER_DUMP_WIRE_TIMELINE === "1") {
+        // eslint-disable-next-line no-console
+        console.log(wireTimeline.dumpTimeline(testInfo.title));
+      }
       await context.close().catch(() => {});
       await deleteSession(db.db.db, minted.sid).catch(() => {});
     }

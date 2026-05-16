@@ -9,19 +9,19 @@ Progress: resolved 0, reused 81, downloaded 0, added 0, done
 
 Done in 1s
 Scope: 6 of 7 workspace projects
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/auth typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck$ tsc --noEmit -p tsconfig.json
 packages/blobs typecheck$ tsc --noEmit -p tsconfig.json
-packages/db typecheck$ tsc --noEmit -p tsconfig.json
 packages/protocol typecheck: Done
-packages/blobs typecheck: Done
 packages/auth typecheck: Done
+packages/blobs typecheck: Done
 packages/db typecheck: Done
 apps/web typecheck$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --threshold error
 apps/sidecar typecheck$ tsc --noEmit -p tsconfig.json
 apps/sidecar typecheck: Done
-apps/web typecheck: 1778924469880 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
-apps/web typecheck: 1778924469885 COMPLETED 752 FILES 0 ERRORS 3 WARNINGS 1 FILES_WITH_PROBLEMS
+apps/web typecheck: 1778925803578 START "/mnt/c/dropbox/academia/projects/2026-supertex/tex-center/apps/web"
+apps/web typecheck: 1778925803583 COMPLETED 752 FILES 0 ERRORS 3 WARNINGS 1 FILES_WITH_PROBLEMS
 apps/web typecheck: Done
 test_checkout_pulls_submodules (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_pulls_submodules) ... ok
 test_checkout_supplies_submodule_token (test_deploy_sidecar_workflow.TestSidecarDeployWorkflow.test_checkout_supplies_submodule_token) ... ok
@@ -190,6 +190,7 @@ test_web_ws_client_hydrated (test_node_suites.TestNodeSuites.test_web_ws_client_
 test_web_ws_client_pdf_segment_identity (test_node_suites.TestNodeSuites.test_web_ws_client_pdf_segment_identity) ... ok
 test_web_ws_client_toast_events (test_node_suites.TestNodeSuites.test_web_ws_client_toast_events) ... ok
 test_web_ws_proxy (test_node_suites.TestNodeSuites.test_web_ws_proxy) ... ok
+test_wire_timeline_format (test_node_suites.TestNodeSuites.test_wire_timeline_format) ... ok
 test_all_ts_files_parse (test_playwright_fixtures_parse.TestPlaywrightFixturesParse.test_all_ts_files_parse) ... ok
 test_empty_state_test_skips_on_live (test_projects_empty_state_skips_live.TestProjectsEmptyStateSkipsLive.test_empty_state_test_skips_on_live) ... ok
 test_exports_get_handler (test_readyz_route.TestReadyzRoute.test_exports_get_handler) ... ok
@@ -236,7 +237,7 @@ test_runtime_listens_on_all_interfaces (test_web_dockerfile.TestWebDockerfile.te
 test_source_copy_covers_web_workspace_deps (test_web_dockerfile.TestWebDockerfile.test_source_copy_covers_web_workspace_deps) ... ok
 
 ----------------------------------------------------------------------
-Ran 211 tests in 73.718s
+Ran 212 tests in 74.235s
 
 OK
 tests_normal/run_tests.sh: PASS

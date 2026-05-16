@@ -68,17 +68,19 @@ routed to (decision deferred post-MVP).
    `server.ts:528` hardcode), else file upstream supertex repro
    on `maxShipout=-1`.
 5. **WS-frame timeline as default fixture (iter 345 discussion).**
-   Promote `tests_gold/playwright/fixtures/wireFrames.ts` from
-   helper to default fixture on the `live` Playwright project;
-   add per-frame timestamps + a `dumpTimeline(specName)` that
-   emits a compact in/out summary block to `console.log` on every
-   spec's `afterEach` (success and failure). Gated by
-   `TEXCENTER_DUMP_WIRE_TIMELINE=1`, default on in local
-   iter-state harness. Implementation per
-   `.autodev/discussion/345_answer.md` §B steps 1–4. Step 5
-   (`verifyLiveGtNStoppedReopenEmitsSegment`) waits until Bug B
-   root-cause is known. Schedule: iter 348 after Bug B
-   investigation (iter 347).
+   Steps 1–4 landed iter 352. `wireTimelineFormat.ts` (pure module)
+   + refactored `wireFrames.ts` produce per-project timeline +
+   summary including `compile-cycles=N`, `zero-segment-cycles=Z`
+   (the Bug B signal), `pdf-segment-bytes`, `doc-update-bytes`.
+   `authedPage` fixture attaches `captureFramesAuto(page)` on
+   every test (live + local) and dumps via `console.log` in the
+   fixture-teardown `finally` when
+   `TEXCENTER_DUMP_WIRE_TIMELINE=1`; default-on in
+   `tests_gold/cases/test_playwright.py`. Local-target specs emit
+   one uniform "no project WS observed" line. Formatter locked by
+   `tests_normal/cases/wireTimelineFormat.test.mjs`.
+   **Remaining (Step 5):** `verifyLiveGtNStoppedReopenEmitsSegment`
+   waits until Bug B root cause is known.
 6. **M9.editor-ux remaining slices.** GT-E (info/success/error
    toast spawn + aggregation badge); GT-F wire-driven part
    (typing→Yjs-op toast, compile→pdf-segment toast); save-feedback
