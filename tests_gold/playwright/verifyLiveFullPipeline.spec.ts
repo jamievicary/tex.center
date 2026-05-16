@@ -65,8 +65,18 @@ test.describe("live full pipeline (M8.pw.4)", () => {
     authedPage,
     db,
   }) => {
-    // Budget: 1.5× max observed (iter 302: 17.9 s; re-run: 23.3 s).
-    test.setTimeout(40_000);
+    // Outer wall-clock budget. The inner `cmContent.waitFor`
+    // below already budgets 120 s for fresh-project cold-start
+    // (Fly Machine spawn + WS handshake + first file-list frame —
+    // documented at the call site). Iter 360 timed out at 40 s
+    // outer-test budget before that 120 s locator could expire,
+    // so a recurring Fly cold-start excursion looked like a test
+    // failure rather than the underlying cost. 150 s = 120 s
+    // locator + ~30 s for the type / pdf-segment poll / canvas-
+    // paint poll downstream. A genuine regression still surfaces
+    // when the 120 s locator expires or the pdf-segment never
+    // arrives.
+    test.setTimeout(150_000);
 
     const project = await createProject(db.db.db, {
       ownerId: db.userId,

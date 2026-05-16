@@ -52,16 +52,20 @@ test.describe("live cold-from-stopped editable state (M13.2(b).4)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    // Budget: 60 s. The test pins a 1 s product invariant
-    // (cmContentReadyMs ≤ 1000 ms, keystrokeAckMs ≤ 1000 ms) on a
-    // cold-from-stopped Machine. End-to-end cold-start should be
-    // <20 s when the architecture is healthy (manual measurement
-    // 2026-05-15: 12.5 s for create→first-compile-visible on a
-    // warm-image host). 60 s allows for ~3× cold variance and
-    // surfaces a real regression if the path stretches further.
-    // Previous 420 s / 300 s budgets were absorbing the very
-    // problem we're meant to be detecting.
-    testInfo.setTimeout(60_000);
+    // Outer wall-clock budget. The real product invariants
+    // (`cmContentReadyMs` ≤ 1000 ms, `keystrokeAckMs` ≤ 1000 ms)
+    // are asserted *inside* the shared helper; this number only
+    // bounds the surrounding plumbing (cold-start hand-off →
+    // `/projects` → Fly stop + state poll → dashboard re-click).
+    // Iter 358 fired the helper's diagnostic with 60 s
+    // (cmContentReadyMs=5372); iter 359-360 hit the 60 s testTimeout
+    // *before* the diagnostic could fire, so the post-click
+    // breakdown never reached production. 120 s leaves headroom
+    // for: ≤30 s cold-start + ≤120 s stop settle (rarely all
+    // used) + ≤30 s navigate / measure, while keeping a real
+    // regression in the cold-from-stopped path observable. The
+    // 1000 ms product budgets the helper asserts are unchanged.
+    testInfo.setTimeout(120_000);
 
     await runColdFromInactiveLiveEditableTest(
       {

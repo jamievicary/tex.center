@@ -71,10 +71,18 @@ test.describe("live cold-from-suspended editable state (M13.2(b).3)", () => {
     authedPage,
     db,
   }, testInfo) => {
-    // Budget: 1.5× observed (iter 302: 23.6 s). Regression-guard, not
-    // a generic safety net — a real perf hit on cold-start + suspend
-    // cycle will trip this before the diagnostic assertions below.
-    testInfo.setTimeout(40_000);
+    // Outer wall-clock budget. The real product invariants
+    // (`cmContentReadyMs` ≤ 1000 ms, `keystrokeAckMs` ≤ 1000 ms)
+    // are asserted *inside* the shared helper; this number only
+    // bounds the surrounding plumbing (cold-start hand-off →
+    // `/projects` → Fly suspend + state poll → dashboard re-click).
+    // Iter 358-360 ran with 40 s and timed out before the helper's
+    // diagnostic `console.log` could fire — without that line,
+    // every subsequent iteration on M13.2(b).5 routing landed
+    // blind. 120 s leaves headroom for: ≤30 s cold-start + ≤60 s
+    // suspend settle + ≤30 s navigate / measure. Widening this
+    // does not relax the 1000 ms product budgets the helper asserts.
+    testInfo.setTimeout(120_000);
 
     await runColdFromInactiveLiveEditableTest(
       {

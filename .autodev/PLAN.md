@@ -20,16 +20,13 @@ routed to (decision deferred post-MVP).
    Iter 359 added `clickToWsOpenMs` / `clickToFirstFrameMs` /
    `wsPostClick=opens:N/closes:M` to the diagnostic.
 
-   **Outstanding observability problem (iter 358-360):** the
-   diagnostic still hasn't been observed in production. Every
-   gold pass since iter 358 has hit `testTimeout` (40 s for
-   suspended, 60 s for stopped) before the spec's
-   `console.log` line could fire. **First move next iteration:
-   bump testTimeout to ≥90 s on `verifyLiveGt6LiveEditableState
-   Stopped.spec.ts` (currently 60 s)** and ≥90 s on the
-   suspended variant (currently 40 s), so the diagnostic fires
-   even when the resume is slow. Without that, iterations
-   N+1…N+k all read the same "timeout, no diagnostic" line.
+   **Iter 362 widened both outer test budgets to 120 s**
+   (suspended was 40 s, stopped was 60 s) so the diagnostic line
+   actually fires on the next gold pass. The 1000 ms product
+   invariants inside the helper are unchanged. If the next pass
+   *still* hits the 120 s outer budget without firing the
+   diagnostic, the cold-from-inactive cost has regressed past
+   even the headroom margin — itself a finding worth routing.
 
    Once the breakdown lands, routing:
    - `clickToWsOpenMs` ≫ everything else → M13.2(b).5
@@ -48,15 +45,13 @@ routed to (decision deferred post-MVP).
    full pipeline `cmContent.waitFor` timed out at 40 s testTimeout
    waiting for `.cm-content` visible (locator gave 120 s but the
    test gave only 40 s — same testTimeout-vs-cold-start mismatch as
-   #1). Was GREEN in iter 357-359. Same Fly-cold-start-cost shape;
-   probably same Fly-region variability that caused iter 356's
-   bootstrap warmup overshoot. Fix path: bump
-   `verifyLiveFullPipeline.spec.ts` testTimeout to ≥90 s, then read
-   the wire-timeline tail (the in-band detail rendering from iter
-   358 is already in place). If recurrence isolates to fresh-
-   project cold-start latency on a specific Fly host, file as a
-   FUTURE_IDEAS observability item rather than chasing per-spec
-   budgets.
+   #1). Was GREEN in iter 357-359. **Iter 362 bumped
+   `test.setTimeout` to 150 s** so the inner 120 s locator can
+   actually expire. Next gold pass: GREEN → close as transient,
+   already-fixed; still RED on the 120 s locator → fresh-project
+   cold-start cost has structurally regressed, look at the wire-
+   timeline tail (the in-band `state=error detail=…` rendering
+   from iter 358 is already in place) and route accordingly.
 
 3. **Bug B / reused-spec follow-up (defensive only).** Iter 358
    landed the in-band `state=error detail=<reason>` rendering in
