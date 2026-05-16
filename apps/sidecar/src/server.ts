@@ -330,12 +330,30 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     stopStage.arm();
   }
 
-  // Arm at startup: a Fly Machine that boots without ever
-  // receiving a viewer connection (control-plane wake-probe
-  // followed by no WS handshake, or user navigates away
-  // mid-cold-start) would otherwise never transition 1→0 and
-  // never idle-stop. First viewer-add clears these.
-  armIdleTimers();
+  // Arm ONLY the stop stage at startup. A Fly Machine that boots
+  // without ever receiving a viewer (control-plane wake-probe with
+  // no WS handshake, or user navigates away mid-cold-start) would
+  // otherwise never transition 1→0 and never idle-stop; the stop
+  // stage's longer timer (default 5 min) is the orphan-cleanup
+  // failsafe.
+  //
+  // The suspend stage is deliberately NOT armed on cold boot.
+  // Production wires it to `SIDECAR_SUSPEND_MS=5_000`, which is
+  // shorter than the upstream resolver's worst-case cold-start
+  // drive-to-started + tcpProbe + WS upgrade forwarding chain
+  // (20–60 s on a stopped→started transition). If we armed
+  // suspend at boot, the sidecar would `POST /machines/{self}/
+  // suspend` mid-handshake; the web proxy's direct 6PN TCP dial
+  // to port 3001 cannot auto-resume a Fly-suspended Machine
+  // (only HTTP via Fly's edge does), so the in-flight WS upgrade
+  // would stall indefinitely. iter 340 traced GT-9
+  // (preserve-edits) + GT-6-stopped failures to exactly this
+  // race via per-probe Fly-state diagnostic (stopped → starting
+  // → suspended within 25 s of dashboard click). The 5 s suspend
+  // timeout is correct for "user closed tab" (its design
+  // motivation) — `noteViewerRemoved` continues to arm both
+  // stages when `viewerCount` transitions 1→0.
+  stopStage.arm();
 
   function noteViewerAdded(): void {
     viewerCount += 1;

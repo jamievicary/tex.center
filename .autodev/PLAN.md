@@ -74,6 +74,26 @@ routed to (decision deferred post-MVP).
    on `SupertexDaemonCompiler` is what M7.4.2 (upstream supertex
    serialise wire) will do when it lands.
 
+   **M20.3(c) cold-boot suspend race fix [landed iter 340].**
+   Iter 339 enriched the GT-9 probe with per-iteration Fly state
+   fetch; the resulting transcript showed `stopped → starting →
+   suspended` within 25 s of dashboard click. Root cause: the
+   sidecar's `armIdleTimers()` at startup armed **both** the 5 s
+   suspend timer and the 5 min stop timer; the suspend timer fired
+   mid-handshake (5 s < the web proxy's worst-case cold-start
+   drive-to-started + tcpProbe + WS upgrade chain, 20–60 s), the
+   sidecar self-suspended, and the web proxy's direct 6PN TCP
+   dial to port 3001 cannot auto-resume a Fly-suspended Machine
+   (only HTTP via Fly's edge does), so the upgrade stalled
+   indefinitely. Fix in `apps/sidecar/src/server.ts:338`:
+   startup arms only the **stop** stage. The suspend stage now
+   arms only on `viewerCount` 1→0 (its design use case: "user
+   closed tab", 300 ms reconnect). `serverIdleStop.test.mjs`
+   case 5 rewritten: cold-boot orphan cleanup now asserted via
+   the stop stage (`suspendCalls === 0 && stopCalls === 1`).
+   Same fix is expected to close GT-6-stopped
+   (`verifyLiveGt6LiveEditableStateStopped`).
+
    **M20.3(b) preservation gold spec [landed iter 333, typing
    strategy fixed iter 334, per-phase diagnostics + 8-min wall
    added iter 335].** `verifyLiveGt9StoppedPreservesEdits
@@ -325,16 +345,16 @@ exits 0. Checkpoint persist runs before both handlers. Env vars:
   are globally unique and the second `storage create` fails
   with `Name has already been taken`). Saved to
   `creds/tigris-tex-center.txt`. M20.3(a)+(a)2 landed iters
-  331/332; the preservation gold spec landed iter 333. Closing
-  M20.3 needs:
+  331/332; the preservation gold spec landed iter 333;
+  M20.3(c) cold-boot suspend race fixed iter 340 (see
+  "M20.3(c)" entry above and iter 340 log). Closing M20.3 needs:
   (i) prod cold-boot log capture validating that `restoreMs`
   collapsed from 273 ms → 0 and the warmup overlap shaved the
   pre-compile hydrate/restore window (verification only, no code);
-  (ii) GT-9 passing live — pins the sidecar→Tigris→sidecar
-  byte round-trip on a force-stop + cold reopen; today it boots
-  a fresh Machine itself rather than relying on a pre-existing
-  preserved blob, so it can run on every gold pass without
-  external state.
+  (ii) GT-9 passing live (and GT-6-stopped) — pins the
+  sidecar→Tigris→sidecar byte round-trip on a force-stop + cold
+  reopen. Iter 340's fix is the most likely cause of both prior
+  RED specs; verify on next gold pass.
 
 Tuning: 5 s suspend is aggressive but suspend cost is ~300 ms
 reconnect. Adjust via env if live use shows thrash.

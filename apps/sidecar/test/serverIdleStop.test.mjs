@@ -142,14 +142,21 @@ async function closeAndWait(ws) {
   await app.close();
 }
 
-// Case 5 (regression for live-prod bug seen iter 176): if the
-// server boots but no viewer ever connects, the suspend timer must
-// still arm and fire. Without this, Fly Machines whose
-// control-plane wake-probe lands but whose WS handshake never
-// completes would run forever, billed indefinitely.
+// Case 5 (regression for live-prod bug seen iter 176, refined
+// iter 340): if the server boots but no viewer ever connects, the
+// orphan must still be cleaned up — but via the STOP stage only,
+// not the suspend stage. iter 340 traced GT-9 + GT-6-stopped gold
+// failures to the cold-boot suspend timer firing mid-handshake
+// (5 s default suspend timeout < the web proxy's worst-case
+// cold-start drive-to-started + tcpProbe + WS upgrade chain). The
+// orphan rationale (no indefinite billing) still holds — the stop
+// stage's longer timer is the failsafe — but suspend on cold boot
+// is now forbidden because the 6PN dial that follows can't
+// auto-resume a Fly-suspended Machine.
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-5-"));
   let suspendCalls = 0;
+  let stopCalls = 0;
   const app = await buildServer({
     logger: false,
     scratchRoot,
@@ -157,12 +164,25 @@ async function closeAndWait(ws) {
     onSuspend: () => {
       suspendCalls += 1;
     },
+    stopTimeoutMs: 150,
+    onStop: () => {
+      stopCalls += 1;
+    },
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
 
-  // Never open a WebSocket. Wait past the timeout.
-  await new Promise((r) => setTimeout(r, 200));
-  assert.equal(suspendCalls, 1, "onSuspend should fire when no viewer ever connects");
+  // Never open a WebSocket. Wait past BOTH timeouts.
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(
+    suspendCalls,
+    0,
+    "cold-boot suspend timer must NOT fire — racing against resolver+WS-handshake",
+  );
+  assert.equal(
+    stopCalls,
+    1,
+    "cold-boot stop timer (orphan cleanup) must still fire when no viewer connects",
+  );
 
   await app.close();
 }
@@ -232,9 +252,13 @@ async function closeAndWait(ws) {
   await app.close();
 }
 
-// Case 8 (M20.1): viewer re-connection during the suspend window
-// clears BOTH timers, so neither suspend nor stop fires until the
-// next disconnect.
+// Case 8 (M20.1, refined iter 340): viewer re-connection during
+// the cold-boot stop window clears BOTH timers, so neither
+// suspend nor stop fires until the next disconnect. (After
+// iter 340 only stop is armed on cold boot, but a viewer connect
+// is still a `noteViewerAdded` that calls `clearIdleTimers()` for
+// both stages, so this invariant — "active viewer ⇒ neither
+// fires" — is unchanged.)
 {
   const scratchRoot = mkdtempSync(join(tmpdir(), "sidecar-idle-8-"));
   let suspendCalls = 0;
