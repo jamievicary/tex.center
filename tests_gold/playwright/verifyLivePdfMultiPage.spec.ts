@@ -503,27 +503,55 @@ test.describe("live multi-page PDF preview (M15)", () => {
   // count is satisfied by the iter-372 `.pdf-page-placeholder` slot
   // alone, so it never validates that the bootstrap-cascade chain
   // actually replaces the placeholder with a real page 2. This
-  // case closes that gap by exercising every hop:
+  // case closes that gap by exercising every cascade hop, including
+  // the terminate-on-`\enddocument` signal.
   //
-  //   1. Fresh project, static two-page source via Ctrl+A → type.
-  //   2. Post-replace pdf-segment ships `shipoutPage=1,
-  //      lastPage=false` (target capped to `maxViewingPage=1`).
-  //   3. PdfViewer mounts `.pdf-page-placeholder` for page 2.
-  //   4. `placeholderEl.scrollIntoView()` → IntersectionObserver
-  //      fires (ratio > 0.1 threshold) → `setViewingPage(2)` →
-  //      outgoing `view` frame → sidecar `kickForView(2)` →
-  //      recompile with `targetPage=2`.
-  //   5. Post-cascade pdf-segment ships `shipoutPage≥2,
-  //      lastPage=true`.
-  //   6. PdfViewer removes placeholder, two *real* `.pdf-page`
-  //      wrappers (no `pdf-page-placeholder` class) live in the
-  //      DOM.
+  // Under the iter-372 design `target = maxViewingPage(p)` (clamped
+  // ≥ 1) supertex stops at `target` before emitting `[pdf-end]`
+  // unless `\enddocument` falls *before* `target`. So an N-page
+  // document needs N cascades to terminate `lastPage=true`: each
+  // scroll exposes one more page (cascade ships pages 1..target
+  // with `lastPage=false`, mounting a probe placeholder for the
+  // next slot); the (N+1)-th cascade fires with `target=N+1` on a
+  // doc with only N pages, hits `\enddocument` first, ships
+  // `lastPage=true`, and the placeholder is removed.
+  //
+  // For `STATIC_TWO_PAGE` (2 pages exactly) that means **two**
+  // cascade hops:
+  //
+  //   Hop 0 — Initial steady state.
+  //     • Hello-world template compiles cold: `maxViewing=1`,
+  //       `target=1`, 1-page doc → `[pdf-end]` → `lastPage=true`,
+  //       no placeholder.
+  //     • `Ctrl+A → STATIC_TWO_PAGE`: `maxViewing` stays 1,
+  //       `target=1`, 2-page doc → supertex stops at page 1 →
+  //       `lastPage=false` → PdfViewer mounts placeholder for
+  //       page 2.
+  //
+  //   Hop 1 — `scrollIntoView` → cascade ships page 2.
+  //     • IO fires on placeholder-2 → `maxViewing=2` →
+  //       `setViewingPage(2)` → outgoing `view` frame → sidecar
+  //       `kickForView(2)` → recompile `target=2`.
+  //     • Cascade segment: `shipoutPage=2, lastPage=false` (target
+  //       reached *before* `\enddocument`).
+  //     • PdfViewer commits 2 real `.pdf-page` wrappers AND
+  //       remounts a placeholder (slot for page 3) because
+  //       `lastPage===false` still signals "more might exist".
+  //
+  //   Hop 2 — `scrollIntoView` on placeholder-3 → terminate.
+  //     • IO fires on placeholder-3 → `maxViewing=3` →
+  //       `kickForView(3)` → recompile `target=3`.
+  //     • Cascade segment: doc only has 2 pages, supertex hits
+  //       `\enddocument` before shipping page 3 → ships pages 1+2
+  //       with `lastPage=true`.
+  //     • PdfViewer's lastPage-effect runs `removePlaceholder()` →
+  //       DOM ends at 2 real pages + 0 placeholders.
   //
   // `lastPage` is the new tri-state byte at frame-offset 18 (i.e.
   // payload[17]) — encoder writes 2=true / 1=false / 0=unset
   // (`packages/protocol/src/index.ts`). Parsed inline here so the
   // wireFrames fixture stays minimal.
-  test("bootstrap cascade: scroll into placeholder triggers page-2 fetch and replaces placeholder", async ({
+  test("bootstrap cascade: scrolling probe placeholders fetches page 2 then terminates lastPage=true", async ({
     authedPage,
     db,
   }, testInfo) => {
@@ -630,37 +658,40 @@ test.describe("live multi-page PDF preview (M15)", () => {
         );
       }
 
-      const segmentsAtPlaceholder = pdfSegmentFrames.length;
+      const segmentsBeforeHop1 = pdfSegmentFrames.length;
 
-      // Scroll the placeholder into view. Triggers IO → tracker
+      // ── Hop 1 ────────────────────────────────────────────────
+      // Scroll placeholder-2 into view. Triggers IO → tracker
       // promotes maxVisible to 2 → `setViewingPage(2)` →
-      // outgoing `view` frame → sidecar `kickForView(2)`.
+      // outgoing `view` frame → sidecar `kickForView(2)` →
+      // recompile `target=2`. Doc has 2 pages exactly, so the
+      // cascade ships pages 1+2 with `lastPage=false` (target
+      // reached before `\enddocument`); ships=true would only
+      // happen on a 1-page doc, which `STATIC_TWO_PAGE` is not.
       await placeholder.scrollIntoViewIfNeeded();
 
-      // Await a post-cascade pdf-segment with both lastPage=true
-      // and shipoutPage ≥ 2. Either signal alone is insufficient:
-      // a coincidental compile with lastPage=true on page 1 (a
-      // single-page document re-emitted) would have shipoutPage=1.
-      const cascadeDeadline = Date.now() + 90_000;
-      let cascadeSeg: { idx: number; shipoutPage: number | null } | null = null;
-      while (Date.now() < cascadeDeadline) {
-        for (let i = segmentsAtPlaceholder; i < pdfSegmentFrames.length; i++) {
+      const hop1Deadline = Date.now() + 90_000;
+      let hop1Seg: {
+        idx: number;
+        shipoutPage: number | null;
+        lastPage: boolean | null;
+      } | null = null;
+      while (Date.now() < hop1Deadline) {
+        for (let i = segmentsBeforeHop1; i < pdfSegmentFrames.length; i++) {
           const f = pdfSegmentFrames[i]!;
-          if (parseLastPage(f) === true) {
-            const sp = parseShipoutPage(f);
-            if (sp !== null && sp >= 2) {
-              cascadeSeg = { idx: i, shipoutPage: sp };
-              break;
-            }
+          const sp = parseShipoutPage(f);
+          if (sp !== null && sp >= 2) {
+            hop1Seg = { idx: i, shipoutPage: sp, lastPage: parseLastPage(f) };
+            break;
           }
         }
-        if (cascadeSeg) break;
+        if (hop1Seg) break;
         await authedPage.waitForTimeout(250);
       }
 
-      if (!cascadeSeg) {
-        const postCascadeFrames = pdfSegmentFrames.slice(segmentsAtPlaceholder);
-        const shapes = postCascadeFrames.map((f) => ({
+      if (!hop1Seg) {
+        const postHop1Frames = pdfSegmentFrames.slice(segmentsBeforeHop1);
+        const shapes = postHop1Frames.map((f) => ({
           bytes: f.length,
           shipoutPage: parseShipoutPage(f),
           lastPage: parseLastPage(f),
@@ -676,12 +707,10 @@ test.describe("live multi-page PDF preview (M15)", () => {
           Object.entries(csCounts)
             .map(([s, n]) => `${s}×${n}`)
             .join(",") || "none";
-        expect(
-          cascadeSeg,
-          `no pdf-segment with shipoutPage≥2 AND lastPage=true ` +
-            `arrived within 90 s of scrolling the placeholder into ` +
-            `view. ` +
-            `postCascadeFrameCount=${postCascadeFrames.length} ` +
+        throw new Error(
+          `hop 1: no pdf-segment with shipoutPage≥2 arrived within ` +
+            `90 s of scrolling placeholder-2 into view. ` +
+            `postHop1FrameCount=${postHop1Frames.length} ` +
             `shapes=${JSON.stringify(shapes)} ` +
             `compileStatusEvents=${csSummary}. ` +
             `Classification: 0 post-scroll segments → IO didn't ` +
@@ -689,21 +718,121 @@ test.describe("live multi-page PDF preview (M15)", () => {
             `kickForView skipped (check sidecar log for ` +
             `kickForView-skip with reason); ≥1 with ` +
             `shipoutPage=1 → sidecar still capping target at 1 ` +
-            `(maxViewingPage state lost); ≥1 with ` +
-            `shipoutPage=2 + lastPage=false → engine didn't ` +
-            `hit \\enddocument at page 2 (upstream supertex).`,
-        ).not.toBeNull();
+            `(maxViewingPage state lost on the wire or in the ` +
+            `coalescer).`,
+        );
       }
 
-      // The PdfViewer must remove the placeholder and add a
-      // second real `.pdf-page` wrapper after the cascade segment
-      // commits. Bounded poll on the DOM rather than a fixed
-      // sleep: the render is bytes→pdfjs→canvases→commit, so a
-      // few hundred ms of slack is enough on a warm Machine.
-      const renderDeadline = Date.now() + 30_000;
+      // After hop-1's commit the PdfViewer must have rendered 2
+      // real `.pdf-page` wrappers AND remounted a new placeholder
+      // for page 3 (because hop-1's `lastPage===false`). If the
+      // segment carried `lastPage===true` here that's also fine
+      // (defensive — would only happen on a 1-page doc), in which
+      // case the hop-2 expectation collapses to "the placeholder
+      // for page 3 never mounts" and we skip to the terminal DOM
+      // assertion below.
+      const hop1RenderDeadline = Date.now() + 30_000;
+      let hop1RealPages = 0;
+      let hop1Placeholders = 0;
+      const wantHop2 = hop1Seg.lastPage !== true;
+      while (Date.now() < hop1RenderDeadline) {
+        const counts = await authedPage.evaluate(() => ({
+          realPages: document.querySelectorAll(
+            ".preview .pdf-page:not(.pdf-page-placeholder)",
+          ).length,
+          placeholderCount: document.querySelectorAll(
+            ".preview .pdf-page-placeholder",
+          ).length,
+        }));
+        hop1RealPages = counts.realPages;
+        hop1Placeholders = counts.placeholderCount;
+        if (
+          hop1RealPages >= 2 &&
+          ((wantHop2 && hop1Placeholders === 1) ||
+            (!wantHop2 && hop1Placeholders === 0))
+        )
+          break;
+        await authedPage.waitForTimeout(250);
+      }
+
+      expect(
+        hop1RealPages >= 2,
+        `hop 1: ≥2 real .pdf-page wrappers expected after a ` +
+          `shipoutPage=${hop1Seg.shipoutPage} commit, but DOM had ` +
+          `realPages=${hop1RealPages} ` +
+          `placeholders=${hop1Placeholders}. PdfViewer's render() ` +
+          `did not commit a 2-page descriptor list — check pdfjs ` +
+          `path for [PdfViewer] render failed: lines (captured by ` +
+          `authedPage console hook).`,
+      ).toBe(true);
+
+      if (wantHop2) {
+        expect(
+          hop1Placeholders === 1,
+          `hop 1: lastPage=false segment should leave exactly one ` +
+            `probe placeholder (for page 3) after commit, but DOM ` +
+            `had placeholders=${hop1Placeholders} ` +
+            `realPages=${hop1RealPages}. ` +
+            `Classification: placeholders=0 → syncPlaceholder() did ` +
+            `not remount after the render commit (lastPage prop ` +
+            `lost on the WsClient → +page.svelte → PdfViewer wire); ` +
+            `placeholders≥2 → removePlaceholder() didn't run before ` +
+            `render commit (DOM-stability invariant broken).`,
+        ).toBe(true);
+
+        // ── Hop 2 ────────────────────────────────────────────────
+        // Scroll the newly-mounted placeholder-3 into view. IO →
+        // `maxViewing=3` → `kickForView(3)` → recompile `target=3`.
+        // Doc has 2 pages, so supertex hits `\enddocument` before
+        // shipping page 3 → ships pages 1+2 with `lastPage=true`,
+        // PdfViewer's lastPage-effect runs removePlaceholder().
+        const segmentsBeforeHop2 = pdfSegmentFrames.length;
+        const placeholder3 = authedPage.locator(".pdf-page-placeholder");
+        await placeholder3.scrollIntoViewIfNeeded();
+
+        const hop2Deadline = Date.now() + 90_000;
+        let hop2Seg: { idx: number; shipoutPage: number | null } | null = null;
+        while (Date.now() < hop2Deadline) {
+          for (let i = segmentsBeforeHop2; i < pdfSegmentFrames.length; i++) {
+            const f = pdfSegmentFrames[i]!;
+            if (parseLastPage(f) === true) {
+              hop2Seg = { idx: i, shipoutPage: parseShipoutPage(f) };
+              break;
+            }
+          }
+          if (hop2Seg) break;
+          await authedPage.waitForTimeout(250);
+        }
+
+        if (!hop2Seg) {
+          const postHop2Frames = pdfSegmentFrames.slice(segmentsBeforeHop2);
+          const shapes = postHop2Frames.map((f) => ({
+            bytes: f.length,
+            shipoutPage: parseShipoutPage(f),
+            lastPage: parseLastPage(f),
+          }));
+          throw new Error(
+            `hop 2: no pdf-segment with lastPage=true arrived ` +
+              `within 90 s of scrolling placeholder-3 into view. ` +
+              `postHop2FrameCount=${postHop2Frames.length} ` +
+              `shapes=${JSON.stringify(shapes)}. ` +
+              `Classification: 0 post-scroll segments → second ` +
+              `cascade hop didn't reach the sidecar (IO/view-frame ` +
+              `path broke between hops); ≥1 with lastPage=false → ` +
+              `target=3 not making it to supertex OR engine didn't ` +
+              `emit [pdf-end] on a 2-page document compiled to ` +
+              `target=3 (upstream supertex).`,
+          );
+        }
+      }
+
+      // Terminal DOM state: 2 real pages, 0 placeholders. Bounded
+      // poll covers render(bytes)→pdfjs→canvases→commit +
+      // syncPlaceholder() removePlaceholder() pass.
+      const terminalDeadline = Date.now() + 30_000;
       let realPages = 0;
       let placeholderCount = 1;
-      while (Date.now() < renderDeadline) {
+      while (Date.now() < terminalDeadline) {
         const counts = await authedPage.evaluate(() => ({
           realPages: document.querySelectorAll(
             ".preview .pdf-page:not(.pdf-page-placeholder)",
@@ -720,15 +849,15 @@ test.describe("live multi-page PDF preview (M15)", () => {
 
       expect(
         realPages >= 2 && placeholderCount === 0,
-        `bootstrap cascade rendered, but the viewer did not ` +
-          `replace the placeholder with a real page 2 within 30 s. ` +
+        `terminal state: after both cascade hops the DOM should ` +
+          `have ≥2 real .pdf-page wrappers and 0 placeholders, but ` +
           `realPages=${realPages} placeholderCount=${placeholderCount}. ` +
-          `Classification: realPages=1 + placeholderCount=1 → ` +
-          `cascade segment arrived but PdfViewer's render() didn't ` +
-          `commit a 2-page descriptor list (check pdfjs path); ` +
-          `realPages=2 + placeholderCount=1 → ` +
-          `syncPlaceholder() didn't remove the slot after commit ` +
-          `(lastPage prop never flipped to true on PdfViewer).`,
+          `Classification: realPages<2 → hop-2's commit dropped ` +
+          `pages (pdfjs path or descriptor list); ` +
+          `realPages=2 + placeholderCount=1 → syncPlaceholder() ` +
+          `didn't remove the slot after the lastPage=true segment ` +
+          `(lastPage prop never flipped to true on PdfViewer — ` +
+          `WsClient.pdfLastPage tri-state lost on the wire?).`,
       ).toBe(true);
     } finally {
       await cleanupLiveProjectMachine({

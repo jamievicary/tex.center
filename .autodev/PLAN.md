@@ -13,8 +13,11 @@ routed to (decision deferred post-MVP).
 **Active priority queue (open work only):**
 
 1. **`[pdf-end]` + `lastPage` wire-through + multipage demand-fetch
-   (per 368_question / 368_answer).** Closed iter 375 — all
-   slices landed, bootstrap-cascade gold pin added.
+   (per 368_question / 368_answer).** Runtime closed iter 372–375;
+   bootstrap-cascade gold pin reshaped iter 376 to cover the
+   two-hop cascade (single-hop expectation was incompatible with
+   `target = maxViewing` semantics — first green pass expected
+   next gold run).
    - **Iter A (landed iter 370).** Submodule pointer at `aaa625a`
      on `vendor/supertex`. `daemonProtocol.ts` parses `[pdf-end]`
      into a `pdf-end` event; `supertexDaemon.collectRound` tracks
@@ -52,17 +55,27 @@ routed to (decision deferred post-MVP).
      Case 7 (range form + page-1 form + unstamped fallback) and
      `compileCycleTracker.test.mjs` Case 5 (range form with
      elapsed-time prefix).
-   - **Iter B-gold — bootstrap-cascade gold case (landed iter 375).**
+   - **Iter B-gold — bootstrap-cascade gold case (reshaped iter 376).**
      `verifyLivePdfMultiPage.spec.ts` third case
-     "bootstrap cascade: scroll into placeholder triggers page-2
-     fetch and replaces placeholder". Fresh project, Ctrl+A →
-     STATIC_TWO_PAGE, wait for `.pdf-page-placeholder` to mount,
-     `placeholder.scrollIntoViewIfNeeded()`, await pdf-segment
-     with `lastPage=true AND shipoutPage≥2`, assert
-     `.pdf-page:not(.pdf-page-placeholder)` count ≥2 and zero
-     placeholders. Bounded polls at each hop with failure-mode
-     classification (placeholder-never-mounted / cascade-never-
-     shipped / placeholder-never-replaced). Outer timeout 240 s.
+     "bootstrap cascade: scrolling probe placeholders fetches page
+     2 then terminates lastPage=true". Iter-375 single-hop variant
+     was design-incompatible: `target = maxViewing` (iter 372)
+     means an N-page document needs N cascades to terminate
+     `lastPage=true` (each cascade hits target *before*
+     `\enddocument`; only when target > N does supertex emit
+     `[pdf-end]`). Iter 376 spec walks both hops on
+     `STATIC_TWO_PAGE`:
+     - Hop 1: scroll placeholder-2 → IO → `kickForView(2)` →
+       sidecar ships pages 1+2 with `lastPage=false`; PdfViewer
+       commits 2 real pages AND remounts a new placeholder for
+       page 3 (because lastPage===false still signals "more might
+       exist").
+     - Hop 2: scroll placeholder-3 → IO → `kickForView(3)` →
+       supertex hits `\enddocument` first → ships pages 1+2 with
+       `lastPage=true`; PdfViewer removes placeholder.
+     Per-hop failure classifications still bound each hop with
+     specific diagnostic messages (IO-didn't-fire vs sidecar-
+     capping vs `\enddocument`-not-emitted). Outer timeout 240 s.
      Closes M21.2 too (same coverage; see #5).
    - **Load-bearing read of current sidecar segment assembly.**
      `assembleSegment(maxShipout)` (sidecar) concatenates chunks
@@ -169,11 +182,11 @@ routed to (decision deferred post-MVP).
    most recent `deploy-sidecar.yml` success, then targeted-destroy
    the reused project's Machine.
 
-5. **M21.2 max-visible gold pin — closed iter 375.** Coverage
-   provided by the iter B-gold bootstrap-cascade case (priority
-   #1, landed iter 375), per 369b_answer: each placeholder→real
-   transition exercises max-visible → sidecar target on the
-   wire.
+5. **M21.2 max-visible gold pin — coverage provided by the iter
+   B-gold two-hop cascade case (priority #1, reshaped iter 376).**
+   Per 369b_answer: each placeholder→real transition exercises
+   max-visible → sidecar target on the wire. First green pass
+   pending iter-376 reshape; first GREEN closes M21.2.
 
 6. **M21.3c page-prefetch off-by-one.** Capture sidecar
    `daemon-stdin` + `daemon-round-done` transcript of user-
@@ -354,10 +367,11 @@ Sidecar log surfaces both pre-round (`daemon-stdin`:
 (`daemon-round-done`: `{ round, maxShipout, errorReason,
 violation? }`).
 
-- **M21.2 (closed iter 375).** Iter B-gold bootstrap-cascade
-  case in `verifyLivePdfMultiPage.spec.ts` (priority #1) covers
-  the same max-visible→target invariant without a separate
-  3-page spec or sidecar introspection hook.
+- **M21.2 (coverage in iter B-gold case, reshaped iter 376).**
+  Two-hop bootstrap-cascade case in `verifyLivePdfMultiPage.spec.ts`
+  (priority #1) covers the max-visible→target invariant without a
+  separate 3-page spec or sidecar introspection hook. First green
+  pass on the reshape closes M21.2.
 - **M21.3c (open).** Capture sidecar log transcript of the
   user-reported "edit on hidden page N+2 ships no segment" repro.
   Fix front-end if `daemon-stdin` shows non-`end` target
@@ -429,8 +443,7 @@ M9.cold-start-retry; M9.resource-hygiene; M9.gold-restructure;
 M10.branding; M11.1/1b/1c/2a/2b/5a; M12; M13.1; M13.2(a);
 M13.2(b).1–3, .5 R2; M14; M15 sidecar fix + Step D plumbing;
 M17; M17.b; M18.1; M19; M20.1; M20.2; M20.3 (bar GT-6-stopped);
-M21.1; M21.2 (iter 375 — bootstrap-cascade gold pin);
-M21.3a/b; M21.target-page-swap (iter 372);
+M21.1; M21.3a/b; M21.target-page-swap (iter 372);
 M22.1/2-local/3/4a/4b/5; M23.1/2/4/5.
 
 See git log and `.autodev/logs/` for narrative detail.
