@@ -214,6 +214,34 @@ function makeStubFetch(responses) {
   assert.equal(calls[0].init.body, undefined);
 }
 
+// ---- listMachines: GET /machines, parses array of Machine ----
+
+{
+  const { stub, calls } = makeStubFetch([
+    {
+      status: 200,
+      body: [
+        { id: "m1", state: "started" },
+        { id: "m2", state: "stopped", image_ref: { digest: "sha256:abc" } },
+      ],
+    },
+  ]);
+  const client = new MachinesClient({ token: "tok", appName: "app", fetch: stub });
+  const ms = await client.listMachines();
+  assert.equal(calls[0].url, "https://api.machines.dev/v1/apps/app/machines");
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(ms.length, 2);
+  assert.equal(ms[0].id, "m1");
+  assert.equal(ms[1].image_ref?.digest, "sha256:abc");
+}
+
+// listMachines: non-array body rejected.
+{
+  const { stub } = makeStubFetch([{ status: 200, body: { id: "m1", state: "started" } }]);
+  const client = new MachinesClient({ token: "tok", appName: "app", fetch: stub });
+  await assert.rejects(() => client.listMachines(), /expected array response/);
+}
+
 // ---- startMachine ----
 
 {

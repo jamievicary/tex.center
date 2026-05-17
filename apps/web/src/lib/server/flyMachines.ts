@@ -65,6 +65,15 @@ export interface CreateMachineRequest {
   readonly config: MachineConfig;
 }
 
+export interface MachineImageRef {
+  readonly registry?: string;
+  readonly repository?: string;
+  readonly tag?: string;
+  readonly digest?: string;
+  readonly labels?: Readonly<Record<string, string>>;
+  readonly [k: string]: unknown;
+}
+
 export interface Machine {
   readonly id: string;
   readonly name?: string;
@@ -72,6 +81,14 @@ export interface Machine {
   readonly region?: string;
   readonly private_ip?: string;
   readonly instance_id?: string;
+  /**
+   * Image identity the Machine is running. Fly returns this on the
+   * top-level `GET /machines/<id>` response (alongside `config.image`,
+   * which is the *requested* tag — the digest under `image_ref` is the
+   * resolved content-addressable identity at last start). The resolver's
+   * stale-image eviction (iter 378) keys off `image_ref.digest`.
+   */
+  readonly image_ref?: MachineImageRef;
   readonly [k: string]: unknown;
 }
 
@@ -204,6 +221,17 @@ export class MachinesClient {
     );
     const body = await this.request(url, { method: "GET" });
     return ensureMachine(body);
+  }
+
+  async listMachines(): Promise<Machine[]> {
+    const url = buildMachinesUrl(this.baseUrl, this.appName, "machines");
+    const body = await this.request(url, { method: "GET" });
+    if (!Array.isArray(body)) {
+      throw new Error(
+        `listMachines: expected array response, got ${typeof body}`,
+      );
+    }
+    return body.map((entry) => ensureMachine(entry));
   }
 
   async startMachine(machineId: string): Promise<void> {

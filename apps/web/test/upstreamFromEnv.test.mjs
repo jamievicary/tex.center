@@ -42,6 +42,9 @@ function makeMachinesStub(appName) {
     },
     async getMachine(id) {
       calls.push({ kind: "get", id });
+      // No image_ref → resolver's iter-378 eviction check sees a
+      // null actualDigest and skips the digest comparison even when
+      // currentImage resolves.
       return { id, state: "started" };
     },
     async startMachine(id) {
@@ -51,6 +54,27 @@ function makeMachinesStub(appName) {
     async destroyMachine() {},
     async waitForState(id, state) {
       calls.push({ kind: "wait", id, state });
+    },
+    async listMachines() {
+      // Iter 378: return a deployment-pool entry so
+      // `createFlyCurrentSidecarImage` resolves cleanly. Per-project
+      // machines created by `createMachine` above have no
+      // `image_ref`, so the resolver's eviction check sees a null
+      // `actualDigest` and skips the comparison either way — but
+      // returning a healthy deploy entry keeps the warning channel
+      // quiet so the test output stays focused on the resolver's
+      // happy path.
+      calls.push({ kind: "list" });
+      return [
+        {
+          id: "m-deploy",
+          state: "stopped",
+          image_ref: { digest: "sha256:current-deploy" },
+          config: {
+            metadata: { fly_process_group: "app", fly_release_version: "1" },
+          },
+        },
+      ];
     },
     internalAddress(id) {
       return `${id}.vm.${appName}.internal`;

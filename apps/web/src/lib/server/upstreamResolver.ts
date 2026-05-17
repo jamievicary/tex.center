@@ -39,6 +39,16 @@ import type {
   MachineState,
   MachinesClient,
 } from "./flyMachines.js";
+
+/**
+ * Resolves the image digest new sidecar Machines should be running.
+ * Implementations may cache; the resolver calls `getCurrent()` once
+ * per resolution and tolerates a thrown rejection by skipping the
+ * eviction check (fail-open).
+ */
+export interface CurrentSidecarImage {
+  getCurrent(): Promise<string>;
+}
 import type { SidecarUpstream } from "./wsProxy.js";
 
 export type UpstreamResolver = (
@@ -141,6 +151,49 @@ export interface UpstreamResolverOptions {
     projectId: string;
     message: string;
   }) => void;
+  /**
+   * Iter 378 — stale-sidecar-image eviction. When provided, the
+   * resolver compares the assigned Machine's `image_ref.digest`
+   * against `currentImage.getCurrent()`; on mismatch it force-
+   * destroys the Machine, drops the assignment row, and falls into
+   * the existing "no cached row → create fresh" path. This spreads
+   * post-deploy cold-starts across "next user open" rather than
+   * concentrating them at deploy time. Omit (or pass an
+   * implementation that always throws) to disable.
+   */
+  readonly currentImage?: CurrentSidecarImage;
+  /**
+   * Observability hook for stale-image evictions. Fires after the
+   * destroy + delete succeeds, before the recreate. Both digests
+   * are the canonical `sha256:…` form; `expected` is the value
+   * returned by `currentImage.getCurrent()`.
+   */
+  readonly onStaleImageEviction?: (detail: {
+    projectId: string;
+    machineId: string;
+    expectedDigest: string;
+    actualDigest: string;
+  }) => void;
+  /**
+   * Reporter for `currentImage.getCurrent()` failures. The resolver
+   * always proceeds (fail-open) when the lookup throws — a single
+   * protocol-drift session is better than wedging every editor open
+   * behind a flaky Fly API call — but the failure is worth
+   * surfacing.
+   */
+  readonly onCurrentImageError?: (detail: { message: string }) => void;
+}
+
+/**
+ * Pure helper: extract the canonical `sha256:…` digest from a
+ * Machine's `image_ref`. Returns null when the field isn't present
+ * or isn't a non-empty string. The resolver short-circuits eviction
+ * when either side is null (can't compare what we don't have).
+ */
+export function machineImageDigest(machine: Machine): string | null {
+  const digest = machine.image_ref?.digest;
+  if (typeof digest !== "string" || digest.length === 0) return null;
+  return digest;
 }
 
 const sleep = (ms: number): Promise<void> =>
@@ -186,6 +239,40 @@ export function createUpstreamResolver(
       await opts.store.delete(projectId);
       machineId = await ensureMachineId(projectId);
       machine = await opts.machines.getMachine(machineId);
+    }
+
+    // Iter 378 — stale-image eviction. Per-project Machines aren't
+    // touched by `flyctl deploy`, so after a sidecar deploy the
+    // assigned Machine keeps running the old image — silently breaking
+    // any wire-protocol bump (e.g. the iter-370/372 17→18-byte
+    // pdf-segment header). Check the assigned Machine's digest against
+    // what new sidecars *should* be running; if they differ, evict
+    // and fall through to the create path.
+    if (opts.currentImage !== undefined) {
+      const actualDigest = machineImageDigest(machine);
+      let expectedDigest: string | null = null;
+      try {
+        expectedDigest = await opts.currentImage.getCurrent();
+      } catch (err) {
+        // Fail open: surface the failure but don't block the session.
+        opts.onCurrentImageError?.({ message: errorMessage(err) });
+      }
+      if (
+        actualDigest !== null &&
+        expectedDigest !== null &&
+        actualDigest !== expectedDigest
+      ) {
+        await opts.machines.destroyMachine(machineId, { force: true });
+        await opts.store.delete(projectId);
+        opts.onStaleImageEviction?.({
+          projectId,
+          machineId,
+          expectedDigest,
+          actualDigest,
+        });
+        machineId = await ensureMachineId(projectId);
+        machine = await opts.machines.getMachine(machineId);
+      }
     }
 
     machine = await driveToStarted(machineId, machine);
@@ -347,6 +434,76 @@ export function createUpstreamResolver(
     });
     inFlight.set(projectId, p);
     return p;
+  };
+}
+
+/**
+ * Iter 378 — Fly-backed `CurrentSidecarImage`.
+ *
+ * "Current" = the `image_ref.digest` of the deployment-pool Machine
+ * with the highest `fly_release_version`. The deploy-pool Machines
+ * are created by `flyctl deploy` and carry
+ * `config.metadata.fly_process_group === "app"` plus a numeric
+ * `fly_release_version`; per-project Machines (which we manage) have
+ * neither, so the filter cleanly excludes them. The highest release
+ * version is what new on-demand Machines inherit.
+ *
+ * Cached in-process; the resolver hits this on every session. Default
+ * TTL 60 s — short enough to converge within a minute of a deploy,
+ * long enough that a burst of editor opens shares one Fly API round-
+ * trip.
+ *
+ * On API failure the underlying `Promise` rejects; the resolver
+ * catches and fail-opens. A successful response refreshes the cache;
+ * a thrown lookup leaves the prior cached value in place so transient
+ * Fly hiccups don't force every editor open to skip eviction.
+ */
+export interface CurrentSidecarImageFlyOptions {
+  readonly machines: Pick<MachinesClient, "listMachines">;
+  /** Cache TTL in ms. Default 60_000 (60 s). */
+  readonly ttlMs?: number;
+  /** Clock injection for tests. Default `Date.now`. */
+  readonly now?: () => number;
+}
+
+export function createFlyCurrentSidecarImage(
+  opts: CurrentSidecarImageFlyOptions,
+): CurrentSidecarImage {
+  const ttlMs = opts.ttlMs ?? 60_000;
+  const now = opts.now ?? (() => Date.now());
+  let cached: { digest: string; expiresAt: number } | null = null;
+  return {
+    async getCurrent(): Promise<string> {
+      if (cached !== null && now() < cached.expiresAt) {
+        return cached.digest;
+      }
+      const all = await opts.machines.listMachines();
+      let best: { version: number; digest: string } | null = null;
+      for (const m of all) {
+        const config = (m as { config?: unknown }).config;
+        if (typeof config !== "object" || config === null) continue;
+        const metadata = (config as { metadata?: unknown }).metadata;
+        if (typeof metadata !== "object" || metadata === null) continue;
+        const meta = metadata as Record<string, unknown>;
+        if (meta.fly_process_group !== "app") continue;
+        const verRaw = meta.fly_release_version;
+        if (typeof verRaw !== "string") continue;
+        const version = Number.parseInt(verRaw, 10);
+        if (!Number.isInteger(version)) continue;
+        const digest = m.image_ref?.digest;
+        if (typeof digest !== "string" || digest.length === 0) continue;
+        if (best === null || version > best.version) best = { version, digest };
+      }
+      if (best === null) {
+        throw new Error(
+          "createFlyCurrentSidecarImage: no deployment-pool Machine with " +
+            "`fly_process_group=app` + numeric `fly_release_version` + " +
+            "`image_ref.digest` found; cannot determine current image",
+        );
+      }
+      cached = { digest: best.digest, expiresAt: now() + ttlMs };
+      return best.digest;
+    },
   };
 }
 

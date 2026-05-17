@@ -9,7 +9,9 @@ import assert from "node:assert/strict";
 
 import {
   cachedStateOf,
+  createFlyCurrentSidecarImage,
   createUpstreamResolver,
+  machineImageDigest,
 } from "../src/lib/server/upstreamResolver.ts";
 
 // ---- cachedStateOf ----
@@ -48,7 +50,7 @@ function makeStore() {
 }
 
 function makeMachinesStub({ initial = [], onCreate, onStart } = {}) {
-  // initial: list of { id, state, region? } pre-existing machines.
+  // initial: list of { id, state, region?, image_ref? } pre-existing machines.
   const machines = new Map();
   for (const m of initial) machines.set(m.id, { ...m });
   const calls = [];
@@ -82,12 +84,22 @@ function makeMachinesStub({ initial = [], onCreate, onStart } = {}) {
       m.state = next;
       calls.push({ kind: "start", id, state: next });
     },
+    async destroyMachine(id, opts) {
+      const m = machines.get(id);
+      if (!m) throw new Error(`destroyMachine: no such machine ${id}`);
+      m.state = "destroyed";
+      calls.push({ kind: "destroy", id, force: opts?.force === true });
+    },
     async waitForState(id, state) {
       const m = machines.get(id);
       if (!m) throw new Error(`waitForState: no such machine ${id}`);
       // Pretend we observed the transition.
       m.state = state;
       calls.push({ kind: "wait", id, state });
+    },
+    async listMachines() {
+      calls.push({ kind: "list" });
+      return [...machines.values()].map((m) => ({ ...m }));
     },
     internalAddress(id) {
       return `${id}.vm.${this.appName}.internal`;
@@ -678,6 +690,423 @@ const baseOpts = {
     machines.startCalls >= 1,
     "startMachine must have been attempted at least once",
   );
+}
+
+// ---- iter 378: stale-sidecar-image eviction ----
+//
+// Per-project Machines aren't touched by `flyctl deploy` (no process
+// group), so after a sidecar deploy the assigned Machine keeps
+// running the old image. Resolver compares the assigned Machine's
+// `image_ref.digest` against `currentImage.getCurrent()`; on
+// mismatch it force-destroys + drops + recreates. Fail-open on
+// `getCurrent()` rejection — a single drift session is better than
+// wedging every editor open behind a flaky Fly API call.
+
+// machineImageDigest: pure helper.
+{
+  assert.equal(machineImageDigest({ id: "x", state: "started" }), null);
+  assert.equal(
+    machineImageDigest({ id: "x", state: "started", image_ref: {} }),
+    null,
+  );
+  assert.equal(
+    machineImageDigest({
+      id: "x",
+      state: "started",
+      image_ref: { digest: "" },
+    }),
+    null,
+    "empty digest treated as missing",
+  );
+  assert.equal(
+    machineImageDigest({
+      id: "x",
+      state: "started",
+      image_ref: { digest: "sha256:abc" },
+    }),
+    "sha256:abc",
+  );
+}
+
+// ---- case 16: digest matches current → no eviction ----
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-match",
+    machineId: "m-fresh",
+    region: "fra",
+    state: "running",
+  });
+  const machines = makeMachinesStub({
+    initial: [
+      {
+        id: "m-fresh",
+        state: "started",
+        region: "fra",
+        image_ref: { digest: "sha256:current" },
+      },
+    ],
+  });
+  let currentCalls = 0;
+  const currentImage = {
+    async getCurrent() {
+      currentCalls += 1;
+      return "sha256:current";
+    },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    currentImage,
+  });
+  const upstream = await resolve("p-match");
+  assert.equal(upstream.host, "m-fresh.vm.test-app.internal");
+  assert.equal(currentCalls, 1, "getCurrent must be consulted once per resolve");
+  assert.equal(
+    machines.calls.filter((c) => c.kind === "destroy").length,
+    0,
+    "matching digest must not trigger destroy",
+  );
+  assert.equal(
+    store.rows.get("p-match").machineId,
+    "m-fresh",
+    "assignment row must be preserved",
+  );
+}
+
+// ---- case 17: digest mismatch → force-destroy + delete + recreate ----
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-stale",
+    machineId: "m-old",
+    region: "fra",
+    state: "running",
+  });
+  const machines = makeMachinesStub({
+    initial: [
+      {
+        id: "m-old",
+        state: "started",
+        region: "fra",
+        image_ref: { digest: "sha256:old" },
+      },
+    ],
+    onCreate: () => "started",
+  });
+  const currentImage = {
+    async getCurrent() {
+      return "sha256:current";
+    },
+  };
+  const evictions = [];
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    currentImage,
+    onStaleImageEviction: (detail) => evictions.push(detail),
+  });
+  const upstream = await resolve("p-stale");
+  // New machine minted; host no longer points at m-old.
+  assert.notEqual(upstream.host, "m-old.vm.test-app.internal");
+  // Destroy called exactly once with force=true.
+  const destroyCalls = machines.calls.filter((c) => c.kind === "destroy");
+  assert.equal(destroyCalls.length, 1, "destroy must fire exactly once");
+  assert.equal(destroyCalls[0].id, "m-old");
+  assert.equal(destroyCalls[0].force, true, "destroy must be force=true");
+  // Assignment row points at the new machine, not m-old.
+  const row = store.rows.get("p-stale");
+  assert.ok(row && row.machineId !== "m-old");
+  // Observer fired with both digests + ids.
+  assert.equal(evictions.length, 1);
+  assert.deepEqual(evictions[0], {
+    projectId: "p-stale",
+    machineId: "m-old",
+    expectedDigest: "sha256:current",
+    actualDigest: "sha256:old",
+  });
+  // New machine carries the texcenter_project tag (regression guard:
+  // the post-eviction createMachine path must go through
+  // ensureMachineId, not bypass the tagging).
+  const createCall = machines.calls.find((c) => c.kind === "create");
+  assert.equal(
+    createCall.req.config.metadata?.texcenter_project,
+    "p-stale",
+    "post-eviction create must tag with texcenter_project",
+  );
+}
+
+// ---- case 18: assigned machine missing image_ref → no eviction ----
+//
+// Defensive: an older Fly API response (or a hand-stubbed fake) might
+// not surface `image_ref`. Without a digest we cannot compare, so
+// fall through to the normal start path instead of destroying based
+// on a one-sided null.
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-no-digest",
+    machineId: "m-undocumented",
+    region: "fra",
+    state: "running",
+  });
+  const machines = makeMachinesStub({
+    initial: [
+      { id: "m-undocumented", state: "started", region: "fra" /* no image_ref */ },
+    ],
+  });
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    currentImage: { async getCurrent() { return "sha256:current"; } },
+  });
+  const upstream = await resolve("p-no-digest");
+  assert.equal(upstream.host, "m-undocumented.vm.test-app.internal");
+  assert.equal(
+    machines.calls.filter((c) => c.kind === "destroy").length,
+    0,
+    "missing image_ref must not trigger destroy",
+  );
+}
+
+// ---- case 19: currentImage.getCurrent() throws → fail-open ----
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-flaky",
+    machineId: "m-existing",
+    region: "fra",
+    state: "running",
+  });
+  const machines = makeMachinesStub({
+    initial: [
+      {
+        id: "m-existing",
+        state: "started",
+        region: "fra",
+        image_ref: { digest: "sha256:whatever" },
+      },
+    ],
+  });
+  const errs = [];
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    currentImage: {
+      async getCurrent() {
+        throw new Error("fly API 503");
+      },
+    },
+    onCurrentImageError: (detail) => errs.push(detail),
+  });
+  const upstream = await resolve("p-flaky");
+  // Resolver returned the existing upstream — no destroy, no recreate.
+  assert.equal(upstream.host, "m-existing.vm.test-app.internal");
+  assert.equal(
+    machines.calls.filter((c) => c.kind === "destroy").length,
+    0,
+    "getCurrent throw must NOT trigger destroy",
+  );
+  assert.equal(errs.length, 1);
+  assert.match(errs[0].message, /fly API 503/);
+}
+
+// ---- case 20: concurrent resolves of a stale project produce one destroy ----
+//
+// Iter 378: the existing in-flight dedup must continue to coalesce
+// concurrent resolves so a thundering-herd of WS upgrades for the
+// same project doesn't issue N destroys against the same stale id.
+{
+  const store = makeStore();
+  await store.upsert({
+    projectId: "p-herd",
+    machineId: "m-old",
+    region: "fra",
+    state: "running",
+  });
+  let resolveDestroy;
+  const destroyGate = new Promise((r) => { resolveDestroy = r; });
+  let destroyCalls = 0;
+  const machines = {
+    appName: "test-app",
+    calls: [],
+    async createMachine(req) {
+      this.calls.push({ kind: "create", req });
+      return {
+        id: "m-new",
+        state: "started",
+        region: req.region,
+        image_ref: { digest: "sha256:current" },
+      };
+    },
+    async getMachine(id) {
+      this.calls.push({ kind: "get", id });
+      if (id === "m-old") {
+        return {
+          id,
+          state: "started",
+          region: "fra",
+          image_ref: { digest: "sha256:old" },
+        };
+      }
+      return {
+        id,
+        state: "started",
+        region: "fra",
+        image_ref: { digest: "sha256:current" },
+      };
+    },
+    async destroyMachine(id, opts) {
+      destroyCalls += 1;
+      this.calls.push({ kind: "destroy", id, force: opts?.force === true });
+      await destroyGate;
+    },
+    async startMachine() {},
+    async waitForState() {},
+    internalAddress(id) { return `${id}.vm.test-app.internal`; },
+  };
+  const resolve = createUpstreamResolver({
+    ...baseOpts,
+    machines,
+    store,
+    currentImage: { async getCurrent() { return "sha256:current"; } },
+  });
+  const p1 = resolve("p-herd");
+  const p2 = resolve("p-herd");
+  assert.strictEqual(p1, p2, "concurrent resolves must share the promise");
+  // Drain microtasks so the destroy is in flight.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  resolveDestroy();
+  const [u1, u2] = await Promise.all([p1, p2]);
+  assert.deepEqual(u1, u2);
+  assert.equal(destroyCalls, 1, "exactly one destroy across concurrent resolves");
+  assert.equal(
+    machines.calls.filter((c) => c.kind === "create").length,
+    1,
+    "exactly one recreate across concurrent resolves",
+  );
+}
+
+// ---- iter 378: Fly-backed CurrentSidecarImage ----
+//
+// Picks the deployment-pool machine (config.metadata.fly_process_group
+// === "app", numeric fly_release_version) with the highest release
+// version. Per-project Machines (no process group) and partial entries
+// are filtered out. Caches for ttlMs to amortise across editor opens.
+
+// ---- case 21: picks highest release version, ignores per-project ----
+{
+  const listResponses = [];
+  const machines = {
+    async listMachines() {
+      listResponses.push(true);
+      return [
+        // Per-project Machine — ignored (no fly_process_group).
+        {
+          id: "m-proj",
+          state: "started",
+          image_ref: { digest: "sha256:proj-old" },
+          config: { metadata: { texcenter_project: "p1" } },
+        },
+        // Deployment pool, release 67 — older.
+        {
+          id: "m-old-deploy",
+          state: "stopped",
+          image_ref: { digest: "sha256:rel-67" },
+          config: {
+            metadata: { fly_process_group: "app", fly_release_version: "67" },
+          },
+        },
+        // Deployment pool, release 68 — current.
+        {
+          id: "m-new-deploy",
+          state: "stopped",
+          image_ref: { digest: "sha256:rel-68" },
+          config: {
+            metadata: { fly_process_group: "app", fly_release_version: "68" },
+          },
+        },
+        // Non-app group machine — ignored even with release_version.
+        {
+          id: "m-aux",
+          state: "started",
+          image_ref: { digest: "sha256:aux-999" },
+          config: {
+            metadata: { fly_process_group: "aux", fly_release_version: "999" },
+          },
+        },
+      ];
+    },
+  };
+  const ci = createFlyCurrentSidecarImage({ machines });
+  assert.equal(await ci.getCurrent(), "sha256:rel-68");
+  assert.equal(listResponses.length, 1);
+}
+
+// ---- case 22: caches within TTL, refetches after ----
+{
+  let listCalls = 0;
+  let digest = "sha256:rel-1";
+  const machines = {
+    async listMachines() {
+      listCalls += 1;
+      return [
+        {
+          id: "m",
+          state: "started",
+          image_ref: { digest },
+          config: {
+            metadata: { fly_process_group: "app", fly_release_version: "1" },
+          },
+        },
+      ];
+    },
+  };
+  let nowMs = 1000;
+  const ci = createFlyCurrentSidecarImage({
+    machines,
+    ttlMs: 100,
+    now: () => nowMs,
+  });
+  assert.equal(await ci.getCurrent(), "sha256:rel-1");
+  assert.equal(listCalls, 1);
+  // Within TTL: cache hit.
+  nowMs = 1050;
+  digest = "sha256:rel-2"; // would-be new value
+  assert.equal(await ci.getCurrent(), "sha256:rel-1");
+  assert.equal(listCalls, 1, "second call within TTL must hit cache");
+  // After TTL: refetch picks up the new digest.
+  nowMs = 2000;
+  assert.equal(await ci.getCurrent(), "sha256:rel-2");
+  assert.equal(listCalls, 2);
+}
+
+// ---- case 23: no deployment-pool machine → throws ----
+//
+// The resolver fail-opens on this throw, but the factory itself must
+// surface the misconfiguration rather than silently caching null.
+{
+  const machines = {
+    async listMachines() {
+      return [
+        // Only per-project Machines exist — no deploy pool.
+        {
+          id: "m-proj",
+          state: "started",
+          image_ref: { digest: "sha256:proj" },
+          config: { metadata: { texcenter_project: "p1" } },
+        },
+      ];
+    },
+  };
+  const ci = createFlyCurrentSidecarImage({ machines });
+  await assert.rejects(() => ci.getCurrent(), /no deployment-pool Machine/);
 }
 
 console.log("upstreamResolver ok");

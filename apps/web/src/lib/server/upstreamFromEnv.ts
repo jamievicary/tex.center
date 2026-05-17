@@ -11,6 +11,7 @@
 
 import type { MachineConfig, MachinesClient } from "./flyMachines.js";
 import {
+  createFlyCurrentSidecarImage,
   createUpstreamResolver,
   defaultTcpProbe,
   type MachineAssignmentStore,
@@ -99,6 +100,10 @@ export function buildUpstreamFromEnv(
   };
 
   const machines = deps.makeMachinesClient({ token, appName });
+  // Iter 378: stale-sidecar-image eviction. Caches the deployment-pool
+  // digest for 60 s so a burst of editor opens shares one Fly API
+  // round-trip while still converging within a minute of any deploy.
+  const currentImage = createFlyCurrentSidecarImage({ machines });
   return createUpstreamResolver({
     machines,
     store: deps.makeStore(),
@@ -117,6 +122,28 @@ export function buildUpstreamFromEnv(
     // warm image and a few seconds on a cold pull.
     tcpProbeTimeoutSec: 60,
     ...(deps.seedDocFor !== undefined ? { seedDocFor: deps.seedDocFor } : {}),
+    currentImage,
+    onStaleImageEviction: (detail) => {
+      // eslint-disable-next-line no-console
+      console.log(
+        JSON.stringify({
+          kind: "stale-image-eviction",
+          projectId: detail.projectId,
+          machineId: detail.machineId,
+          expectedDigest: detail.expectedDigest,
+          actualDigest: detail.actualDigest,
+        }),
+      );
+    },
+    onCurrentImageError: (detail) => {
+      // eslint-disable-next-line no-console
+      console.warn(
+        JSON.stringify({
+          kind: "current-image-lookup-failed",
+          message: detail.message,
+        }),
+      );
+    },
   });
 }
 
