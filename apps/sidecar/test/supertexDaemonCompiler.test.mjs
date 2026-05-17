@@ -39,10 +39,10 @@ mkdirSync(dir, { recursive: true });
 for (const e of readdirSync(dir)) unlinkSync(join(dir, e));
 
 const total = parseInt(process.env.FAKE_TOTAL ?? "3", 10);
-const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid | rollback | error-then-ok | noop
+const mode = process.env.FAKE_MODE ?? "ok"; // ok | error | violation | hang | exit-mid | dirty | error-then-ok | noop
 const exitOn = process.env.FAKE_EXIT_AFTER ?? ""; // count of rounds before exit
 const errorRounds = parseInt(process.env.FAKE_ERROR_ROUNDS ?? "1", 10);
-const rollbackK = parseInt(process.env.FAKE_ROLLBACK_K ?? "0", 10);
+const dirtyD = parseInt(process.env.FAKE_DIRTY_D ?? "1", 10);
 // When "auto", emit "[pdf-end]\\n" after the final shipout line iff
 // the round shipped every chunk (target reached total). Mirrors
 // chunk_writer's behaviour in supertex \`aaa625a\`: the marker is
@@ -104,14 +104,12 @@ function handleLine(line) {
   if (pdfEndAtTarget === "auto" && target === total && target > 0) {
     process.stdout.write("[pdf-end]\\n");
   }
-  if (mode === "rollback") {
-    // Unlink chunks > K from disk (the real daemon does this on
-    // rollback) and announce the rollback. No reshipping after,
-    // so the round ends with maxShipout = K.
-    for (let i = rollbackK + 1; i <= target; i++) {
-      try { unlinkSync(join(dir, i + ".out")); } catch {}
-    }
-    process.stdout.write("[rollback " + rollbackK + "]\\n");
+  if (mode === "dirty") {
+    // M27 [dirty D]: emit after the chunks (D..target re-emitted
+    // above), before [round-done]. D itself is dictated by the
+    // edit; chunks 1..D-1 are untouched and not re-shipped — the
+    // fake just emits all chunks 1..target for simplicity.
+    process.stdout.write("[dirty " + dirtyD + "]\\n");
   }
   if (mode === "error" || (mode === "error-then-ok" && rounds <= errorRounds)) {
     process.stdout.write("[error simulated failure]\\n");
@@ -352,29 +350,37 @@ const require = createRequire(import.meta.url);
   await c.close();
 }
 
-// 10. Rollback: `[rollback K]` truncates the assembled segment to
-//     chunks 1..K, ignoring shipout events for indices > K within
-//     the same round.
+// 10. M27 [dirty D]: a post-edit round emits its new chunks first,
+//     then `[dirty D]`, then `[round-done]`. The compiler must
+//     forward D on the result as `dirtyPage`, and propagate it via
+//     the `daemon-round-done` structured log so the sidecar can
+//     broadcast a control message to the FE. The shipped chunks
+//     in the same round cover 1..target (the new contents); pages
+//     past `target` are still stale on the FE side.
 {
-  const workDir = await makeWorkDir("rollback");
+  const workDir = await makeWorkDir("dirty");
+  const logCalls = [];
   const c = new SupertexDaemonCompiler({
     workDir,
     supertexBin: fakeBin,
     spawnFn: makeSpawnFn({
       FAKE_TOTAL: "3",
-      FAKE_MODE: "rollback",
-      FAKE_ROLLBACK_K: "1",
+      FAKE_MODE: "dirty",
+      FAKE_DIRTY_D: "1",
     }),
     readyTimeoutMs: 5_000,
     roundTimeoutMs: 5_000,
+    log: (fields, msg) => logCalls.push({ fields, msg }),
   });
   const r = await c.compile({ source: "x", targetPage: 0 });
-  assert.equal(r.ok, true, "rollback compile ok");
+  assert.equal(r.ok, true, "dirty-round compile ok");
+  assert.equal(r.dirtyPage, 1, "result.dirtyPage carries D");
+  assert.equal(r.shipoutPage, 3, "shipoutPage from re-emitted chunks");
   const text = Buffer.from(r.segments[0].bytes).toString("utf8");
-  assert.match(text, /^CHUNK-1\n$/, "segment truncated to chunk 1 after rollback");
-  // Only the chunks ≤ K survive on disk.
-  const onDisk = readdirSync(join(workDir, "chunks")).sort();
-  assert.deepEqual(onDisk, ["1.out"]);
+  assert.match(text, /^CHUNK-1\nCHUNK-2\nCHUNK-3\n$/);
+  const doneLine = logCalls.find((l) => l.msg === "daemon-round-done");
+  assert.ok(doneLine, "daemon-round-done emitted");
+  assert.equal(doneLine.fields.dirtyPage, 1, "round-done log carries dirtyPage");
   await c.close();
 }
 

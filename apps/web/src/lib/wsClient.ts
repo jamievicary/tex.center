@@ -37,6 +37,19 @@ export interface WsClientSnapshot {
    * applies in that case, so there's no missing page to fetch).
    */
   pdfLastPage: boolean | undefined;
+  /**
+   * Lowest 1-based page index that is currently considered stale —
+   * the post-edit dirty frontier (M27 `[dirty D]`). Pages with
+   * index `>= dirtyFromPage` reflect the pre-edit source and the
+   * PDF viewer renders a translucent grey overlay + waiting spinner
+   * on them. `null` means no known dirty pages — the rendered PDF
+   * is the live state of the current source. Updated jointly by
+   * `pdf-segment` (advances the frontier as fresh chunks arrive)
+   * and `dirty-page` controls (a new edit re-introduces a lower
+   * dirty boundary). See the inline handler comments for the
+   * combine rule.
+   */
+  dirtyFromPage: number | null;
   lastError: string | null;
   compileState: "idle" | "running" | "error" | "unknown";
   files: string[];
@@ -118,6 +131,13 @@ export class WsClient {
   private _status: ConnectionState = "connecting";
   private _pdfBytes: Uint8Array | null = null;
   private _pdfLastPage: boolean | undefined = undefined;
+  // Highest shipoutPage ever observed on a pdf-segment. Used to
+  // clamp an incoming `dirty-page D` to the rendered region —
+  // pages > _highestShipout aren't on screen yet, so a dirty
+  // boundary inside the unrendered region only matters from the
+  // first unrendered page onwards (`max(D, _highestShipout + 1)`).
+  private _highestShipout = 0;
+  private _dirtyFromPage: number | null = null;
   private _lastError: string | null = null;
   private _compileState: WsClientSnapshot["compileState"] = "unknown";
   private _files: string[] = [MAIN_DOC_NAME];
@@ -209,6 +229,19 @@ export class WsClient {
       case "pdf-segment":
         this._pdfBytes = this.pdf.applySegment(decoded.segment);
         this._pdfLastPage = decoded.segment.lastPage;
+        // A pdf-segment is the complete PDF up to page
+        // `shipoutPage` (compilers that don't expose per-shipout
+        // structure leave the field undefined; we then can't shrink
+        // the dirty frontier). When the segment covers the current
+        // dirty range, advance the frontier to the first page that
+        // wasn't refreshed.
+        if (typeof decoded.segment.shipoutPage === "number") {
+          const T = decoded.segment.shipoutPage;
+          if (T > this._highestShipout) this._highestShipout = T;
+          if (this._dirtyFromPage !== null && this._dirtyFromPage <= T) {
+            this._dirtyFromPage = T + 1;
+          }
+        }
         {
           const ev: WsDebugEvent =
             decoded.segment.shipoutPage !== undefined
@@ -267,6 +300,23 @@ export class WsClient {
             kind: "hello",
             protocol: decoded.message.protocol,
           });
+        } else if (decoded.message.type === "dirty-page") {
+          // M27 [dirty D]: pages D..onwards in the engine are
+          // invalidated by a just-detected edit. The same round's
+          // pdf-segment (which arrives first) has already covered
+          // pages 1..highestShipout, so on the FE those are fresh —
+          // clamp the candidate to the first un-refreshed page.
+          // Combine with any prior dirty boundary via `min` so a
+          // narrower D (closer to page 1) wins.
+          const candidate = Math.max(
+            decoded.message.page,
+            this._highestShipout + 1,
+          );
+          this._dirtyFromPage =
+            this._dirtyFromPage === null
+              ? candidate
+              : Math.min(this._dirtyFromPage, candidate);
+          this.emit();
         }
         break;
       case "awareness":
@@ -356,6 +406,7 @@ export class WsClient {
       status: this._status,
       pdfBytes: this._pdfBytes,
       pdfLastPage: this._pdfLastPage,
+      dirtyFromPage: this._dirtyFromPage,
       lastError: this._lastError,
       compileState: this._compileState,
       files: this._files,

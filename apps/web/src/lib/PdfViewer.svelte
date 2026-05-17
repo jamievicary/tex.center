@@ -9,6 +9,7 @@
   let {
     src,
     lastPage,
+    dirtyFromPage,
     onPageChange,
   }: {
     src: Uint8Array | string | null;
@@ -25,6 +26,14 @@
      * there's no missing page to fetch).
      */
     lastPage?: boolean | undefined;
+    /**
+     * Lowest stale 1-based page index, from the wsClient snapshot.
+     * Pages `>= dirtyFromPage` get a translucent grey overlay + a
+     * spinning "waiting" indicator; their canvas underneath still
+     * shows the pre-edit render so the user keeps spatial context.
+     * `null`/`undefined` ⇒ no dirty pages.
+     */
+    dirtyFromPage?: number | null | undefined;
     onPageChange?: (page: number) => void;
   } = $props();
 
@@ -51,6 +60,21 @@
     height: 842,
   };
   let placeholderEl: HTMLDivElement | null = null;
+
+  // Apply the `.pdf-page-dirty` class to every page whose 1-based
+  // index is >= dirtyFromPage. Runs reactively when the dirty
+  // boundary moves and after every render commit (the controller
+  // creates fresh `.pdf-page` wrappers we need to re-tag).
+  function syncDirty(): void {
+    if (!host) return;
+    const d = dirtyFromPage ?? null;
+    for (const el of host.querySelectorAll<HTMLElement>(".pdf-page[data-page]")) {
+      const pageAttr = el.dataset.page;
+      const p = pageAttr ? Number(pageAttr) : NaN;
+      const isDirty = d !== null && Number.isFinite(p) && p >= d;
+      el.classList.toggle("pdf-page-dirty", isDirty);
+    }
+  }
 
   function syncPlaceholder(): void {
     const target = host;
@@ -115,6 +139,7 @@
       .then(() => {
         if (token !== renderToken) return;
         syncPlaceholder();
+        syncDirty();
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -132,6 +157,13 @@
     // Read the reactive prop so Svelte tracks it.
     void lastPage;
     syncPlaceholder();
+  });
+
+  // Independently react to `dirtyFromPage` changes so the overlay
+  // class appears/disappears without waiting for the next render.
+  $effect(() => {
+    void dirtyFromPage;
+    syncDirty();
   });
 
   function ensureObserver(): IntersectionObserver | null {
@@ -280,5 +312,40 @@
     background: rgba(250, 247, 240, 0.55);
     border: 1px dashed rgba(31, 27, 22, 0.18);
     box-shadow: none;
+  }
+  /* M27 dirty overlay (`[dirty D]` from the supertex daemon): the
+     underlying canvas keeps showing the pre-edit render so the user
+     retains spatial context; we layer a translucent grey wash and a
+     centred spinner on top. ::before is the wash; ::after is the
+     spinner. The spinner is a CSS-only conic-gradient ring so we
+     don't ship an SVG asset for it. Sized in CSS px so it stays
+     visually constant regardless of DPR. */
+  :global(.host .pdf-page-dirty::before) {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(220, 220, 220, 0.45);
+    pointer-events: none;
+    z-index: 2;
+  }
+  :global(.host .pdf-page-dirty::after) {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    border-radius: 50%;
+    border: 3px solid rgba(60, 60, 60, 0.25);
+    border-top-color: rgba(60, 60, 60, 0.8);
+    animation: pdf-page-dirty-spin 0.9s linear infinite;
+    pointer-events: none;
+    z-index: 3;
+  }
+  @keyframes pdf-page-dirty-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

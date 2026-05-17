@@ -95,6 +95,9 @@ class TestNodeSuites(unittest.TestCase):
     def test_sidecar_server_target_page(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverTargetPage.test.mjs")
 
+    def test_sidecar_server_dirty_page(self) -> None:
+        _run_tsx(ROOT / "apps" / "sidecar" / "test" / "serverDirtyPage.test.mjs")
+
     def test_sidecar_coalescer_trace(self) -> None:
         _run_tsx(ROOT / "apps" / "sidecar" / "test" / "coalescerTrace.test.mjs")
 
@@ -262,6 +265,9 @@ class TestNodeSuites(unittest.TestCase):
 
     def test_web_ws_client_last_page(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "wsClientLastPage.test.mjs")
+
+    def test_web_ws_client_dirty_page(self) -> None:
+        _run_tsx(ROOT / "apps" / "web" / "test" / "wsClientDirtyPage.test.mjs")
 
     def test_web_debug_toasts_toggle(self) -> None:
         _run_tsx(ROOT / "apps" / "web" / "test" / "debugToastsToggle.test.mjs")

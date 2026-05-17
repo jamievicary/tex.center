@@ -111,7 +111,21 @@ export type ControlMessage =
       type: "file-op-error";
       op: "create-file" | "delete-file" | "rename-file" | "upload-file";
       reason: string;
-    };
+    }
+  /**
+   * Sidecar → web. Sourced from the upstream supertex daemon's
+   * `[dirty D]` line (M27 protocol). Pages D..onwards of the
+   * currently-rendered PDF are stale: they reflect the pre-edit
+   * source, and their contents will only become fresh when a
+   * subsequent `recompile,N` round re-emits chunks D..N. The FE
+   * shows a translucent grey overlay + spinner on dirty pages, and
+   * a scroll-to-dirty-page bumps `viewing-page` so the sidecar
+   * kicks the daemon. Emitted at most once per compile round, AFTER
+   * the round's PDF segment(s) so the FE can merge with the just-
+   * shipped `shipoutPage` to compute the actual dirty frontier
+   * (`max(D, shipoutPage + 1)`).
+   */
+  | { type: "dirty-page"; page: number };
 
 export interface PdfSegment {
   totalLength: number;

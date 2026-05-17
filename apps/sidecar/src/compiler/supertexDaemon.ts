@@ -175,6 +175,7 @@ export class SupertexDaemonCompiler implements Compiler {
           maxShipout: events.maxShipout,
           errorReason: events.errorReason,
           lastPageReached: events.lastPageReached,
+          ...(events.dirtyPage !== null ? { dirtyPage: events.dirtyPage } : {}),
           ...(events.violation !== undefined
             ? { violation: events.violation }
             : {}),
@@ -191,24 +192,33 @@ export class SupertexDaemonCompiler implements Compiler {
         };
       }
       // No-op compile: round-done arrived with no `[N.out]` events
-      // and no error. The upstream `--daemon` rollback path emits
-      // exactly this shape when `process_event` finds no usable
-      // rollback target — silently no-op'ing the round. We must NOT
-      // synthesise a segment from stale chunks on disk: that hides
-      // the upstream no-op behind a byte-identical "fresh" PDF and
-      // is the iter 188 edit→preview regression. See 188_answer.md.
+      // and no error. With the M27 daemon protocol this happens on
+      // any `recompile,T` with T <= S (already-shipped enough) and
+      // no edit detected — e.g. a view-only kick from the FE. We
+      // must NOT synthesise a segment from stale chunks on disk:
+      // that hides the no-op behind a byte-identical "fresh" PDF
+      // and is the iter 188 edit→preview regression. See
+      // 188_answer.md.
       if (events.maxShipout < 0) {
-        return { ok: true, segments: [], lastPage: events.lastPageReached };
+        const out: CompileResult = {
+          ok: true,
+          segments: [],
+          lastPage: events.lastPageReached,
+        };
+        if (events.dirtyPage !== null) out.dirtyPage = events.dirtyPage;
+        return out;
       }
       const segment = await this.assembleSegment(events.maxShipout);
       segment.shipoutPage = events.maxShipout;
       segment.lastPage = events.lastPageReached;
-      return {
+      const out: CompileResult = {
         ok: true,
         segments: [segment],
         shipoutPage: events.maxShipout,
         lastPage: events.lastPageReached,
       };
+      if (events.dirtyPage !== null) out.dirtyPage = events.dirtyPage;
+      return out;
     } catch (e) {
       return { ok: false, error: errorMessage(e) };
     } finally {
@@ -374,6 +384,7 @@ export class SupertexDaemonCompiler implements Compiler {
     maxShipout: number;
     errorReason: string | null;
     lastPageReached: boolean;
+    dirtyPage: number | null;
   }> {
     let maxShipout = -1;
     let errorReason: string | null = null;
@@ -381,6 +392,12 @@ export class SupertexDaemonCompiler implements Compiler {
     // round; `[pdf-end]` may only follow a `[N.out]` and precedes
     // `[round-done]`, so a single boolean is enough.
     let lastPageReached = false;
+    // First page invalidated by an edit detected this round
+    // (`[dirty D]`). M27 protocol: chunks D..T are emitted first,
+    // then `[dirty D]`, then `[round-done]`. Pages > maxShipout
+    // remain stale on the FE; we forward D verbatim and let the
+    // sidecar/FE combine it with the shipped range.
+    let dirtyPage: number | null = null;
     const deadline = Date.now() + this.roundTimeoutMs;
     while (true) {
       const remaining = deadline - Date.now();
@@ -390,6 +407,7 @@ export class SupertexDaemonCompiler implements Compiler {
           maxShipout,
           errorReason,
           lastPageReached,
+          dirtyPage,
         };
       }
       const ev = await this.nextEvent(remaining);
@@ -399,16 +417,19 @@ export class SupertexDaemonCompiler implements Compiler {
           maxShipout,
           errorReason,
           lastPageReached,
+          dirtyPage,
         };
       }
       switch (ev.kind) {
         case "shipout":
           if (ev.n > maxShipout) maxShipout = ev.n;
           break;
-        case "rollback":
-          // Chunks > K were deleted upstream; subsequent [N.out]
-          // events will re-establish maxShipout. Track conservatively.
-          if (ev.k < maxShipout) maxShipout = ev.k;
+        case "dirty":
+          // Latest D wins. Spec emits at most one [dirty D] per
+          // round (after the chunks, before round-done), but if the
+          // daemon ever batched multiple edits the latest is the
+          // narrowest dirty frontier.
+          dirtyPage = ev.d;
           break;
         case "error":
           // Latest error reason wins; round-done still ends the round.
@@ -418,7 +439,7 @@ export class SupertexDaemonCompiler implements Compiler {
           lastPageReached = true;
           break;
         case "round-done":
-          return { maxShipout, errorReason, lastPageReached };
+          return { maxShipout, errorReason, lastPageReached, dirtyPage };
         case "violation":
           // Protocol violation: terminate child, surface raw line.
           this.killChild();
@@ -427,6 +448,7 @@ export class SupertexDaemonCompiler implements Compiler {
             maxShipout,
             errorReason,
             lastPageReached,
+            dirtyPage,
           };
       }
     }
@@ -548,8 +570,8 @@ function describeEvent(ev: DaemonEvent): string {
   switch (ev.kind) {
     case "shipout":
       return `shipout n=${ev.n}`;
-    case "rollback":
-      return `rollback k=${ev.k}`;
+    case "dirty":
+      return `dirty d=${ev.d}`;
     case "error":
       return `error reason=${ev.reason}`;
     case "pdf-end":

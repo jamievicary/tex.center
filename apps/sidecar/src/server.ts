@@ -641,6 +641,14 @@ export async function buildServer(opts: SidecarOptions = {}): Promise<FastifyIns
     ) {
       p.coalescer.highestEmittedShipoutPage = result.shipoutPage;
     }
+    // M27 dirty-page broadcast. Ships AFTER the PDF segment so the
+    // FE can combine the just-shipped shipoutPage with the daemon's
+    // D to compute the actual dirty frontier (`max(D, shipoutPage
+    // + 1)`). Emitted at most once per round; absent when no edit
+    // was detected (vanilla view-only advance).
+    if (typeof result.dirtyPage === "number") {
+      broadcast(p, encodeControl({ type: "dirty-page", page: result.dirtyPage }));
+    }
     app.log.info(
       {
         projectId: p.id,

@@ -61,6 +61,7 @@
     status: "connecting",
     pdfBytes: null,
     pdfLastPage: undefined,
+    dirtyFromPage: null,
     lastError: null,
     compileState: "unknown",
     files: [MAIN_DOC_NAME],
@@ -500,6 +501,7 @@
     <PdfViewer
       src={snapshot.pdfBytes}
       lastPage={snapshot.pdfLastPage}
+      dirtyFromPage={snapshot.dirtyFromPage}
       onPageChange={handlePageChange}
     />
     {#if snapshot.compileState === "running"}

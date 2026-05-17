@@ -20,8 +20,9 @@ import {
 }
 
 {
-  assert.deepEqual(parseDaemonLine("[rollback 0]"), { kind: "rollback", k: 0 });
-  assert.deepEqual(parseDaemonLine("[rollback 7]"), { kind: "rollback", k: 7 });
+  assert.deepEqual(parseDaemonLine("[dirty 1]"), { kind: "dirty", d: 1 });
+  assert.deepEqual(parseDaemonLine("[dirty 7]"), { kind: "dirty", d: 7 });
+  assert.deepEqual(parseDaemonLine("[dirty 0]"), { kind: "dirty", d: 0 });
 }
 
 {
@@ -56,9 +57,9 @@ for (const raw of [
   "[N.out]", // non-numeric N
   "[ 1.out]", // stray space
   "[1.out] trailing", // trailing junk
-  "[rollback]", // missing K
-  "[rollback -1]", // negative K rejected (upstream only emits %lld of non-negatives)
-  "[rollback 1 ]", // trailing space
+  "[dirty]", // missing D
+  "[dirty -1]", // negative D rejected (upstream only emits %lld of non-negatives)
+  "[dirty 1 ]", // trailing space
   "[error oops", // missing close
   "[round-done] extra",
   "  [round-done]", // leading space
@@ -95,9 +96,9 @@ for (const raw of [
 // A trailing partial at EOF is a violation.
 {
   const buf = new DaemonLineBuffer();
-  buf.push("[round-done]\n[rollback 3");
+  buf.push("[round-done]\n[dirty 3");
   const ev = buf.flush();
-  assert.deepEqual(ev, { kind: "violation", raw: "[rollback 3" });
+  assert.deepEqual(ev, { kind: "violation", raw: "[dirty 3" });
   // Flush is idempotent: pending is cleared.
   assert.equal(buf.flush(), null);
 }
@@ -118,18 +119,28 @@ for (const raw of [
   assert.deepEqual(buf.push(bytes), [{ kind: "shipout", n: 42 }]);
 }
 
-// Mixed sequence mirroring a real recompile-with-rollback round.
+// Mixed sequence mirroring a real post-edit M27 round: the new
+// chunks come first, then `[dirty D]`, then `[round-done]`. D is
+// the first dirty page from the edit; in this example chunks 1..5
+// have been re-emitted and D=1 says the invalidation started at
+// page 1 (so pages > 5, if any, remain dirty).
 {
   const buf = new DaemonLineBuffer();
   const stream =
-    "[rollback 3]\n" +
+    "[1.out]\n" +
+    "[2.out]\n" +
+    "[3.out]\n" +
     "[4.out]\n" +
     "[5.out]\n" +
+    "[dirty 1]\n" +
     "[round-done]\n";
   assert.deepEqual(buf.push(stream), [
-    { kind: "rollback", k: 3 },
+    { kind: "shipout", n: 1 },
+    { kind: "shipout", n: 2 },
+    { kind: "shipout", n: 3 },
     { kind: "shipout", n: 4 },
     { kind: "shipout", n: 5 },
+    { kind: "dirty", d: 1 },
     { kind: "round-done" },
   ]);
 }

@@ -62,6 +62,18 @@ export interface CompileSuccess {
    * demand-fetches.
    */
   lastPage?: boolean;
+  /**
+   * First page invalidated by an edit detected this round, sourced
+   * from the upstream `[dirty D]` line (M27). Pages D..onwards are
+   * stale until a subsequent `recompile,N` re-emits them. The
+   * chunks shipped in *this* round (D..maxShipout) already carry
+   * the post-edit contents; the FE typically combines the two and
+   * treats `max(D, maxShipout + 1)` as the dirty frontier.
+   * `undefined` when no edit was detected in the round (every
+   * vanilla `recompile,T` advance round) or the compiler does not
+   * expose the signal.
+   */
+  dirtyPage?: number;
 }
 
 export interface CompileFailure {

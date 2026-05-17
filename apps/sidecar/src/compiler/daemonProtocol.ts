@@ -1,10 +1,17 @@
-// Stdout protocol parser for `supertex --daemon DIR` (M7.5.1).
+// Stdout protocol parser for `supertex --daemon DIR`.
 //
-// The daemon emits exactly five line types on stdout, each
-// terminated by `\n`:
+// The daemon emits these line types on stdout, each terminated by
+// `\n`:
 //
 //   `[N.out]`         — a chunk file `<N>.out` is now ready in DIR
-//   `[rollback K]`    — recompile rolled back through shipout K
+//   `[dirty D]`       — an edit was detected on this round and
+//                       pages D..onwards are invalidated. Emitted
+//                       after the round's `[N.out]` lines and
+//                       before `[round-done]`. The chunks emitted
+//                       in the same round (D..T) carry the new
+//                       contents; pages T+1..∞ remain stale until a
+//                       subsequent `recompile,N` advances further.
+//                       Replaces pre-M27 `[rollback K]`.
 //   `[error <reason>]`— recoverable error; `<reason>` is ASCII
 //                       printable (0x20..0x7e) minus `]`,
 //                       truncated to 120 chars upstream
@@ -12,27 +19,27 @@
 //                       tail carried `%SUPERTEX-LAST-PAGE`. Signals
 //                       that the engine reached `\enddocument` and
 //                       no further shipouts will follow on this
-//                       source. Added in supertex `aaa625a`.
+//                       source.
 //   `[round-done]`    — current round is complete
 //
-// `N` and `K` are non-negative decimal integers (`%lld` upstream).
+// `N` and `D` are non-negative decimal integers (`%lld` upstream).
 // Anything else is a protocol violation; the caller is expected
 // to terminate the process and surface the offending line.
 //
 // This file is pure logic — no I/O, no process work. The
-// `SupertexDaemonCompiler` (M7.5.2) feeds it stdout chunks via
+// `SupertexDaemonCompiler` feeds it stdout chunks via
 // `DaemonLineBuffer`.
 
 export type DaemonEvent =
   | { kind: "shipout"; n: number }
-  | { kind: "rollback"; k: number }
+  | { kind: "dirty"; d: number }
   | { kind: "error"; reason: string }
   | { kind: "pdf-end" }
   | { kind: "round-done" }
   | { kind: "violation"; raw: string };
 
 const SHIPOUT_RE = /^\[(\d+)\.out\]$/;
-const ROLLBACK_RE = /^\[rollback (\d+)\]$/;
+const DIRTY_RE = /^\[dirty (\d+)\]$/;
 const ERROR_RE = /^\[error ([^\]]*)\]$/;
 
 export function parseDaemonLine(line: string): DaemonEvent {
@@ -48,10 +55,10 @@ export function parseDaemonLine(line: string): DaemonEvent {
     if (Number.isSafeInteger(n)) return { kind: "shipout", n };
     return { kind: "violation", raw: line };
   }
-  const roll = ROLLBACK_RE.exec(line);
-  if (roll) {
-    const k = Number(roll[1]);
-    if (Number.isSafeInteger(k)) return { kind: "rollback", k };
+  const dirty = DIRTY_RE.exec(line);
+  if (dirty) {
+    const d = Number(dirty[1]);
+    if (Number.isSafeInteger(d)) return { kind: "dirty", d };
     return { kind: "violation", raw: line };
   }
   const err = ERROR_RE.exec(line);
